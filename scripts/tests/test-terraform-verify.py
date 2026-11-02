@@ -64,7 +64,10 @@ if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
             self.assertEqual([json.loads(line)[1] for line in log.read_text().splitlines()], ['init', 'validate'])
 
     def test_original_mock_runs_preserved(self):
-        self.assertEqual(sum(len(__import__('re').findall(r'^run\s+"', p.read_text(), __import__('re').M)) for p in (ROOT / 'terraform').rglob('*.tftest.hcl')), 28)
+        # Preserve the original AWS suite without counting independent cloud suites.
+        roots = [ROOT / 'terraform' / verify.relative(stack) for stack in verify.ROOTS]
+        self.assertEqual(sum(len(__import__('re').findall(r'^run\s+"', p.read_text(), __import__('re').M))
+                             for root in roots for p in root.rglob('*.tftest.hcl')), 28)
         self.assertEqual(len(verify.ROOTS), 6)
 
 

@@ -1,0 +1,6 @@
+project_id                = "replace-with-project-id"
+region                    = "asia-northeast3"
+state_bucket_name         = "replace-with-globally-unique-state-bucket"
+github_repository_id       = "123456789"
+github_repository_owner_id = "987654321"
+github_ref                = "refs/heads/main"

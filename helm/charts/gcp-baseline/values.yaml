@@ -1,0 +1,21 @@
+applicationNamespace: charlie-apps
+storageClass:
+  name: charlie-gcp-balanced
+  diskType: pd-balanced
+  reclaimPolicy: Delete
+quota:
+  requests.cpu: "2"
+  requests.memory: 4Gi
+  limits.cpu: "4"
+  limits.memory: 8Gi
+  requests.storage: 100Gi
+  pods: "30"
+limits:
+  defaultRequest:
+    cpu: 100m
+    memory: 128Mi
+  default:
+    cpu: 500m
+    memory: 512Mi
+# Platform access, CNPG replication and observability policies are deployment-specific.
+# This chart deliberately does not pretend to establish cross-cloud connectivity.

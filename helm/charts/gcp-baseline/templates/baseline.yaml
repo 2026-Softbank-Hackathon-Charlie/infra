@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.applicationNamespace }}
+  labels:
+    charlie.dev/managed-by: gcp-baseline
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name }}
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: {{ .Values.storageClass.diskType }}
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: {{ .Values.storageClass.reclaimPolicy }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: application-budget
+  namespace: {{ .Values.applicationNamespace }}
+spec:
+  hard:
+    {{- toYaml .Values.quota | nindent 4 }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: application-defaults
+  namespace: {{ .Values.applicationNamespace }}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        {{- toYaml .Values.limits.defaultRequest | nindent 8 }}
+      default:
+        {{- toYaml .Values.limits.default | nindent 8 }}
