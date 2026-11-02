@@ -10,18 +10,8 @@ variables {
 run "default_network" {
   command = apply
 
-  assert {
-    condition = (
-      alltrue([for name, value in {
-        vpc_cidr                = var.vpc_cidr, nat_gateway_mode = var.nat_gateway_mode,
-        management_cluster_name = var.management_cluster_name, workload_cluster_name = var.workload_cluster_name,
-        } : regex("(?m)^${name}\\s*=\\s*\"([^\"]+)\"", file("${path.module}/terraform.tfvars.example"))[0] == value
-      ]) &&
-      tolist(jsondecode(regex("(?m)^availability_zones\\s*=\\s*(\\[[^\\n]+\\])", file("${path.module}/terraform.tfvars.example"))[0])) == var.availability_zones
-    )
-    error_message = "The checked-in example must match the network defaults used by CI."
-  }
-
+  # Deployment input parity is covered by scripts/tests/test-project-config.py.
+  # These mock runs intentionally exercise module baseline defaults and overrides.
   assert {
     condition = (
       aws_vpc.shared.cidr_block == "10.40.0.0/16" &&

@@ -2,12 +2,16 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 export STACK AWS_ACCOUNT_ID
 PYTHON ?= python3
-.PHONY: help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check
+.PHONY: config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check
 help:
 	@echo 'make check                          정적 검사·mock test·Helm render'
 	@echo 'make tf-init STACK=aws/dev/foundation  실제 backend 초기화'
 	@echo 'make tf-plan / tf-apply STACK=... AWS_ACCOUNT_ID=...'
-check: tf-check tf-test ci-test helm-check inventory-check
+check: tf-fmt-check tf-verify ci-test helm-check inventory-check config-check
+config-check:
+	@$(PYTHON) scripts/project-config.py check
+tf-verify:
+	@$(PYTHON) scripts/terraform-verify.py
 tf-fmt:
 	terraform fmt -recursive terraform
 tf-fmt-check:
@@ -25,6 +29,8 @@ tf-apply:
 helm-check:
 	@PYTHON="$(PYTHON)" bash scripts/helm-check.sh
 ci-test:
+	@$(PYTHON) scripts/tests/test-project-config.py
+	@$(PYTHON) scripts/tests/test-terraform-verify.py
 	@$(PYTHON) scripts/tests/test-tf-ci.py
 	@$(PYTHON) scripts/tests/test-workflow.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done

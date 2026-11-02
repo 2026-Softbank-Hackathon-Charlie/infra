@@ -1,0 +1,72 @@
+"""Disposable verification tree, init reuse, cache misses/hits, failure propagation."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('verify', ROOT / 'scripts/terraform-verify.py')
+verify = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(verify)
+
+
+class VerifyTests(unittest.TestCase):
+    def test_copy_excludes_runtime_inputs_and_overrides(self):
+        with tempfile.TemporaryDirectory() as t:
+            src, dest = Path(t) / 'source', Path(t) / 'copy'
+            src.mkdir()
+            for name in ('main.tf', '.terraform.lock.hcl', 'terraform.tfvars', 'x.auto.tfvars.json', 'terraform.tfstate', 'backend.hcl', 'override.tf', 'local_override.tf'):
+                (src / name).write_text('data')
+            (src / 'linked.tf').symlink_to(src / 'main.tf')
+            (src / '.terraform').mkdir()
+            (src / '.terraform/secret.tf').write_text('secret')
+            verify.clean_copy(src, dest)
+            self.assertEqual({p.name for p in dest.iterdir()}, {'main.tf', '.terraform.lock.hcl'})
+
+    def test_all_roots_one_init_mock_coverage_and_warm_cache(self):
+        with tempfile.TemporaryDirectory() as t:
+            work = Path(t)
+            binary = work / 'terraform'
+            binary.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+path = Path(sys.argv[1].split('=', 1)[1])
+assert not (path / 'terraform.tfvars').exists()
+assert not (path / 'terraform.tfstate').exists()
+assert 'TF_VAR_project' not in os.environ
+assert 'TF_DATA_DIR' not in os.environ
+with open(os.environ['VERIFY_LOG'], 'a') as stream:
+    stream.write(json.dumps([str(path), sys.argv[2]]) + '\\n')
+cache = Path(os.environ['TF_PLUGIN_CACHE_DIR'])
+(cache / 'fake-provider').touch()
+if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
+    sys.exit(1)
+''')
+            binary.chmod(0o755)
+            log = work / 'calls'
+            env = dict(os.environ, PATH=str(work) + os.pathsep + os.environ['PATH'], VERIFY_LOG=str(log), TF_PLUGIN_CACHE_DIR=str(work / 'cache'), TF_VAR_project='hidden')
+            command = [sys.executable, str(ROOT / 'scripts/terraform-verify.py')]
+            for _ in range(2):
+                result = subprocess.run(command, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(sum(c[1] == 'init' for c in calls), 6)
+                self.assertEqual(sum(c[1] == 'validate' for c in calls), 6)
+                self.assertEqual(sum(c[1] == 'test' for c in calls), 5)
+                self.assertTrue((work / 'cache/fake-provider').exists())
+                log.unlink()
+            env['VERIFY_FAIL'] = 'validate'
+            self.assertNotEqual(subprocess.run(command, env=env, capture_output=True).returncode, 0)
+            self.assertEqual([json.loads(line)[1] for line in log.read_text().splitlines()], ['init', 'validate'])
+
+    def test_original_mock_runs_preserved(self):
+        self.assertEqual(sum(len(__import__('re').findall(r'^run\s+"', p.read_text(), __import__('re').M)) for p in (ROOT / 'terraform').rglob('*.tftest.hcl')), 28)
+        self.assertEqual(len(verify.ROOTS), 6)
+
+
+if __name__ == '__main__':
+    unittest.main()

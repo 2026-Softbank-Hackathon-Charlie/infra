@@ -24,6 +24,11 @@ import sys
 
 tool = Path(sys.argv[0]).name
 args = sys.argv[1:]
+if tool == "terraform" and args[1] == "init":
+    config = json.loads(Path(next(a.split("=", 1)[1] for a in args if a.startswith("-backend-config="))).read_text())
+    for key, value in config.items():
+        encoded = json.dumps(value, separators=(",", ":")) if not isinstance(value, str) else value
+        args.append("-backend-config=" + key + "=" + encoded)
 with open(os.environ["FAKE_LOG"], "a") as stream:
     stream.write(json.dumps({"tool": tool, "args": args}) + "\n")
 if tool == "aws":
@@ -34,15 +39,22 @@ else:
     action = args[1]
     if os.environ.get("FAKE_FAIL") == directory.name + ":" + action:
         sys.exit(2)
-    assert os.environ["TF_VAR_aws_account_id"] == "123456789012"
-    assert os.environ["TF_VAR_aws_region"] == "ap-northeast-2"
+    if "TF_VAR_aws_account_id" in os.environ:
+        assert os.environ["TF_VAR_aws_account_id"] == "123456789012"
+        assert os.environ["TF_VAR_aws_region"] == "ap-northeast-2"
+    for arg in args:
+        if arg.startswith("-var-file="):
+            inputs = json.loads(Path(arg.split("=", 1)[1]).read_text())
+            assert inputs["aws_account_id"] == "123456789012"
+            assert inputs["project"] == "charlie"
     if action == "plan":
         output = next(arg.removeprefix("-out=") for arg in args if arg.startswith("-out="))
         Path(output).write_text("saved plan for " + str(directory))
     elif action == "show":
         print(os.environ.get("FAKE_PLAN_JSON", '{"format_version":"1.2","resource_changes":[]}'))
     elif action == "apply":
-        assert Path(args[-1]).read_text() == "saved plan for " + str(directory)
+        if not args[-1].startswith("-var-file="):
+            assert Path(args[-1]).read_text() == "saved plan for " + str(directory)
 '''
 
 
@@ -53,8 +65,9 @@ class TerraformCITest(unittest.TestCase):
         self.root = Path(self.temp.name)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("common.sh", "tf-ci.sh", "check-foundation-plan.py"):
+        for name in ("common.sh", "tf-ci.sh", "check-foundation-plan.py", "project-config.py", "tf-stack.sh"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
+        shutil.copytree(ROOT / "config", self.root / "config", ignore=shutil.ignore_patterns("account.local.json"))
         for stack in (*STACKS, "account/aws", "modules/eks"):
             directory = self.directory(stack)
             directory.mkdir(parents=True)
@@ -80,16 +93,16 @@ class TerraformCITest(unittest.TestCase):
             "RUNNER_TEMP": str(self.plans),
             "FAKE_ACCOUNT": "123456789012",
             "FAKE_LOG": str(self.log),
-            "TF_VAR_operator_principal_arn": "arn:aws:iam::123456789012:role/operator",
+            "EKS_OPERATOR_PRINCIPAL_ARN": "arn:aws:iam::123456789012:role/operator",
         }
 
     def directory(self, stack):
         prefix = "terraform/environments" if stack.startswith("aws/dev/") else "terraform"
         return self.root / prefix / stack
 
-    def run_script(self, action="apply", *extra):
+    def run_script(self, action="apply", target="all-runtime", *extra):
         return subprocess.run(
-            ["bash", str(self.root / "scripts/tf-ci.sh"), action, *extra],
+            ["bash", str(self.root / "scripts/tf-ci.sh"), action, target, *extra],
             env=self.env, text=True, capture_output=True, timeout=15,
         )
 
@@ -121,6 +134,62 @@ class TerraformCITest(unittest.TestCase):
         self.assertIn("skip: aws/dev/management (scaffold)", result.stdout)
         self.assertIn("skip: aws/dev/workload (scaffold)", result.stdout)
         self.assert_no_plans()
+
+    def test_local_wrapper_uses_same_inputs_and_retains_approval(self):
+        (self.root / "config/account.local.json").write_text(json.dumps({
+            "aws_account_id": "123456789012",
+            "operator_principal_arn": "arn:aws:iam::123456789012:role/operator",
+        }))
+        self.env["STACK"] = "aws/dev/foundation"
+        result = subprocess.run(["bash", str(self.root / "scripts/tf-stack.sh"), "apply"], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls("terraform")
+        self.assertEqual([c[1] for c in calls], ["init", "apply"])
+        self.assertTrue(any(v.startswith("-var-file=") for v in calls[-1]))
+        self.assertNotIn("-auto-approve", calls[-1])
+        self.assertIn("-backend-config=key=aws/dev/foundation/terraform.tfstate", calls[0])
+
+    def test_legacy_and_hidden_inputs_stop_before_authentication(self):
+        for key in ("TF_VAR_project", "TF_CLI_ARGS_plan", "TF_DATA_DIR", "TF_WORKSPACE"):
+            with self.subTest(key=key):
+                env = dict(self.env, **{key: "unexpected"})
+                result = subprocess.run(["bash", str(self.root / "scripts/tf-ci.sh"), "apply"], env=env, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.calls(), [])
+        (self.directory(STACKS[1]) / "terraform.tfvars").write_text('project="other"')
+        self.assertNotEqual(self.run_script().returncode, 0)
+        self.assertEqual(self.calls(), [])
+
+    def test_default_is_bootstrap_plan_without_operator(self):
+        self.env.pop("EKS_OPERATOR_PRINCIPAL_ARN")
+        shutil.rmtree(self.directory("aws/dev/foundation"))
+        result = subprocess.run(["bash", str(self.root / "scripts/tf-ci.sh")], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls("terraform")
+        self.assertEqual([c[1] for c in calls], ["init", "plan"])
+        self.assertTrue(all(c[0] == f"-chdir={self.directory('bootstrap/aws')}" for c in calls))
+        self.assert_no_plans()
+
+    def test_selected_stacks_do_not_automatically_apply_dependencies(self):
+        for target, stack in (("bootstrap", STACKS[0]), ("foundation", STACKS[1]), ("management", STACKS[2]), ("workload", STACKS[3])):
+            with self.subTest(target=target):
+                self.log.unlink(missing_ok=True)
+                (self.directory(stack) / ".scaffold").unlink(missing_ok=True)
+                result = self.run_script("apply", target)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = self.calls("terraform")
+                self.assertTrue(all(c[0] == f"-chdir={self.directory(stack)}" for c in calls))
+                self.assertEqual(sum(c[1] == "apply" for c in calls), 1)
+                self.assert_no_plans()
+
+    def test_selected_eks_requires_operator_and_unknown_targets_fail(self):
+        (self.directory(STACKS[2]) / ".scaffold").unlink()
+        self.env.pop("EKS_OPERATOR_PRINCIPAL_ARN")
+        for target in ("management", "account", "account/aws", "unknown", "../../bootstrap"):
+            self.assertNotEqual(self.run_script("plan", target).returncode, 0)
+            self.assertEqual(self.calls(), [])
+        self.assertNotEqual(self.run_script("plan", "bootstrap", "extra").returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_retired_stacks_never_authenticate_or_run_terraform(self):
         for stack in STACKS:
@@ -174,7 +243,7 @@ class TerraformCITest(unittest.TestCase):
 
     def test_missing_operator_is_rejected_before_any_stack_runs(self):
         (self.directory(STACKS[2]) / ".scaffold").unlink()
-        del self.env["TF_VAR_operator_principal_arn"]
+        del self.env["EKS_OPERATOR_PRINCIPAL_ARN"]
         self.assertNotEqual(self.run_script().returncode,0)
         self.assertEqual(self.calls(),[])
 

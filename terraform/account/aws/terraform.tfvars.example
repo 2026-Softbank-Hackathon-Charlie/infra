@@ -1,9 +1,4 @@
-aws_account_id = "000000000000"
-aws_region = "ap-northeast-2"
-project = "charlie"
-environment = "dev"
-github_oidc_subject_prefix = "repo:YOUR_OWNER/charlie-infra"
-# 기존 계정: provider 조회 후 해당 ARN 지정. provider가 없는 새 계정만 빈 문자열.
-github_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com"
-management_cluster_name = "charlie-dev-management"
-workload_cluster_name = "charlie-dev-workload"
+# 이 파일을 terraform.tfvars로 복사하지 마세요.
+# 공유 입력: config/project.json
+# 계정별 입력: config/account.local.json.example을 config/account.local.json으로 복사
+# make tf-init/tf-plan/tf-apply가 stack별 입력을 생성합니다. README 참조.

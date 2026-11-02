@@ -5,7 +5,7 @@ metadata:
   name: charlie-root
   namespace: argocd
 spec:
-  sourceRepos: [https://github.com/YOUR_OWNER/charlie-infra.git]
+  sourceRepos: [https://github.com/2026-Softbank-Hackathon-Charlie/infra.git]
   destinations:
     - server: https://kubernetes.default.svc
       namespace: argocd
@@ -21,12 +21,12 @@ metadata:
 spec:
   project: charlie-root
   source:
-    repoURL: https://github.com/YOUR_OWNER/charlie-infra.git
+    repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
     targetRevision: main
     path: helm/gitops
     helm:
       valuesObject:
-        repoURL: https://github.com/YOUR_OWNER/charlie-infra.git
+        repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
         revision: main
         targets:
           management:

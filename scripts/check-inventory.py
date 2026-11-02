@@ -8,7 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     readme = (ROOT / "README.md").read_text()
-    files = [p for p in ROOT.rglob("*") if p.is_file() and not any(x in p.relative_to(ROOT).parts for x in (".git", ".terraform", "__pycache__", ".generated"))]
+    # The supported account input is intentionally local and ignored by Git.
+    files = [p for p in ROOT.rglob("*") if p.is_file()
+             and p.relative_to(ROOT).as_posix() != "config/account.local.json"
+             and not any(x in p.relative_to(ROOT).parts for x in (".git", ".terraform", "__pycache__", ".generated"))]
     for path in files:
         rel = path.relative_to(ROOT).as_posix()
         assert f"]({rel})" in readme, f"README missing: {rel}"

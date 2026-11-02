@@ -11,6 +11,7 @@
 | [AGENTS.md](AGENTS.md) | 주요 의사결정을 ADR로 기록하는 Agent 지침 |
 | [docs/adr/template.md](docs/adr/template.md) | 배경·대안·결정 이유·영향을 기록하는 ADR 템플릿 |
 | [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
+| [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 
 ## 구조와 소유권
 
@@ -53,7 +54,9 @@ make check PYTHON=/tmp/charlie-check-venv/bin/python
 
 | 명령 | 확인 범위 |
 | --- | --- |
-| `make tf-check` | fmt + 임시 TF_DATA_DIR에서 backend 없는 init/validate. state/AWS 연결 없음 |
+| `make tf-check` | fmt + 정제 임시 복사본에서 backend 없는 init/validate. state/AWS 연결 없음 |
+| `make tf-verify` | root당 init 한 번 후 validate/mock 실행; CI matrix도 같은 runner 사용 |
+| `make config-check` | 공유 프로젝트 JSON의 스키마·명명·네트워크 입력 검사 |
 | `make tf-test` | 로컬 state/tfvars/override를 제외한 임시 복사본에서 provider mock test |
 | `make ci-test PYTHON=...` | fake AWS/Terraform 실행 순서·계정·state key·삭제 guard·실패 처리, workflow 수동 배포 조건, shell 구문 |
 | `make helm-check PYTHON=...` | 임시 chart dependency, bootstrap/GitOps/두 baseline 및 고정 외부 addon lint/render, AppProject/namespace·이미지 digest 검사 |
@@ -65,18 +68,25 @@ make check PYTHON=/tmp/charlie-check-venv/bin/python
 
 아래는 **운영자가 이후 별도로 실행하는 배포 안내**입니다. 예제 값은 그대로 배포하지 마세요. 이 문서의 `apply`, migration, Helm/kubectl 적용은 실제 외부 변경입니다.
 
-1. 저장소를 clone하고 모든 stack에서 실제 계정/리전/project/environment와 클러스터 이름을 일치시킵니다. 예제의 `repo:YOUR_OWNER/charlie-infra`는 `repo:2026-Softbank-Hackathon-Charlie/infra`로, 저장소 URL은 `https://github.com/2026-Softbank-Hackathon-Charlie/infra.git`으로 설정합니다. 다른 프로젝트의 state나 backend 설정을 재사용하지 않습니다.
-2. 각 root에서 `terraform.tfvars.example`을 `terraform.tfvars`로, `backend.hcl.example`을 `backend.hcl`로 복사하고 실제 값을 채웁니다. state 버킷은 새 `charlie-tfstate-<계정>-ap-northeast-2`, key는 예제의 stack별 경로를 사용합니다. account key는 `account/aws/terraform.tfstate`이며 CI 역할에 접근 권한을 주지 않습니다.
-3. 같은 AWS 계정의 GitHub OIDC provider 존재 여부를 관리자로 확인합니다.
+1. [config/project.json](config/project.json)을 공유 입력의 기준으로 사용합니다. 현재 `charlie/dev`, 서울, 기존 클러스터명과 state key를 유지합니다. CIDR·AZ·NAT 변경은 이 파일에서 하고 로컬/CI가 함께 사용합니다. 다른 환경·프로젝트로 이름을 바꾸려면 별도 migration 검토가 필요합니다.
+2. 계정별 입력은 다음처럼 준비합니다. 이 파일에는 access key·secret·토큰을 넣지 않습니다. 추가 운영자가 없다면 빈 배열을 유지합니다. 초기 bootstrap/account만 실행한다면 `operator_principal_arn`은 생략할 수 있지만 EKS 적용 전에 기존 운영자 IAM role/user ARN을 반드시 넣습니다.
+
+```bash
+umask 077
+cp config/account.local.json.example config/account.local.json
+# account.local.json의 실제 계정 ID와 기존 운영자 ARN 등을 편집
+python3 scripts/project-config.py check
+```
+
+3. AWS 인증 후 `aws sts get-caller-identity`로 계정을 확인하고 관리자로 기존 GitHub OIDC provider를 조회합니다. provider가 있으면 `github_oidc_provider_arn`에 기존 ARN을 넣어 소유권을 유지합니다. 없는 경우에만 빈 문자열로 신규 생성합니다. 기본 subject는 공통 설정의 `repo:2026-Softbank-Hackathon-Charlie/infra`이며 main만 신뢰합니다. 조직의 subject customization을 쓰면 로컬 계정 JSON의 `github_oidc_subject_prefix`에 실제 `@ID` 포함 prefix를 명시합니다.
 
 ```bash
 aws sts get-caller-identity
 aws iam list-open-id-connect-providers
-# 조회한 ARN으로 URL·audience가 GitHub token.actions.githubusercontent.com / sts.amazonaws.com인지 확인
 aws iam get-open-id-connect-provider --open-id-connect-provider-arn <조회한_ARN>
 ```
 
-기존 provider가 있으면 account의 `github_oidc_provider_arn`에 그 ARN을 넣고 **기존 state 소유를 유지**합니다. 새 charlie state로 중복 import하지 않습니다. provider가 없는 계정에서만 빈 문자열로 생성합니다. `github_oidc_subject_prefix`는 실제 저장소 OIDC sub prefix에 맞춥니다. 보통 `repo:OWNER/REPO`이며 조직의 subject customization을 사용하는 경우 실제 `@ID` 포함 prefix를 사용합니다. main 브랜치만 신뢰합니다.
+기존 `terraform.tfvars`, `terraform.tfvars.json`, `*.auto.tfvars*`, override 및 `backend.hcl`은 wrapper가 거부합니다. 기존 값을 검토해 공유 값은 project.json, 계정 값은 account.local.json으로 수동 이관한 후 해당 입력 파일을 안전하게 별도 보관합니다. state나 `.terraform`를 지워서 충돌을 우회하지 마세요. wrapper는 기존 backend 메타데이터의 bucket/key/region/account/잠금/암호화를 확인하고 다르거나 판독 불가하면 중단합니다. 기본 workspace만 지원하며 외부 `TF_VAR_*`, `TF_CLI_ARGS*`, `TF_DATA_DIR`, `TF_CLI_CONFIG_FILE`도 거부합니다. 자동 state migration/reconfigure는 하지 않습니다.
 
 ### S3 state 최초 생성
 
@@ -84,20 +94,25 @@ aws iam get-open-id-connect-provider --open-id-connect-provider-arn <조회한_A
 
 ```bash
 umask 077
-mkdir -p .generated/bootstrap-local
-# backend.tf를 제외한 bootstrap 정의와 lock, 준비한 로컬 입력만 복사
+mkdir -p .generated/bootstrap-local .generated/bootstrap-inputs
+# 정식 root에 legacy 입력이나 초기화 충돌이 없을 때 공통 입력 생성
+python3 scripts/project-config.py prepare --stack bootstrap/aws \
+  --output-dir .generated/bootstrap-inputs
+# backend.tf 없이 로컬 backend로 최초 생성
 cp terraform/bootstrap/aws/main.tf terraform/bootstrap/aws/variables.tf \
    terraform/bootstrap/aws/outputs.tf terraform/bootstrap/aws/providers.tf \
    terraform/bootstrap/aws/versions.tf terraform/bootstrap/aws/.terraform.lock.hcl \
-   terraform/bootstrap/aws/terraform.tfvars .generated/bootstrap-local/
+   .generated/bootstrap-local/
 terraform -chdir=.generated/bootstrap-local init -lockfile=readonly
-terraform -chdir=.generated/bootstrap-local plan
-terraform -chdir=.generated/bootstrap-local apply
-# 버킷 생성 후 같은 작업 디렉터리에서 backend를 추가하고 local state를 이전
+terraform -chdir=.generated/bootstrap-local plan \
+  -var-file=../bootstrap-inputs/inputs.tfvars.json
+terraform -chdir=.generated/bootstrap-local apply \
+  -var-file=../bootstrap-inputs/inputs.tfvars.json
+# 생성한 bootstrap state만 새 S3로 이전: 별도 승인 후 수동 실행
 cp terraform/bootstrap/aws/backend.tf .generated/bootstrap-local/
 terraform -chdir=.generated/bootstrap-local init -migrate-state \
-  -backend-config=../../terraform/bootstrap/aws/backend.hcl
-# 정식 root도 같은 새 bucket/key로 연결
+  -backend-config=../bootstrap-inputs/backend.json
+# 이전 및 원격 리소스 목록 확인 후 정식 root 연결
 make tf-init STACK=bootstrap/aws
 ```
 
@@ -116,24 +131,38 @@ make tf-apply STACK=account/aws
 # 이후 STACK=aws/dev/foundation, aws/dev/management, aws/dev/workload 순서로 반복
 ```
 
-실제 `terraform.tfvars`는 로컬 명령에만 사용합니다. CI는 checked-in 기본값과 아래 repository variables를 사용하므로 기본 project/environment/네트워크를 바꾸면 CI 입력도 명시적으로 맞춰야 합니다. `tf-ci.sh plan`은 stack 간 미생성 출력을 예측하지 않으므로 최초 구축의 전체 일괄 dry-run이 아닙니다. 최초 생성은 위 의존 순서로 진행합니다.
+로컬과 CI는 같은 `config/project.json` 및 `scripts/project-config.py`로 입력을 생성합니다. 계정 JSON과 GitHub 변수는 계정별 값만 제공합니다. 공통 설정과 AWS_REGION·TF_STATE_BUCKET·역할 ARN이 어긋나면 중단합니다. backend JSON과 변수 파일은 임시 생성 후 정리합니다. `bash scripts/tf-ci.sh`의 기본 동작은 `plan bootstrap`입니다. 전체 검토는 `bash scripts/tf-ci.sh plan all-runtime`으로 명시해야 하며, 미생성 foundation 출력을 예측하지 않으므로 최초 구축의 전체 일괄 dry-run이 아닙니다. 최초 생성은 위 의존 순서로 진행합니다.
 
 ## GitHub Actions 파이프라인
 
-- push/PR: `make check`만 실행하며 AWS 자격 증명을 받지 않습니다.
-- 수동 실행: main에서 `apply=true`를 선택하고 check가 성공한 경우에만 OIDC 인증 후 bootstrap → foundation → management → workload를 순차 적용합니다. account는 제외합니다. apply는 저장된 plan을 사용하며 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체를 사전 차단합니다.
-- `apply=false`가 기본값이며 main push만으로 배포하지 않습니다. workflow는 `.github/workflows/terraform-check.yml`에 정의되어 있습니다.
+- push/PR: Terraform 6개 root의 validate/mock을 matrix(최대 동시 3개)로 실행하고 Helm·스크립트 검사를 병렬 실행합니다. 모든 검사에 AWS 인증을 부여하지 않습니다. fork PR도 공통 설정 검증을 수행합니다.
+- `check`는 모든 검증의 성공만 허용하는 집계 job이며 실패·skip·취소 시 배포하지 않습니다. 기존 필수 검사 이름을 유지합니다. Terraform은 정제된 임시 복사본에서 root당 init 한 번(총 6회)을 수행합니다. OS/아키텍처/CLI/root/lock별 provider 전용 캐시를 사용하고 state·plan·tfvars·전체 `.terraform`는 캐시하지 않습니다. runner별 캐시는 독립적입니다.
+- 각 Terraform root의 경과 시간을 로그에 출력합니다. cold/warm 실행 비교는 실제 GitHub 실행 후 확인해야 하며 특정 속도 향상을 보장하지 않습니다. 병렬 runner 사용 분이 증가할 수 있습니다.
+- 수동 실행: main에서 `action=plan|apply`, `stack=bootstrap|foundation|management|workload|all-runtime`을 선택합니다. 기본값은 **`plan + bootstrap`**이며 리소스를 적용하지 않습니다. 기존 `apply` boolean 입력은 이 두 choice 입력으로 대체했습니다.
+- check 성공 후에만 OIDC로 인증하고 선택한 stack을 실행합니다. 개별 선택은 의존 stack을 자동 생성하지 않습니다. `all-runtime`을 명시한 경우에만 bootstrap → foundation → management → workload를 순차 실행하며 account는 관리자 로컬 전용입니다. apply는 저장한 plan을 사용하고 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체 guard를 유지합니다.
+- `bootstrap`은 state S3와 보호 설정만 관리합니다. `foundation` apply는 VPC·NAT·SSM bridge·IAM·Loki S3를, `management`/`workload` apply는 각 EKS를 포함합니다. `all-runtime + apply`는 두 EKS까지 포함합니다.
+- main push만으로 AWS 작업을 실행하지 않습니다. 수동 plan도 S3 backend·CI 역할이 필요하며 state 잠금 파일을 일시 생성할 수 있습니다. workflow는 `.github/workflows/terraform-check.yml`에 정의되어 있습니다.
 
 | Repository variable | 설정 값 |
 | --- | --- |
 | `AWS_ACCOUNT_ID` | 실제 12자리 계정 |
-| `AWS_REGION` | 기본 `ap-northeast-2` |
-| `TF_STATE_BUCKET` | `charlie-tfstate-<계정>-<리전>` |
+| `AWS_REGION` | 선택 사항. 설정 시 project.json의 리전과 같아야 함 |
+| `TF_STATE_BUCKET` | 선택 사항. 설정 시 공통 설정에서 계산한 버킷명과 같아야 함 |
 | `TERRAFORM_APPLY_ROLE_ARN` | account 출력 `terraform_apply_role_arn` |
 | `EKS_OPERATOR_PRINCIPAL_ARN` | 기존 운영자 IAM role/user ARN |
 | `EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS` | 추가 운영자 ARN JSON 배열, 기본 `[]` |
 
+배포 인증 전 실행 저장소/브랜치가 공통 설정과 일치하는지도 확인합니다. OIDC subject는 account의 명시 입력이며 맞춤 subject 설정은 관리자 책임입니다.
+
 동일 apply concurrency group은 취소하지 않고 직렬 실행합니다. IAM은 프로젝트 태그·이름 범위로 제한하지만, 이 CI 역할은 두 클러스터와 해당 runtime IAM을 관리하므로 권한이 큽니다. branch 보호/저장소 접근 권한은 운영 정책으로 별도 관리하세요.
+
+### 최소 구축과 첫 파이프라인 실행 순서
+
+1. 관리자 로컬 인증으로 S3 bootstrap을 생성하고 그 bootstrap state만 S3로 이전합니다. 위 최초 생성 절차를 사용합니다.
+2. 로컬에서 `account/aws` plan을 검토하고 별도 승인 후 apply하여 CI 역할을 생성합니다. 기존 GitHub OIDC provider는 config의 ARN으로 참조합니다.
+3. Repository variables를 설정하고 이 workflow 변경을 main에 반영합니다. 코드가 로컬에만 있으면 GitHub의 기존 workflow 동작은 바뀌지 않습니다.
+4. Run workflow에서 `action=plan`, `stack=bootstrap`으로 실행해 OIDC·state 연결을 확인합니다. 이 단계에서 EKS는 생성하지 않습니다.
+5. 이후 필요할 때만 foundation과 EKS를 각각 검토·적용합니다. EKS에는 운영자 IAM ARN과 선행 foundation state가 필요합니다.
 
 ## Private EKS 접근과 Argo CD 설치
 
@@ -248,14 +277,14 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [scripts/check-inventory.py](scripts/check-inventory.py) | README 파일 목록 및 Terraform 로컬 module/file 참조 확인 |
 | [scripts/common.sh](scripts/common.sh) | 공통 오류 처리·도구 확인·허용 AWS stack 경로 변환 |
 | [scripts/helm-check.sh](scripts/helm-check.sh) | 선택한 Python 환경으로 Helm 검사 실행 |
-| [scripts/terraform-check.sh](scripts/terraform-check.sh) | 임시 Terraform data directory의 backend 없는 init/validate |
+| [scripts/terraform-check.sh](scripts/terraform-check.sh) | 정제 임시 복사본에서 backend 없는 init/validate |
 | [scripts/terraform-test.sh](scripts/terraform-test.sh) | 실제 state·tfvars를 제외한 임시 복사본의 Terraform mock test |
 | [scripts/tests/test-tf-ci.py](scripts/tests/test-tf-ci.py) | fake CLI로 순서·state key·계정·실패·삭제 guard·임시 plan 정리 검증 |
 | [scripts/tests/test-workflow.py](scripts/tests/test-workflow.py) | 이벤트/브랜치/apply 입력 조합별 CI 배포 gate 검증 |
 | [scripts/tf-ci.sh](scripts/tf-ci.sh) | CI의 stack 순서·state 분리·saved plan apply·삭제 guard 실행 |
 | [scripts/tf-stack.sh](scripts/tf-stack.sh) | 계정 확인을 포함한 로컬 init/plan/apply; apply 대화형 승인 유지 |
 | [terraform/account/aws/.terraform.lock.hcl](terraform/account/aws/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
-| [terraform/account/aws/backend.hcl.example](terraform/account/aws/backend.hcl.example) | 새 S3 bucket·stack 전용 state key·계정 제한 입력 예제 |
+| [terraform/account/aws/backend.hcl.example](terraform/account/aws/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/account/aws/backend.tf](terraform/account/aws/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/account/aws/ci-access.tf](terraform/account/aws/ci-access.tf) | 태그 제한 compute 권한 및 SSM bridge 실행 권한 |
 | [terraform/account/aws/ci-eks.tf](terraform/account/aws/ci-eks.tf) | CI의 EKS·runtime IAM·PassRole·서비스 연결 역할 관리 범위 |
@@ -264,56 +293,56 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/account/aws/main.tf](terraform/account/aws/main.tf) | 선택적 GitHub OIDC 생성/기존 ARN 참조, main trust, CI 역할과 state 권한 |
 | [terraform/account/aws/outputs.tf](terraform/account/aws/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/account/aws/providers.tf](terraform/account/aws/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
-| [terraform/account/aws/terraform.tfvars.example](terraform/account/aws/terraform.tfvars.example) | 새 환경에 맞게 복사·수정할 비밀값 없는 입력 예제 |
+| [terraform/account/aws/terraform.tfvars.example](terraform/account/aws/terraform.tfvars.example) | 공통 프로젝트/계정 JSON 입력으로 이관하는 안내 |
 | [terraform/account/aws/tests/eks-ci.tftest.hcl](terraform/account/aws/tests/eks-ci.tftest.hcl) | CI 세션·runtime IAM·EKS cluster 생성 보안 경계 mock 검사 |
 | [terraform/account/aws/tests/github-ci.tftest.hcl](terraform/account/aws/tests/github-ci.tftest.hcl) | 신규/기존 OIDC 두 경로·main trust·state/Loki 권한·잘못된 계정 거부 mock 검사 |
 | [terraform/account/aws/tests/network-ci.tftest.hcl](terraform/account/aws/tests/network-ci.tftest.hcl) | CI의 태그·리전·네트워크 IAM 경계 mock 검사 |
 | [terraform/account/aws/variables.tf](terraform/account/aws/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/account/aws/versions.tf](terraform/account/aws/versions.tf) | Terraform 및 provider 버전 조건 |
 | [terraform/bootstrap/aws/.terraform.lock.hcl](terraform/bootstrap/aws/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
-| [terraform/bootstrap/aws/backend.hcl.example](terraform/bootstrap/aws/backend.hcl.example) | 새 S3 bucket·stack 전용 state key·계정 제한 입력 예제 |
+| [terraform/bootstrap/aws/backend.hcl.example](terraform/bootstrap/aws/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/bootstrap/aws/backend.tf](terraform/bootstrap/aws/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/bootstrap/aws/main.tf](terraform/bootstrap/aws/main.tf) | state S3 버킷·versioning·암호화·공개 차단·전송 보안·삭제 보호 |
 | [terraform/bootstrap/aws/outputs.tf](terraform/bootstrap/aws/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/bootstrap/aws/providers.tf](terraform/bootstrap/aws/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
-| [terraform/bootstrap/aws/terraform.tfvars.example](terraform/bootstrap/aws/terraform.tfvars.example) | 새 환경에 맞게 복사·수정할 비밀값 없는 입력 예제 |
+| [terraform/bootstrap/aws/terraform.tfvars.example](terraform/bootstrap/aws/terraform.tfvars.example) | 공통 프로젝트/계정 JSON 입력으로 이관하는 안내 |
 | [terraform/bootstrap/aws/variables.tf](terraform/bootstrap/aws/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/bootstrap/aws/versions.tf](terraform/bootstrap/aws/versions.tf) | Terraform 및 provider 버전 조건 |
 | [terraform/config/aws-load-balancer-controller-policy.json](terraform/config/aws-load-balancer-controller-policy.json) | EKS 모듈이 읽는 AWS Load Balancer Controller IAM 정책 문서 |
 | [terraform/environments/aws/dev/foundation/.terraform.lock.hcl](terraform/environments/aws/dev/foundation/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
 | [terraform/environments/aws/dev/foundation/access.tf](terraform/environments/aws/dev/foundation/access.tf) | 공인 IP/인바운드 없는 SSM bridge EC2·IAM·SG |
 | [terraform/environments/aws/dev/foundation/argocd.tf](terraform/environments/aws/dev/foundation/argocd.tf) | 관리 Argo Pod Identity 역할과 두 EKS deploy 역할·assume 관계 |
-| [terraform/environments/aws/dev/foundation/backend.hcl.example](terraform/environments/aws/dev/foundation/backend.hcl.example) | 새 S3 bucket·stack 전용 state key·계정 제한 입력 예제 |
+| [terraform/environments/aws/dev/foundation/backend.hcl.example](terraform/environments/aws/dev/foundation/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/foundation/backend.tf](terraform/environments/aws/dev/foundation/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/environments/aws/dev/foundation/main.tf](terraform/environments/aws/dev/foundation/main.tf) | 공유 인프라 기능별 파일 안내 |
 | [terraform/environments/aws/dev/foundation/network.tf](terraform/environments/aws/dev/foundation/network.tf) | 공유 VPC·public/private subnet·IGW·NAT·route·관리→workload API SG |
 | [terraform/environments/aws/dev/foundation/observability.tf](terraform/environments/aws/dev/foundation/observability.tf) | Loki S3·암호화·버킷 정책·Loki Pod Identity IAM |
 | [terraform/environments/aws/dev/foundation/outputs.tf](terraform/environments/aws/dev/foundation/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/environments/aws/dev/foundation/providers.tf](terraform/environments/aws/dev/foundation/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
-| [terraform/environments/aws/dev/foundation/terraform.tfvars.example](terraform/environments/aws/dev/foundation/terraform.tfvars.example) | 새 환경에 맞게 복사·수정할 비밀값 없는 입력 예제 |
+| [terraform/environments/aws/dev/foundation/terraform.tfvars.example](terraform/environments/aws/dev/foundation/terraform.tfvars.example) | 공통 프로젝트/계정 JSON 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/foundation/tests/access.tftest.hcl](terraform/environments/aws/dev/foundation/tests/access.tftest.hcl) | private SSM bridge와 Argo assume-role 경계 mock 검사 |
 | [terraform/environments/aws/dev/foundation/tests/network.tftest.hcl](terraform/environments/aws/dev/foundation/tests/network.tftest.hcl) | 공유 subnet/AZ/CIDR/NAT·잘못된 네트워크 입력 mock 검사 |
 | [terraform/environments/aws/dev/foundation/tests/observability.tftest.hcl](terraform/environments/aws/dev/foundation/tests/observability.tftest.hcl) | Loki 버킷 이름/삭제 보호·SA trust·S3 범위 mock 검사 |
 | [terraform/environments/aws/dev/foundation/variables.tf](terraform/environments/aws/dev/foundation/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/environments/aws/dev/foundation/versions.tf](terraform/environments/aws/dev/foundation/versions.tf) | Terraform 및 provider 버전 조건 |
 | [terraform/environments/aws/dev/management/.terraform.lock.hcl](terraform/environments/aws/dev/management/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
-| [terraform/environments/aws/dev/management/backend.hcl.example](terraform/environments/aws/dev/management/backend.hcl.example) | 새 S3 bucket·stack 전용 state key·계정 제한 입력 예제 |
+| [terraform/environments/aws/dev/management/backend.hcl.example](terraform/environments/aws/dev/management/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/management/backend.tf](terraform/environments/aws/dev/management/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/environments/aws/dev/management/identity.tf](terraform/environments/aws/dev/management/identity.tf) | 관리 Argo SA 3개와 Loki SA의 Pod Identity 연결 |
 | [terraform/environments/aws/dev/management/main.tf](terraform/environments/aws/dev/management/main.tf) | foundation remote state를 읽고 관리 EKS 모듈 연결 |
 | [terraform/environments/aws/dev/management/outputs.tf](terraform/environments/aws/dev/management/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/environments/aws/dev/management/providers.tf](terraform/environments/aws/dev/management/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
-| [terraform/environments/aws/dev/management/terraform.tfvars.example](terraform/environments/aws/dev/management/terraform.tfvars.example) | 새 환경에 맞게 복사·수정할 비밀값 없는 입력 예제 |
+| [terraform/environments/aws/dev/management/terraform.tfvars.example](terraform/environments/aws/dev/management/terraform.tfvars.example) | 공통 프로젝트/계정 JSON 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/management/tests/eks.tftest.hcl](terraform/environments/aws/dev/management/tests/eks.tftest.hcl) | foundation 출력만 소비하는 해당 EKS target 계약 mock 검사 |
 | [terraform/environments/aws/dev/management/variables.tf](terraform/environments/aws/dev/management/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/environments/aws/dev/management/versions.tf](terraform/environments/aws/dev/management/versions.tf) | Terraform 및 provider 버전 조건 |
 | [terraform/environments/aws/dev/workload/.terraform.lock.hcl](terraform/environments/aws/dev/workload/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
-| [terraform/environments/aws/dev/workload/backend.hcl.example](terraform/environments/aws/dev/workload/backend.hcl.example) | 새 S3 bucket·stack 전용 state key·계정 제한 입력 예제 |
+| [terraform/environments/aws/dev/workload/backend.hcl.example](terraform/environments/aws/dev/workload/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/workload/backend.tf](terraform/environments/aws/dev/workload/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/environments/aws/dev/workload/main.tf](terraform/environments/aws/dev/workload/main.tf) | foundation remote state를 읽고 워크로드 EKS 모듈 연결 |
 | [terraform/environments/aws/dev/workload/outputs.tf](terraform/environments/aws/dev/workload/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/environments/aws/dev/workload/providers.tf](terraform/environments/aws/dev/workload/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
-| [terraform/environments/aws/dev/workload/terraform.tfvars.example](terraform/environments/aws/dev/workload/terraform.tfvars.example) | 새 환경에 맞게 복사·수정할 비밀값 없는 입력 예제 |
+| [terraform/environments/aws/dev/workload/terraform.tfvars.example](terraform/environments/aws/dev/workload/terraform.tfvars.example) | 공통 프로젝트/계정 JSON 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/workload/tests/eks.tftest.hcl](terraform/environments/aws/dev/workload/tests/eks.tftest.hcl) | foundation 출력만 소비하는 해당 EKS target 계약 mock 검사 |
 | [terraform/environments/aws/dev/workload/variables.tf](terraform/environments/aws/dev/workload/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/environments/aws/dev/workload/versions.tf](terraform/environments/aws/dev/workload/versions.tf) | Terraform 및 provider 버전 조건 |
@@ -323,3 +352,18 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/modules/eks/tests/eks.tftest.hcl](terraform/modules/eks/tests/eks.tftest.hcl) | EKS 모듈 private API·노드·addon·운영자 경계 mock 검사 |
 | [terraform/modules/eks/variables.tf](terraform/modules/eks/variables.tf) | stack/module 입력값·기본값·유효성 검사 |
 | [terraform/modules/eks/versions.tf](terraform/modules/eks/versions.tf) | Terraform 및 provider 버전 조건 |
+
+## 공통 설정·병렬 검증 추가 파일
+
+| 파일 | 설명 |
+| --- | --- |
+| [config/project.json](config/project.json) | 로컬/CI 공통 프로젝트·네트워크 입력 |
+| [config/account.local.json.example](config/account.local.json.example) | Git 제외 계정 입력 예제; 자격 증명 저장 금지 |
+| [scripts/project-config.py](scripts/project-config.py) | 공통 입력 생성·충돌·backend 대상 검증 |
+| [scripts/terraform-verify.py](scripts/terraform-verify.py) | 정제 복사본의 통합 validate/mock runner |
+| [scripts/tests/test-project-config.py](scripts/tests/test-project-config.py) | 공통 설정·계정·backend·숨은 입력 회귀 테스트 |
+| [scripts/tests/test-terraform-verify.py](scripts/tests/test-terraform-verify.py) | 검증 정제 복사·init 재사용·캐시 경로 테스트 |
+| [docs/adr/0003-share-project-inputs-between-local-and-ci.md](docs/adr/0003-share-project-inputs-between-local-and-ci.md) | 로컬/CI 공통 설정 결정 |
+| [docs/adr/0004-parallelize-infrastructure-checks.md](docs/adr/0004-parallelize-infrastructure-checks.md) | CI 병렬화·provider 캐시 결정 |
+| [docs/adr/0007-register-account-github-oidc-provider.md](docs/adr/0007-register-account-github-oidc-provider.md) | 계정 공용 GitHub OIDC provider 등록과 Terraform의 기존 ARN 참조 결정 |
+| [docs/adr/0008-select-terraform-stack-and-action.md](docs/adr/0008-select-terraform-stack-and-action.md) | 기본 bootstrap plan과 stack별 수동 Terraform 실행 결정 |

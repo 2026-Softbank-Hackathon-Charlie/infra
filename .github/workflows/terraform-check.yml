@@ -4,16 +4,42 @@ on:
   push:
   workflow_dispatch:
     inputs:
-      apply:
-        description: 'main의 검증된 Terraform 구성을 실제 AWS에 적용'
-        type: boolean
-        default: false
+      action:
+        description: 'plan: 변경 검토만 / apply: 선택 stack의 실제 AWS 변경'
+        type: choice
+        default: plan
+        options: [plan, apply]
+      stack:
+        description: '실행 범위. all-runtime은 두 EKS를 포함하며 의존 stack을 자동 생성하지 않음'
+        type: choice
+        default: bootstrap
+        options: [bootstrap, foundation, management, workload, all-runtime]
+
 permissions:
   contents: read
 jobs:
-  check:
+  terraform:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - stack: bootstrap/aws
+            lock: terraform/bootstrap/aws/.terraform.lock.hcl
+          - stack: account/aws
+            lock: terraform/account/aws/.terraform.lock.hcl
+          - stack: aws/dev/foundation
+            lock: terraform/environments/aws/dev/foundation/.terraform.lock.hcl
+          - stack: modules/eks
+            lock: terraform/modules/eks/.terraform.lock.hcl
+          - stack: aws/dev/management
+            lock: terraform/environments/aws/dev/management/.terraform.lock.hcl
+          - stack: aws/dev/workload
+            lock: terraform/environments/aws/dev/workload/.terraform.lock.hcl
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-providers
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,14 +58,68 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Create provider cache directory
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-providers-${{ runner.os }}-${{ runner.arch }}-${{ steps.tf-version.outputs.version }}-${{ matrix.stack }}-${{ hashFiles(matrix.lock) }}
+      - name: Validate and mock test (one init per root)
+        run: python3 scripts/terraform-verify.py --stack '${{ matrix.stack }}'
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: azure/setup-helm@v4.3.1
         with:
           version: v3.19.1
       - run: python3 -m pip install PyYAML==6.0.3
-      - run: make check
+      - run: make helm-check
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read pinned Terraform version
+        id: tf-version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < .terraform-version)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tf-version.outputs.version }}
+          terraform_wrapper: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install PyYAML==6.0.3
+      - run: make tf-fmt-check ci-test inventory-check config-check
+  check:
+    if: always()
+    needs: [terraform, helm, scripts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all checks to pass
+        env:
+          TERRAFORM_RESULT: ${{ needs.terraform.result }}
+          HELM_RESULT: ${{ needs.helm.result }}
+          SCRIPTS_RESULT: ${{ needs.scripts.result }}
+        run: |
+          [[ "$TERRAFORM_RESULT" == success && "$HELM_RESULT" == success && "$SCRIPTS_RESULT" == success ]]
   deploy:
     needs: check
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply == true
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'plan' || inputs.action == 'apply')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     concurrency:
@@ -50,22 +130,22 @@ jobs:
       id-token: write
     env:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       AWS_ROLE_ARN: ${{ vars.TERRAFORM_APPLY_ROLE_ARN }}
-      TF_VAR_operator_principal_arn: ${{ vars.EKS_OPERATOR_PRINCIPAL_ARN }}
-      TF_VAR_additional_operator_principal_arns: ${{ vars.EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS || '[]' }}
+      EKS_OPERATOR_PRINCIPAL_ARN: ${{ vars.EKS_OPERATOR_PRINCIPAL_ARN }}
+      EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS: ${{ vars.EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS || '[]' }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Validate deployment settings
+        id: settings
         shell: bash
-        run: |
-          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ && "$AWS_ACCOUNT_ID" != 000000000000 ]]
-          [[ -n "$AWS_REGION" && -n "$TF_STATE_BUCKET" ]]
-          [[ "$TF_STATE_BUCKET" == "charlie-tfstate-$AWS_ACCOUNT_ID-$AWS_REGION" ]]
-          [[ "$AWS_ROLE_ARN" == "arn:aws:iam::$AWS_ACCOUNT_ID:role/charlie-dev-github-terraform" ]]
+        run: python3 scripts/project-config.py settings --ci --deploy-context >> "$GITHUB_OUTPUT"
       - name: Read pinned Terraform version
         id: tf-version
         shell: bash
@@ -82,6 +162,10 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           role-session-name: charlie-terraform-${{ github.run_id }}
           role-duration-seconds: 7200
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ steps.settings.outputs.region }}
           allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
-      - run: bash scripts/tf-ci.sh apply
+      - name: Run selected Terraform stack
+        env:
+          TF_ACTION: ${{ inputs.action }}
+          TF_STACK: ${{ inputs.stack }}
+        run: bash scripts/tf-ci.sh "$TF_ACTION" "$TF_STACK"

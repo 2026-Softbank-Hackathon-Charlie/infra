@@ -1,0 +1,17 @@
+{
+  "project": "charlie",
+  "environment": "dev",
+  "aws_region": "ap-northeast-2",
+  "github_repository": "2026-Softbank-Hackathon-Charlie/infra",
+  "github_branch": "main",
+  "management_cluster_name": "charlie-dev-management",
+  "workload_cluster_name": "charlie-dev-workload",
+  "foundation": {
+    "vpc_cidr": "10.40.0.0/16",
+    "availability_zones": [
+      "ap-northeast-2a",
+      "ap-northeast-2c"
+    ],
+    "nat_gateway_mode": "per_az"
+  }
+}

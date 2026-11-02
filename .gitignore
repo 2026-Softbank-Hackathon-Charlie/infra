@@ -68,3 +68,6 @@ __pycache__/
 
 # Ephemeral GitHub Google auth action ADC files
 gha-creds-*.json
+
+# Account-specific deployment inputs (no credentials)
+config/account.local.json
