@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hopcharlie-gateway
+  labels:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+  annotations:
+    # Port 8000 forwards everything to the app, so the load balancer checks the
+    # gateway itself on the admin port.
+    alb.ingress.kubernetes.io/healthcheck-port: "9901"
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+spec:
+  selector:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+  ports:
+    - {name: http, port: 8000, targetPort: 8000}
+    - {name: admin, port: 9901, targetPort: 9901}
+---
+# Which environment receives writes, kept across restarts (-state-file).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hopcharlie-gateway-data
+  labels:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.storage.className | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.gateway | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hopcharlie-gateway
+  labels:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "hopcharlie.labels" "gateway" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hopcharlie.labels" "gateway" | nindent 8 }}
+    spec:
+      serviceAccountName: hopcharlie-platform
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "hopcharlie.podSecurity" 10001 | nindent 8 }}
+      initContainers:
+        {{- include "hopcharlie.fetchSettings" (dict "root" $ "fetch" "gateway") | nindent 8 }}
+      containers:
+        - name: gateway
+          image: {{ .Values.images.platform | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              while IFS= read -r line || [ -n "$line" ]; do
+                case "$line" in ''|'#'*) ;; *=*) export "$line" ;; esac
+              done < /config/gateway.env
+              exec hopcharlie-gateway -listen :8000 -admin-addr :9901 -state-file /data/gateway-state.json
+          env:
+            - {name: GATEWAY_BACKENDS, value: {{ .Values.gateway.backends | quote }}}
+            {{- with .Values.gateway.initialBackend }}
+            - {name: GATEWAY_INITIAL_BACKEND, value: {{ . | quote }}}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 8000}
+            - {name: admin, containerPort: 9901}
+          readinessProbe:
+            httpGet: {path: /healthz, port: admin}
+            periodSeconds: 5
+          securityContext:
+            {{- include "hopcharlie.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: settings, mountPath: /config, readOnly: true}
+      volumes:
+        {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: hopcharlie-gateway-data

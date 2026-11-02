@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hopcharlie-postgres
+  labels:
+    {{- include "hopcharlie.labels" "postgres" | nindent 4 }}
+spec:
+  selector:
+    {{- include "hopcharlie.labels" "postgres" | nindent 4 }}
+  ports:
+    - {name: postgres, port: 5432, targetPort: 5432}
+---
+# The platform's own database: plans, runs, events and the audit log.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hopcharlie-postgres
+  labels:
+    {{- include "hopcharlie.labels" "postgres" | nindent 4 }}
+spec:
+  serviceName: hopcharlie-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hopcharlie.labels" "postgres" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hopcharlie.labels" "postgres" | nindent 8 }}
+    spec:
+      serviceAccountName: hopcharlie-platform
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "hopcharlie.podSecurity" 70 | nindent 8 }}
+      initContainers:
+        {{- include "hopcharlie.fetchSettings" (dict "root" $ "fetch" "postgres") | nindent 8 }}
+      containers:
+        - name: postgres
+          image: {{ .Values.images.postgres | quote }}
+          env:
+            - {name: POSTGRES_USER, value: charlie}
+            - {name: POSTGRES_DB, value: charlie}
+            - {name: POSTGRES_PASSWORD_FILE, value: /config/db-password}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "charlie", "-d", "charlie"]
+            periodSeconds: 5
+          securityContext:
+            {{- include "hopcharlie.containerSecurity" . | nindent 12 }}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: settings, mountPath: /config, readOnly: true}
+            - {name: run, mountPath: /var/run/postgresql}
+      volumes:
+        {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        - name: run
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.storage.className | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.postgres | quote }}

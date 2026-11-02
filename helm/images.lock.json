@@ -18,6 +18,10 @@
     "docker.io/otel/opentelemetry-collector-contrib:0.161.0": "sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1",
     "docker.io/grafana/loki:3.6.12": "sha256:2483b71b28b15dee230f85512cae2b20c4b5f6e98a6eabe686cbccfa5ea3ba4a",
     "docker.io/bitnami/sealed-secrets-controller:0.40.0": "sha256:b1ff382e9300dc9e74991f3177b18cafc06ce43b5c21349c86adbdd1d1c177d3",
-    "quay.io/argoproj/argo-rollouts:v1.10.0": "sha256:187630ba722846bb8e079630364d3c29c8246a256be95785fd957b088f621c4e"
+    "quay.io/argoproj/argo-rollouts:v1.10.0": "sha256:187630ba722846bb8e079630364d3c29c8246a256be95785fd957b088f621c4e",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:0c700cd": "sha256:3a7feedca474acc8f06330ddcd9ae9e07ebc27cd410af04c08914d76d27d5e4d",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:5712152": "sha256:bb3417556e4f08494f1aa9f8278cea02aa523c830b1275809d8f615e8bb8a15e",
+    "docker.io/library/postgres:17.11-alpine": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+    "public.ecr.aws/aws-cli/aws-cli:2.31.0": "sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   }
 }

@@ -1,0 +1,20 @@
+{
+  "vpcCidr": "10.40.0.0/16",
+  "images": {
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:0c700cd@sha256:3a7feedca474acc8f06330ddcd9ae9e07ebc27cd410af04c08914d76d27d5e4d",
+    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:5712152@sha256:bb3417556e4f08494f1aa9f8278cea02aa523c830b1275809d8f615e8bb8a15e",
+    "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+    "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
+  },
+  "gateway": {
+    "backends": "gke=http://shop.gke.hopcharlie.internal,eks=http://shop.eks.hopcharlie.internal,onprem=http://shop.onprem.hopcharlie.internal"
+  },
+  "api": {
+    "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
+    "dsnHostSuffixes": ".ts.net"
+  },
+  "ingress": {
+    "enabled": false,
+    "domain": "hopcharlie.dev"
+  }
+}
