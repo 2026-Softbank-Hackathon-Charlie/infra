@@ -125,7 +125,8 @@ def variables(p, a, stack):
     if stack in ('account/aws', 'aws/dev/foundation'):
         common.update({key: p[key] for key in ('management_cluster_name', 'workload_cluster_name')})
     if stack == 'account/aws':
-        prefix = a.get('github_oidc_subject_prefix', 'repo:' + p['github_repository'])
+        require('github_oidc_subject_prefix' in a, 'Set github_oidc_subject_prefix in config/account.local.json from the GitHub OIDC customization API before preparing account/aws.')
+        prefix = a['github_oidc_subject_prefix']
         require(re.sub(r'@[0-9]+', '', prefix) == 'repo:' + p['github_repository'], 'OIDC subject prefix must match the configured repository.')
         common['github_oidc_subject_prefix'] = prefix
         common['github_oidc_provider_arn'] = a.get('github_oidc_provider_arn', '')
