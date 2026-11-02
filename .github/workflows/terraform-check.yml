@@ -38,8 +38,6 @@ jobs:
             lock: terraform/environments/aws/dev/management/.terraform.lock.hcl
           - stack: aws/dev/workload
             lock: terraform/environments/aws/dev/workload/.terraform.lock.hcl
-    env:
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-providers
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,12 +57,18 @@ jobs:
         with:
           python-version: '3.12'
       - name: Create provider cache directory
-        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+        id: provider-cache
+        run: |
+          cache_dir="$RUNNER_TEMP/terraform-providers"
+          mkdir -p "$cache_dir"
+          printf 'path=%s\n' "$cache_dir" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
-          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          path: ${{ steps.provider-cache.outputs.path }}
           key: tf-providers-${{ runner.os }}-${{ runner.arch }}-${{ steps.tf-version.outputs.version }}-${{ matrix.stack }}-${{ hashFiles(matrix.lock) }}
       - name: Validate and mock test (one init per root)
+        env:
+          TF_PLUGIN_CACHE_DIR: ${{ steps.provider-cache.outputs.path }}
         run: python3 scripts/terraform-verify.py --stack '${{ matrix.stack }}'
   helm:
     runs-on: ubuntu-latest

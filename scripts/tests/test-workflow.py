@@ -3,6 +3,7 @@ from itertools import product
 from pathlib import Path
 import os
 import subprocess
+import tempfile
 import unittest
 import yaml
 
@@ -37,6 +38,14 @@ class WorkflowGate(unittest.TestCase):
         settings = next(s for s in job['steps'] if s.get('id') == 'settings')
         self.assertIn('--deploy-context', settings['run'])
 
+    def test_runner_context_is_not_used_in_workflow_or_job_env(self):
+        # GitHub resolves these fields before runner context is available.
+        environments = [self.workflow.get('env', {})]
+        environments.extend(job.get('env', {}) for job in self.workflow['jobs'].values())
+        for env in environments:
+            for value in env.values():
+                self.assertNotIn('runner.', str(value))
+
     def test_aggregate_blocks_failures_skips_and_cancellations(self):
         check = self.workflow['jobs']['check']
         self.assertEqual(check['if'], 'always()')
@@ -60,8 +69,17 @@ class WorkflowGate(unittest.TestCase):
             self.assertEqual(v['lock'], path + v['stack'] + '/.terraform.lock.hcl')
             self.assertTrue((ROOT / v['lock']).is_file())
         cache = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/cache@'))
-        self.assertEqual(cache['with']['path'], '${{ env.TF_PLUGIN_CACHE_DIR }}')
-        self.assertEqual(job['env']['TF_PLUGIN_CACHE_DIR'], '${{ runner.temp }}/terraform-providers')
+        cache_path = '${{ steps.provider-cache.outputs.path }}'
+        self.assertEqual(cache['with']['path'], cache_path)
+        self.assertEqual(job['steps'][-1]['env']['TF_PLUGIN_CACHE_DIR'], cache_path)
+        setup = next(s for s in job['steps'] if s.get('id') == 'provider-cache')
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'output'
+            env = dict(os.environ, RUNNER_TEMP=temp, GITHUB_OUTPUT=str(output))
+            subprocess.run(['bash', '-e', '-c', setup['run']], env=env, check=True)
+            self.assertEqual(output.read_text(), f'path={temp}/terraform-providers\n')
+            self.assertTrue((Path(temp) / 'terraform-providers').is_dir())
+        self.assertLess(job['steps'].index(setup), job['steps'].index(cache))
         for field in ('runner.os', 'runner.arch', 'tf-version.outputs.version', 'matrix.stack', 'hashFiles(matrix.lock)'):
             self.assertIn(field, cache['with']['key'])
         self.assertIn('scripts/terraform-verify.py', job['steps'][-1]['run'])
