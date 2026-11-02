@@ -1,0 +1,32 @@
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+export STACK AWS_ACCOUNT_ID
+PYTHON ?= python3
+.PHONY: help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check
+help:
+	@echo 'make check                          정적 검사·mock test·Helm render'
+	@echo 'make tf-init STACK=aws/dev/foundation  실제 backend 초기화'
+	@echo 'make tf-plan / tf-apply STACK=... AWS_ACCOUNT_ID=...'
+check: tf-check tf-test ci-test helm-check inventory-check
+tf-fmt:
+	terraform fmt -recursive terraform
+tf-fmt-check:
+	terraform fmt -check -recursive terraform
+tf-check: tf-fmt-check
+	@bash scripts/terraform-check.sh
+tf-test:
+	@bash scripts/terraform-test.sh
+tf-init:
+	@bash scripts/tf-stack.sh init
+tf-plan:
+	@bash scripts/tf-stack.sh plan
+tf-apply:
+	@bash scripts/tf-stack.sh apply
+helm-check:
+	@PYTHON="$(PYTHON)" bash scripts/helm-check.sh
+ci-test:
+	@$(PYTHON) scripts/tests/test-tf-ci.py
+	@$(PYTHON) scripts/tests/test-workflow.py
+	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
+inventory-check:
+	@$(PYTHON) scripts/check-inventory.py

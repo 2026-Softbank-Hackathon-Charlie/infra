@@ -1,0 +1,13 @@
+{
+  "namespaces": [
+    "observability",
+    "argocd",
+    "charlie-platform"
+  ],
+  "applicationNamespace": "charlie-platform",
+  "externalAlb": {
+    "enabled": false,
+    "groupName": "charlie-management-external",
+    "certificateArn": ""
+  }
+}

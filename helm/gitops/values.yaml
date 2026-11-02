@@ -1,0 +1,21 @@
+{
+  "repoURL": "https://github.com/YOUR_OWNER/charlie-infra.git",
+  "revision": "main",
+  "targets": {},
+  "addons": {
+    "management": [
+      "aws-load-balancer-controller",
+      "metrics-server",
+      "kube-prometheus-stack",
+      "loki",
+      "sealed-secrets"
+    ],
+    "workload": [
+      "aws-load-balancer-controller",
+      "metrics-server",
+      "kube-prometheus-stack",
+      "sealed-secrets",
+      "argo-rollouts"
+    ]
+  }
+}

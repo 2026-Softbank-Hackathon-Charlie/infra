@@ -1,0 +1,34 @@
+{
+  "repoURL": "https://github.com/example/charlie-infra.git",
+  "revision": "main",
+  "targets": {
+    "management": {
+      "endpoint": "https://management.eks.amazonaws.com",
+      "name": "charlie-dev-management",
+      "region": "ap-northeast-2",
+      "vpc_id": "vpc-0123456789abcdef0"
+    },
+    "workload": {
+      "endpoint": "https://workload.eks.amazonaws.com",
+      "name": "charlie-dev-workload",
+      "region": "ap-northeast-2",
+      "vpc_id": "vpc-0123456789abcdef0"
+    }
+  },
+  "addons": {
+    "management": [
+      "aws-load-balancer-controller",
+      "metrics-server",
+      "kube-prometheus-stack",
+      "loki",
+      "sealed-secrets"
+    ],
+    "workload": [
+      "aws-load-balancer-controller",
+      "metrics-server",
+      "kube-prometheus-stack",
+      "sealed-secrets",
+      "argo-rollouts"
+    ]
+  }
+}

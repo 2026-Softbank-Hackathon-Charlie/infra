@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "namespaces",
+    "applicationNamespace",
+    "storageClass",
+    "quota",
+    "networkPolicy"
+  ],
+  "properties": {
+    "namespaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]+$"
+      }
+    },
+    "applicationNamespace": {
+      "type": "string",
+      "enum": [
+        "charlie-platform",
+        "charlie-apps"
+      ]
+    },
+    "storageClass": {
+      "type": "object",
+      "required": [
+        "name",
+        "reclaimPolicy"
+      ],
+      "properties": {
+        "name": {
+          "const": "gp3"
+        },
+        "reclaimPolicy": {
+          "enum": [
+            "Delete",
+            "Retain"
+          ]
+        }
+      }
+    },
+    "quota": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "externalAlb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "groupName",
+        "certificateArn"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "groupName": {
+          "type": "string",
+          "enum": [
+            "",
+            "charlie-management-external",
+            "charlie-workload-external"
+          ]
+        },
+        "certificateArn": {
+          "type": "string",
+          "pattern": "^(arn:aws:acm:ap-northeast-2:[0-9]{12}:certificate/[0-9a-f-]+)?$"
+        },
+        "accessLogs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "bucket",
+            "prefix"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "bucket": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]+[a-z0-9]$"
+            },
+            "prefix": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9/_-]+$"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "groupName": {
+            "minLength": 1
+          },
+          "certificateArn": {
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

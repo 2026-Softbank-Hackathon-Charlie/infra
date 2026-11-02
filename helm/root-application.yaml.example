@@ -1,0 +1,47 @@
+# 아래의 저장소 URL·target 값은 실제 Terraform 출력으로 교체한 후 적용합니다.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: charlie-root
+  namespace: argocd
+spec:
+  sourceRepos: [https://github.com/YOUR_OWNER/charlie-infra.git]
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  namespaceResourceWhitelist:
+    - {group: argoproj.io, kind: Application}
+    - {group: argoproj.io, kind: AppProject}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-root
+  namespace: argocd
+spec:
+  project: charlie-root
+  source:
+    repoURL: https://github.com/YOUR_OWNER/charlie-infra.git
+    targetRevision: main
+    path: helm/gitops
+    helm:
+      valuesObject:
+        repoURL: https://github.com/YOUR_OWNER/charlie-infra.git
+        revision: main
+        targets:
+          management:
+            endpoint: https://REPLACE_MANAGEMENT_ENDPOINT.eks.amazonaws.com
+            name: charlie-dev-management
+            region: ap-northeast-2
+            vpc_id: vpc-REPLACE
+          workload:
+            endpoint: https://REPLACE_WORKLOAD_ENDPOINT.eks.amazonaws.com
+            name: charlie-dev-workload
+            region: ap-northeast-2
+            vpc_id: vpc-REPLACE
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: {prune: false, selfHeal: true}
+    syncOptions: [ServerSideApply=true]

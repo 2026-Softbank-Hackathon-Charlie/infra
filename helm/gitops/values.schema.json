@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repoURL",
+    "revision",
+    "targets",
+    "addons"
+  ],
+  "properties": {
+    "repoURL": {
+      "type": "string",
+      "pattern": "^(https://github.com/|git@github.com:)"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(main|[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "management",
+        "workload"
+      ],
+      "properties": {
+        "management": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint",
+            "name",
+            "region",
+            "vpc_id"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^https://"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vpc_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^vpc-[0-9a-f]+$"
+            }
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint",
+            "name",
+            "region",
+            "vpc_id"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^https://"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vpc_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^vpc-[0-9a-f]+$"
+            }
+          }
+        }
+      }
+    },
+    "addons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "management",
+        "workload"
+      ],
+      "properties": {
+        "management": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "aws-load-balancer-controller",
+              "metrics-server",
+              "kube-prometheus-stack",
+              "loki",
+              "sealed-secrets",
+              "opentelemetry-collector"
+            ]
+          }
+        },
+        "workload": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "aws-load-balancer-controller",
+              "metrics-server",
+              "kube-prometheus-stack",
+              "sealed-secrets",
+              "argo-rollouts",
+              "opentelemetry-collector"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

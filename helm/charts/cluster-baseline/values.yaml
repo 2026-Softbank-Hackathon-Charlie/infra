@@ -1,0 +1,26 @@
+{
+  "namespaces": [
+    "observability",
+    "charlie-apps"
+  ],
+  "applicationNamespace": "charlie-apps",
+  "storageClass": {
+    "name": "gp3",
+    "reclaimPolicy": "Delete"
+  },
+  "quota": {
+    "requests.cpu": "2",
+    "requests.memory": "4Gi",
+    "limits.cpu": "4",
+    "limits.memory": "8Gi",
+    "pods": "30"
+  },
+  "networkPolicy": {
+    "enabled": true
+  },
+  "externalAlb": {
+    "enabled": false,
+    "groupName": "",
+    "certificateArn": ""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "namespaces": [
+    "observability",
+    "charlie-apps"
+  ],
+  "applicationNamespace": "charlie-apps",
+  "externalAlb": {
+    "enabled": false,
+    "groupName": "charlie-workload-external",
+    "certificateArn": ""
+  }
+}
