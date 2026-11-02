@@ -24,6 +24,34 @@ spec:
     automated: {prune: false, selfHeal: true}
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
 ---
+{{- if eq $purpose "management" }}
+# HopCharlie platform (API, gateway, console, PostgreSQL) after the addons, so
+# the gp3 StorageClass and the load balancer controller exist first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-management-hopcharlie-platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: charlie-addons-management
+  source:
+    repoURL: {{ $.Values.repoURL | quote }}
+    targetRevision: {{ $.Values.revision | quote }}
+    path: helm/charts/hopcharlie-platform
+    helm:
+      releaseName: hopcharlie-platform
+      valueFiles:
+        - ../../../clusters/aws-dev-management/values/hopcharlie-platform.yaml
+  destination:
+    server: {{ $target.endpoint | quote }}
+    namespace: charlie-platform
+  syncPolicy:
+    automated: {prune: false, selfHeal: true}
+    syncOptions: [ServerSideApply=true]
+---
+{{- end }}
 {{- range $name := index $.Values.addons $purpose }}
 {{- $addon := index $addons $name }}
 apiVersion: argoproj.io/v1alpha1

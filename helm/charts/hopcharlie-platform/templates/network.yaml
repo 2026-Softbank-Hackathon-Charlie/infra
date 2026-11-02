@@ -1,0 +1,73 @@
+# The baseline NetworkPolicy of this namespace allows egress only to this
+# namespace, DNS, the Pod Identity agent and port 443. The API also connects to
+# the databases it migrates, and the gateway forwards to the app over HTTP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-egress
+  labels:
+    {{- include "hopcharlie.labels" "platform" | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/component, operator: In, values: [api, gateway]}
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        {{- range .Values.egressPorts }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+{{- if .Values.ingress.enabled }}
+---
+# The ALB sends traffic (target type ip) and health checks from its addresses
+# inside the VPC, which the baseline NetworkPolicy does not allow.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-from-load-balancer
+  labels:
+    {{- include "hopcharlie.labels" "platform" | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/component, operator: In, values: [api, gateway, console]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: {{ required "vpcCidr is required with the ingress" .Values.vpcCidr | quote }}}
+      ports:
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 9901}
+        - {protocol: TCP, port: 80}
+---
+# Joins the shared internet-facing ALB of the baseline (externalAlb), which
+# owns the listeners, the ACM certificate and the HTTP to HTTPS redirect.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hopcharlie-platform
+  labels:
+    {{- include "hopcharlie.labels" "platform" | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName | quote }}
+    alb.ingress.kubernetes.io/group.order: "10"
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+spec:
+  ingressClassName: alb
+  rules:
+    {{- $domain := required "ingress.domain is required with the ingress" .Values.ingress.domain }}
+    {{- range $host, $service := dict "api" (list "hopcharlie-api" 8080) "app" (list "hopcharlie-gateway" 8000) "console" (list "hopcharlie-console" 80) }}
+    - host: {{ printf "%s.%s" $host $domain | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ index $service 0 }}
+                port:
+                  number: {{ index $service 1 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: hopcharlie-platform
+description: HopCharlie platform API, traffic gateway, console and PostgreSQL on the management cluster
+type: application
+version: 0.1.0

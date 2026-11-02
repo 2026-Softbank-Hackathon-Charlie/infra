@@ -417,3 +417,23 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
+
+## HopCharlie 플랫폼
+
+관리 클러스터의 `charlie-platform` namespace에서 플랫폼 API, 트래픽 게이트웨이, 콘솔, PostgreSQL이 돕니다. Argo CD Application `charlie-management-hopcharlie-platform`이 배포합니다. 비밀값은 SSM `/hopcharlie/*`에만 있고, 각 pod의 init 컨테이너가 Pod Identity로 읽습니다. Pod Identity 역할, ECR, SSM 파라미터, ACM 인증서는 platform 레포의 `deploy/aws`가 만듭니다. 결정 이유와 적용 순서는 [ADR 0014](docs/adr/0014-run-hopcharlie-platform-on-management-cluster.md)에 있습니다.
+
+새 이미지를 배포할 때는 values의 이미지와 [helm/images.lock.json](helm/images.lock.json)의 digest를 함께 바꾸는 PR을 올립니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0014-run-hopcharlie-platform-on-management-cluster.md](docs/adr/0014-run-hopcharlie-platform-on-management-cluster.md) | 플랫폼을 관리 클러스터에서 운영하는 결정 |
+| [clusters/aws-dev-management/values/hopcharlie-platform.yaml](clusters/aws-dev-management/values/hopcharlie-platform.yaml) | 이미지 digest, 게이트웨이 백엔드, CORS, 도메인, ALB 연결 여부 |
+| [helm/charts/hopcharlie-platform/Chart.yaml](helm/charts/hopcharlie-platform/Chart.yaml) | 플랫폼 chart 메타데이터 |
+| [helm/charts/hopcharlie-platform/values.yaml](helm/charts/hopcharlie-platform/values.yaml) | SSM 경로, 저장소 크기, egress 포트 기본값 |
+| [helm/charts/hopcharlie-platform/templates/_helpers.tpl](helm/charts/hopcharlie-platform/templates/_helpers.tpl) | 공통 label, 보안 설정, SSM을 읽는 init 컨테이너 |
+| [helm/charts/hopcharlie-platform/templates/settings.yaml](helm/charts/hopcharlie-platform/templates/settings.yaml) | Pod Identity용 ServiceAccount와 SSM을 읽는 스크립트 |
+| [helm/charts/hopcharlie-platform/templates/postgres.yaml](helm/charts/hopcharlie-platform/templates/postgres.yaml) | 플랫폼 PostgreSQL StatefulSet과 Service |
+| [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
+| [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
+| [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
+| [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress |

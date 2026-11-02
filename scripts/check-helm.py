@@ -93,7 +93,8 @@ def main():
             for purpose in ("management", "workload"):
                 projects[purpose] = next(d for d in root_docs if d["kind"] == "AppProject" and d["metadata"]["name"] == f"charlie-addons-{purpose}")
                 apps = [d for d in root_docs if d["kind"] == "Application" and d["spec"]["project"] == f"charlie-addons-{purpose}"]
-                assert len(apps) == len(config["addons"][purpose]) + 1
+                # baseline, plus the HopCharlie platform on the management cluster
+                assert len(apps) == len(config["addons"][purpose]) + (2 if purpose == "management" else 1)
                 for app in apps:
                     assert app["spec"]["destination"]["server"] == fixture["targets"][purpose]["endpoint"]
                     assert app["spec"]["syncPolicy"]["automated"]["prune"] is False
@@ -121,7 +122,18 @@ def main():
                 docs = render(chart, values_root / f"{name}.yaml", release, namespace, extra)
                 check_project(docs, projects[purpose], namespace)
                 seen.update(check_images(docs))
-        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values; {len(seen)} pinned images.")
+        # HopCharlie platform: before and after the shared ALB is turned on.
+        platform_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml"
+        for ingress in (False, True):
+            extra = ("--set", "ingress.enabled=true") if ingress else ()
+            docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", extra)
+            kinds = {d["kind"] for d in docs}
+            assert {"StatefulSet", "Deployment", "Service", "NetworkPolicy", "ConfigMap", "ServiceAccount"} <= kinds
+            assert ("Ingress" in kinds) == ingress
+            assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
+            check_project(docs, projects["management"], "charlie-platform")
+            seen.update(check_images(docs))
+        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform; {len(seen)} pinned images.")
 
 
 if __name__ == "__main__":

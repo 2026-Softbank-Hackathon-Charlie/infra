@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hopcharlie-console
+  labels:
+    {{- include "hopcharlie.labels" "console" | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /
+spec:
+  selector:
+    {{- include "hopcharlie.labels" "console" | nindent 4 }}
+  ports:
+    - {name: http, port: 80, targetPort: 80}
+---
+# Static files of the frontend repo, built against the API address
+# (platform repo, deploy/aws/push-console.sh).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hopcharlie-console
+  labels:
+    {{- include "hopcharlie.labels" "console" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hopcharlie.labels" "console" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hopcharlie.labels" "console" | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: console
+          image: {{ .Values.images.console | quote }}
+          ports:
+            - {name: http, containerPort: 80}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}

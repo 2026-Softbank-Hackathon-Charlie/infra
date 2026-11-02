@@ -1,0 +1,31 @@
+{
+  "awsRegion": "ap-northeast-2",
+  "parameterPrefix": "/hopcharlie",
+  "vpcCidr": "",
+  "images": {
+    "platform": "",
+    "console": "",
+    "postgres": "",
+    "awsCli": ""
+  },
+  "gateway": {
+    "backends": "",
+    "initialBackend": ""
+  },
+  "api": {
+    "corsOrigins": "",
+    "dsnHostSuffixes": ".ts.net"
+  },
+  "egressPorts": [80, 5432],
+  "storage": {
+    "className": "gp3",
+    "postgres": "10Gi",
+    "api": "2Gi",
+    "gateway": "1Gi"
+  },
+  "ingress": {
+    "enabled": false,
+    "groupName": "charlie-management-external",
+    "domain": ""
+  }
+}
