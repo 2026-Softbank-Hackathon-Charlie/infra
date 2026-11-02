@@ -49,9 +49,9 @@ variable "cloudflare_zone_id" {
 }
 
 variable "alb_name" {
-  description = "Name of the shared ALB of the management cluster (infra baseline externalAlb.groupName). Empty until the ALB exists."
+  description = "Name of the shared ALB of the management cluster (infra baseline externalAlb.groupName). Empty while no ALB exists."
   type        = string
-  default     = ""
+  default     = "charlie-management-external"
 }
 
 provider "aws" {
