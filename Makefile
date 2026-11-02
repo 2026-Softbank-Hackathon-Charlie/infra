@@ -2,11 +2,21 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 export STACK AWS_ACCOUNT_ID
 PYTHON ?= python3
-.PHONY: config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check
+.PHONY: config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
 help:
 	@echo 'make check                          정적 검사·mock test·Helm render'
 	@echo 'make tf-init STACK=aws/dev/foundation  실제 backend 초기화'
 	@echo 'make tf-plan / tf-apply STACK=... AWS_ACCOUNT_ID=...'
+	@echo 'make aws-tunnel [CLUSTER=management|workload]  AWS SSM 터널 (foreground)'
+	@echo 'make argo-port-forward                Argo CD → https://localhost:8080'
+aws-tunnel argo-port-forward: export CLUSTER ?= management
+aws-tunnel argo-port-forward: export AWS_PROFILE ?=
+aws-tunnel argo-port-forward: export EKS_LOCAL_PORT ?=
+aws-tunnel argo-port-forward: export ARGO_LOCAL_PORT ?=
+aws-tunnel:
+	@$(PYTHON) scripts/eks-access.py tunnel
+argo-port-forward:
+	@$(PYTHON) scripts/eks-access.py argo-forward
 check: tf-fmt-check tf-verify ci-test helm-check inventory-check config-check
 config-check:
 	@$(PYTHON) scripts/project-config.py check
@@ -33,6 +43,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-terraform-verify.py
 	@$(PYTHON) scripts/tests/test-tf-ci.py
 	@$(PYTHON) scripts/tests/test-workflow.py
+	@$(PYTHON) scripts/tests/test-eks-access.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 inventory-check:
 	@$(PYTHON) scripts/check-inventory.py

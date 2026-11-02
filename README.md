@@ -182,30 +182,63 @@ make tf-apply STACK=account/aws
 
 ## Private EKS 접근과 Argo CD 설치
 
-관리자/운영자 인증으로 foundation의 bridge ID와 각 EKS의 `target` 출력을 확인합니다. 이 값은 전체 state나 자격 증명 대신 연결 메타데이터만 제공합니다. 다음 절차는 클러스터별로 수행합니다.
-
-1. `aws eks update-kubeconfig --name <클러스터명> --region ap-northeast-2 --alias <context>`로 로컬 kubeconfig를 준비합니다. IAM Access Entry에 등록한 운영자 인증을 사용합니다.
-2. SSM bridge가 Online인지 확인하고 각 EKS endpoint의 hostname을 대상으로 터널을 엽니다. management는 10443, workload는 11443을 사용하면 두 터널을 병행할 수 있습니다.
+이미 설치한 Argo CD에 접속할 때는 아래 두 명령만 실행합니다. 저장소 루트에서 각각 별도 터미널을 사용합니다.
 
 ```bash
-aws ssm start-session --target <ssm_bridge_instance_id> \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["<EKS_endpoint_hostname>"],"portNumber":["443"],"localPortNumber":["10443"]}'
+# 터미널 A: 관리 EKS API 터널. Session이 시작되면 계속 켜 둡니다.
+make aws-tunnel
+
+# 터미널 B: Argo CD 포트포워딩. 이 터미널도 계속 켜 둡니다.
+make argo-port-forward
 ```
 
-별도 터미널에서 로컬 kubeconfig의 cluster server를 `https://127.0.0.1:10443`으로 바꾸고 `tls-server-name`은 **원래 EKS endpoint hostname**으로 설정합니다. workload는 11443을 씁니다. `certificate-authority-data`는 EKS의 실제 CA를 유지하고 insecure-skip-tls-verify는 사용하지 않습니다. 이 로컬 server/포트는 Argo target에 넣지 않습니다. `kubectl --context <context> get nodes`와 managed addon 상태를 확인합니다. 운영자에게는 SSM 시작 권한이 별도로 필요합니다.
+브라우저에서 **https://localhost:8080**으로 접속합니다. 기본 Argo CD 자체 서명 인증서를 사용하는 경우 브라우저에 인증서 경고가 표시될 수 있습니다. 각 명령은 foreground로 실행하며 `Ctrl+C`로 해당 프로세스를 종료합니다. Argo 포트포워딩을 종료한 뒤 터널도 종료합니다. 이미 수동으로 열어 둔 터널/포트포워딩이 있으면 해당 터미널에서 먼저 종료하거나 아래처럼 다른 포트를 선택합니다. 명령은 다른 프로세스를 종료하지 않습니다.
 
-3. 관리 클러스터에 bootstrap을 설치합니다.
+준비 사항:
+
+- Python 3, GNU Make, AWS CLI v2, `kubectl`, AWS `session-manager-plugin`이 PATH에 있어야 합니다. macOS의 plugin 설치 예시는 `brew install --cask session-manager-plugin`입니다.
+- `config/account.local.json`의 계정과 일치하는 로그인된 AWS 프로필이 필요합니다. 기본값은 `charlie-admin`이며 로그인·토큰 발급은 자동으로 수행하지 않습니다.
+- 운영자에게 STS 계정 확인, EKS DescribeCluster, EC2 DescribeInstances, SSM DescribeInstanceInformation 및 지정 bridge/document의 StartSession 권한이 필요합니다. EKS Access Entry 인증과 Kubernetes 서비스/Pod 조회 및 Pod port-forward 권한도 필요합니다. 이 명령은 IAM·클러스터 권한을 추가하지 않습니다.
+- 클러스터와 같은 VPC에서 `Project`, `Environment`, `Component=access` 태그를 가진 running bridge가 정확히 하나이고 SSM Online이어야 합니다. 접근 대상은 공유 프로젝트 설정으로 결정합니다.
+
+옵션 예시:
+
+```bash
+# 다른 AWS 프로필로 터널 생성
+make aws-tunnel AWS_PROFILE=my-operator
+
+# 워크로드 EKS는 기본 11443. 관리 터널(10443)과 별도 터미널에서 병행 가능
+make aws-tunnel CLUSTER=workload
+
+# 포트 충돌 시 변경: Argo는 kubeconfig에 저장된 API 포트를 자동 사용
+make aws-tunnel EKS_LOCAL_PORT=12443
+make argo-port-forward ARGO_LOCAL_PORT=9090
+
+# 터널을 유지한 상태에서 관리 클러스터 확인
+kubectl --kubeconfig .generated/access/management.kubeconfig \
+  --context charlie-dev-management get nodes
+```
+
+포트는 1024~65535만 허용하며 Argo 포트포워딩은 management 전용입니다. 프로필은 `AWS_PROFILE` 환경 변수 또는 Make 인자로 지정할 수 있습니다. 모든 AWS 호출에 `config/project.json`의 region을 명시하며 다른 `AWS_REGION`/`AWS_DEFAULT_REGION` 값은 안내 후 무시합니다. Argo 인증은 **터널 생성 시 저장한 프로필**을 사용합니다. Argo 실행 터미널에 다른 `AWS_PROFILE`이 설정되어 있으면 오류가 나므로, 원하는 프로필로 터널을 다시 생성하거나 해당 환경 변수를 해제합니다.
+
+전용 kubeconfig는 `.generated/access/management.kubeconfig`, `.generated/access/workload.kubeconfig`에 권한 `0600`으로 저장합니다. 기존 `~/.kube/config`, 글로벌 current-context, `KUBECONFIG` 및 수동 생성한 `.generated/charlie.kubeconfig`는 변경하지 않습니다. 이후 Helm/kubectl 명령에는 해당 `--kubeconfig`를 명시하세요. 터널의 server는 loopback 주소로 바꾸고 EKS의 실제 CA와 원래 endpoint의 `tls-server-name`을 유지합니다. `insecure-skip-tls-verify`는 사용하지 않습니다. 이 로컬 주소/포트는 Argo target 등록에 넣지 않습니다.
+
+계정 불일치·bridge 미발견/복수·Offline·포트 충돌은 세션 시작 전에 중단합니다. Argo 명령은 관리 API `/readyz` 확인 후 포트포워딩을 실행하며 인증·RBAC 오류는 그대로 출력합니다. 자격 증명이 만료되면 로그인 후 다시 실행하세요. 자동 재시도나 백그라운드 실행은 하지 않습니다. 실제 클라우드 연결은 명령을 실행할 때 시작됩니다.
+
+아래는 **아직 Argo CD를 설치하지 않은 환경**의 최초 설치·GitOps 연결 절차입니다. 이미 설치했다면 재설치는 필요하지 않습니다.
+
+1. 관리 터널을 켠 상태에서 bootstrap을 설치합니다.
 
 ```bash
 helm repo add argo https://argoproj.github.io/argo-helm
 helm dependency build helm/bootstrap
 helm upgrade --install argocd helm/bootstrap --namespace argocd --create-namespace \
+  --kubeconfig .generated/access/management.kubeconfig \
   --kube-context charlie-dev-management --wait
 ```
 
-4. private GitHub 저장소의 read-only credential을 `argocd` namespace의 repository Secret으로 준비합니다. label은 `argocd.argoproj.io/secret-type: repository`, `stringData`는 `type: git`, `url: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git`, `username`, `password`(토큰)입니다. 토큰은 stdin/보호된 로컬 파일로 전달하고 values/Git에는 넣지 않습니다.
-5. 두 EKS를 Argo cluster Secret으로 등록합니다. label은 `argocd.argoproj.io/secret-type: cluster`, `stringData.name`은 실제 클러스터명, `server`는 실제 EKS endpoint, `config`는 아래 구조입니다. 값은 해당 stack의 `target` 출력에서 가져옵니다. 이 예시는 저장 형식 설명이며 인증 정보는 포함하지 않습니다.
+2. private GitHub 저장소의 read-only credential을 `argocd` namespace의 repository Secret으로 준비합니다. label은 `argocd.argoproj.io/secret-type: repository`, `stringData`는 `type: git`, `url: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git`, `username`, `password`(토큰)입니다. 토큰은 stdin/보호된 로컬 파일로 전달하고 values/Git에는 넣지 않습니다.
+3. 두 EKS를 Argo cluster Secret으로 등록합니다. label은 `argocd.argoproj.io/secret-type: cluster`, `stringData.name`은 실제 클러스터명, `server`는 실제 EKS endpoint, `config`는 아래 구조입니다. 값은 해당 stack의 `target` 출력에서 가져옵니다. 이 예시는 저장 형식 설명이며 인증 정보는 포함하지 않습니다.
 
 ```json
 {
@@ -215,12 +248,12 @@ helm upgrade --install argocd helm/bootstrap --namespace argocd --create-namespa
 ```
 
 관리 Argo SA 3개는 Terraform Pod Identity로 foundation management role을 사용하고, 각 deploy role을 assume하여 두 EKS에 접근합니다. Terraform과 Argo 사이 SG/Access Entry가 이 연결을 허용합니다. 등록 Secret을 Git에 커밋하거나 운영 kubeconfig를 chart에 넣지 않습니다.
-6. management의 Loki values 안 `REPLACE_AWS_ACCOUNT_ID` 버킷을 foundation 출력 `loki_bucket_name`으로 교체합니다. 이 비밀값이 아닌 설정을 저장소에 커밋합니다.
-7. `helm/root-application.yaml.example`을 보호된 로컬 `.generated/root-application.yaml`로 복사하고 두 target endpoint/name/region/VPC ID를 실제 출력으로 채웁니다. 예제의 `sourceRepos`와 root·GitOps의 `repoURL`은 모두 `https://github.com/2026-Softbank-Hackathon-Charlie/infra.git`으로 설정합니다. root를 관리 context에 적용하면 공통 애드온을 동기화합니다. 합성 `helm/gitops/ci/targets-values.yaml`은 배포하지 않습니다.
+4. management의 Loki values 안 `REPLACE_AWS_ACCOUNT_ID` 버킷을 foundation 출력 `loki_bucket_name`으로 교체합니다. 이 비밀값이 아닌 설정을 저장소에 커밋합니다.
+5. `helm/root-application.yaml.example`을 보호된 로컬 `.generated/root-application.yaml`로 복사하고 두 target endpoint/name/region/VPC ID를 실제 출력으로 채웁니다. 예제의 `sourceRepos`와 root·GitOps의 `repoURL`은 모두 `https://github.com/2026-Softbank-Hackathon-Charlie/infra.git`으로 설정합니다. root를 관리 context에 적용하면 공통 애드온을 동기화합니다. 합성 `helm/gitops/ci/targets-values.yaml`은 배포하지 않습니다.
 
 ```bash
-kubectl --context charlie-dev-management apply -f .generated/root-application.yaml
-kubectl --context charlie-dev-management -n argocd get applications,appprojects
+kubectl --kubeconfig .generated/access/management.kubeconfig --context charlie-dev-management apply -f .generated/root-application.yaml
+kubectl --kubeconfig .generated/access/management.kubeconfig --context charlie-dev-management -n argocd get applications,appprojects
 ```
 
 기본 addon 목록은 `helm/gitops/values.yaml`입니다. root 예제의 `valuesObject`는 targets/저장소를 override하며, 운영 addon 목록은 해당 기본값을 사용합니다. root/addon 모두 prune=false이므로 목록에서 제거하는 것만으로 실제 자원이 철거되지는 않습니다. Kubernetes 삭제/ALB·PVC 처리와 Terraform destroy는 별도 계획이 필요합니다.
@@ -254,7 +287,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 main의 명시적 수동 Terraform 배포 |
 | [.gitignore](.gitignore) | 로컬 비밀값·state·plan·kubeconfig·다운로드 산출물의 Git 추적 방지 |
 | [.terraform-version](.terraform-version) | Terraform CLI 버전 고정 |
-| [Makefile](Makefile) | 인프라 검증·로컬 Terraform 명령 진입점 |
+| [Makefile](Makefile) | 인프라 검증·로컬 Terraform·SSM 터널·Argo CD 접속 명령 진입점 |
 | [README.md](README.md) | 아키텍처·초기 설정·운영 순서·파일별 역할 안내 |
 | [clusters/aws-dev-management/cluster.yaml](clusters/aws-dev-management/cluster.yaml) | 클러스터 ID·목적·Terraform 경로·로컬 kube context 메타데이터; Kubernetes manifest 아님 |
 | [clusters/aws-dev-management/values/aws-load-balancer-controller.yaml](clusters/aws-dev-management/values/aws-load-balancer-controller.yaml) | LBC 복제/이미지 pin·Pod Identity SA 설정 |
@@ -292,6 +325,9 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [scripts/check-helm.py](scripts/check-helm.py) | 공식 chart lint/render와 이미지 pin·AppProject·namespace 계약 검사 |
 | [scripts/check-inventory.py](scripts/check-inventory.py) | README 파일 목록 및 Terraform 로컬 module/file 참조 확인 |
 | [scripts/common.sh](scripts/common.sh) | 공통 오류 처리·도구 확인·허용 AWS stack 경로 변환 |
+| [scripts/eks-access.py](scripts/eks-access.py) | 전용 kubeconfig와 SSM 터널·관리 Argo CD 포트포워딩 |
+| [scripts/tests/test-eks-access.py](scripts/tests/test-eks-access.py) | fake CLI로 접속 명령·계정·TLS·프로필·실패 처리 검증 |
+| [docs/adr/0014-local-eks-access-commands.md](docs/adr/0014-local-eks-access-commands.md) | foreground Make 명령과 전용 kubeconfig 운영 결정 |
 | [scripts/helm-check.sh](scripts/helm-check.sh) | 선택한 Python 환경으로 Helm 검사 실행 |
 | [scripts/terraform-check.sh](scripts/terraform-check.sh) | 정제 임시 복사본에서 backend 없는 init/validate |
 | [scripts/terraform-test.sh](scripts/terraform-test.sh) | 실제 state·tfvars를 제외한 임시 복사본의 Terraform mock test |
