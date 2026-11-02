@@ -473,3 +473,40 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress |
+
+
+## 플랫폼 Terraform 이관
+
+기존 platform의 관리 EC2·ECR·IAM·SSM 및 state 버킷은 [terraform/platform/aws](terraform/platform/aws/README.md)의 독립 root 세 개로 관리합니다. 기존 hopcharlie S3 backend와 resource 주소를 유지하며, 기존 AWS `all-runtime` 및 charlie 입력 생성기에 포함하지 않습니다. [이관 가이드](docs/platform-terraform-migration.md)의 linked PR 순서·운영 입력 인수 절차를 확인하세요. 별도 검증은 AWS 인증 없이 backend-disabled 임시 복사본에서만 수행합니다.
+
+### 플랫폼 이관 추가 파일
+
+| 파일 | 역할 |
+|---|---|
+| [.github/workflows/platform-terraform.yml](.github/workflows/platform-terraform.yml) | AWS 인증 없는 두 root 전용 검증 workflow |
+| [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
+| [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
+| [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |
+| [scripts/test-platform-terraform.py](scripts/test-platform-terraform.py) | 자격/로컬 artifact 제외·검증 명령 경계 회귀시험 |
+| [terraform/platform/aws/.terraform.lock.hcl](terraform/platform/aws/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
+| [terraform/platform/aws/README.md](terraform/platform/aws/README.md) | 관리 호스트 운영·앱 helper 연결 안내 |
+| [terraform/platform/aws/backend.tf](terraform/platform/aws/backend.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/host/Caddyfile](terraform/platform/aws/host/Caddyfile) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/host/apps.yaml](terraform/platform/aws/host/apps.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/host/compose.tailscale.yaml](terraform/platform/aws/host/compose.tailscale.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/host/compose.yaml](terraform/platform/aws/host/compose.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/host/envs.yaml](terraform/platform/aws/host/envs.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/host/sync.sh](terraform/platform/aws/host/sync.sh) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/main.tf](terraform/platform/aws/main.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/outputs.tf](terraform/platform/aws/outputs.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/state/.terraform.lock.hcl](terraform/platform/aws/state/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
+| [terraform/platform/aws/state/backend.tf](terraform/platform/aws/state/backend.tf) | 별도 state 버킷 root·기존 backend 보존 |
+| [terraform/platform/aws/state/main.tf](terraform/platform/aws/state/main.tf) | 별도 state 버킷 root·기존 backend 보존 |
+| [terraform/platform/aws/tf.sh](terraform/platform/aws/tf.sh) | 기존 계정 guard·Docker Terraform1.17.1 실행 입구 |
+| [terraform/platform/aws/user_data.sh.tftpl](terraform/platform/aws/user_data.sh.tftpl) | 기존 EC2 bootstrap 템플릿 |
+| [terraform/platform/aws/variables.tf](terraform/platform/aws/variables.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/versions.tf](terraform/platform/aws/versions.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/dns/.terraform.lock.hcl](terraform/platform/aws/dns/.terraform.lock.hcl) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/dns/backend.tf](terraform/platform/aws/dns/backend.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
