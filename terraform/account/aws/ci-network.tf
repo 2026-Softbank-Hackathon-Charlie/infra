@@ -1,5 +1,5 @@
 # Network resources live in foundation; this policy must be applied by an
-# administrator before merging network code into main. CI cannot edit itself.
+# administrator before merging network code into main. CI does not run the account stack.
 locals {
   network_ec2_arn = "arn:aws:ec2:${var.aws_region}:${var.aws_account_id}"
   network_region  = { "aws:RequestedRegion" = var.aws_region }

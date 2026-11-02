@@ -11,6 +11,10 @@ variables {
 run "create_new_provider_and_scope_ci" {
   command = apply
   assert {
+    condition     = aws_iam_role_policy_attachment.administrator.role == aws_iam_role.terraform_apply.name && aws_iam_role_policy_attachment.administrator.policy_arn == "arn:aws:iam::aws:policy/AdministratorAccess"
+    error_message = "Attach AWS AdministratorAccess to the main-branch Terraform role."
+  }
+  assert {
     condition     = length(aws_iam_openid_connect_provider.github) == 1 && jsondecode(aws_iam_role.terraform_apply.assume_role_policy).Statement[0].Principal.Federated == aws_iam_openid_connect_provider.github[0].arn
     error_message = "Only new accounts create and trust a new GitHub provider."
   }
@@ -20,11 +24,11 @@ run "create_new_provider_and_scope_ci" {
   }
   assert {
     condition     = alltrue([for s in jsondecode(aws_iam_role_policy.terraform_apply.policy).Statement : !contains(s.Action, "s3:DeleteBucket") && !contains(s.Action, "s3:DeleteObjectVersion")]) && length(local.deployment_state_keys) == 4 && !contains(local.deployment_state_keys, "account/aws/terraform.tfstate")
-    error_message = "CI must not manage account state or delete the state bucket."
+    error_message = "The legacy state policy stays unchanged; AdministratorAccess separately grants account-wide permissions."
   }
   assert {
     condition     = alltrue([for s in jsondecode(aws_iam_role_policy.foundation.policy).Statement : s.Resource == local.loki_bucket_arn && !anytrue([for action in s.Action : startswith(action, "codebuild:") || startswith(action, "iam:")])])
-    error_message = "Foundation CI storage policy must be restricted to Loki."
+    error_message = "The legacy foundation storage policy stays scoped to Loki; it does not limit AdministratorAccess."
   }
 }
 run "reuse_existing_provider_without_ownership" {

@@ -13,15 +13,15 @@ run "runtime_boundaries_and_session" {
   }
   assert {
     condition     = !contains(local.runtime_role_arns, aws_iam_role.terraform_apply.arn) && alltrue([for statement in jsondecode(aws_iam_policy.runtime_iam.policy).Statement : !contains(statement.Action, "iam:*")])
-    error_message = "CI cannot administer its own role and runtime IAM actions must be explicit."
+    error_message = "Legacy runtime IAM policy uses explicit actions and omits the CI role; AdministratorAccess is not restricted by this policy."
   }
   assert {
     condition     = jsondecode(aws_iam_policy.runtime_iam.policy).Statement[1].Condition.ArnEquals["iam:PolicyARN"] == local.attach_policy_arns && !strcontains(aws_iam_policy.runtime_iam.policy, "token.actions.githubusercontent.com")
-    error_message = "Only reviewed policies may attach; GitHub OIDC trust remains out of scope."
+    error_message = "The legacy attachment allowlist is retained; effective AdministratorAccess is broader."
   }
   assert {
     condition     = alltrue([for statement in jsondecode(aws_iam_policy.runtime_compute.policy).Statement : statement.Condition.StringEquals["aws:RequestedRegion"] == "ap-northeast-2"])
-    error_message = "Compute authorization must remain regional."
+    error_message = "The legacy compute policy retains its region condition; AdministratorAccess is account-wide."
   }
   assert {
     condition = length([for statement in jsondecode(aws_iam_policy.bridge_launch.policy).Statement : statement if statement.Sid == "RunTaggedBridgeVolume"]) == 1 && alltrue([
@@ -36,6 +36,6 @@ run "runtime_boundaries_and_session" {
         }
       }) if statement.Sid == "RunTaggedBridgeVolume"
     ])
-    error_message = "Bridge volume RunInstances authorization must retain the exact account/region ARN and all four owner request tags; do not relax IAM to allow untagged volumes."
+    error_message = "Bridge volume RunInstances authorization must retain the exact account/region ARN and all four owner request tags; the separate AdministratorAccess attachment supplies broader permissions."
   }
 }

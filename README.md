@@ -154,7 +154,7 @@ make tf-apply STACK=account/aws
 
 배포 인증 전 실행 저장소/브랜치가 공통 설정과 일치하는지도 확인합니다. OIDC subject는 account의 명시 입력이며 맞춤 subject 설정은 관리자 책임입니다.
 
-동일 apply concurrency group은 취소하지 않고 직렬 실행합니다. IAM은 프로젝트 태그·이름 범위로 제한하지만, 이 CI 역할은 두 클러스터와 해당 runtime IAM을 관리하므로 권한이 큽니다. branch 보호/저장소 접근 권한은 운영 정책으로 별도 관리하세요.
+동일 apply concurrency group은 취소하지 않고 직렬 실행합니다. CI 역할에는 AWS 관리형 `AdministratorAccess`를 연결합니다. 기존 태그·이름 범위 정책도 남아 있지만 실제 권한의 상한이 아니며 account state·자체 역할·OIDC·다른 프로젝트를 포함한 계정 전체에 관리 권한을 가집니다. OIDC 신뢰는 이 저장소의 main 브랜치와 `sts.amazonaws.com` audience로 유지합니다. branch 보호/저장소 접근 권한은 운영 정책으로 별도 관리하세요.
 
 ### 최소 구축과 첫 파이프라인 실행 순서
 
@@ -367,3 +367,6 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [docs/adr/0004-parallelize-infrastructure-checks.md](docs/adr/0004-parallelize-infrastructure-checks.md) | CI 병렬화·provider 캐시 결정 |
 | [docs/adr/0007-register-account-github-oidc-provider.md](docs/adr/0007-register-account-github-oidc-provider.md) | 계정 공용 GitHub OIDC provider 등록과 Terraform의 기존 ARN 참조 결정 |
 | [docs/adr/0008-select-terraform-stack-and-action.md](docs/adr/0008-select-terraform-stack-and-action.md) | 기본 bootstrap plan과 stack별 수동 Terraform 실행 결정 |
+| [terraform/account/aws/ci-administrator.tf](terraform/account/aws/ci-administrator.tf) | main OIDC Terraform 역할의 계정 전체 AdministratorAccess 연결 |
+| [docs/adr/0009-grant-ci-terraform-administrator-access.md](docs/adr/0009-grant-ci-terraform-administrator-access.md) | CI에 계정 전체 관리자 권한을 부여하는 결정 |
+| [docs/adr/0010-grant-eks-operator-access.md](docs/adr/0010-grant-eks-operator-access.md) | 기존 IAM 사용자의 두 EKS 관리자 접근 결정 |
