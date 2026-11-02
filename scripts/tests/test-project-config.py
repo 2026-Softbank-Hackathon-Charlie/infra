@@ -22,7 +22,7 @@ class ConfigTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / 'config').mkdir()
         self.p = json.loads((ROOT / 'config/project.json').read_text())
-        self.a = {'aws_account_id': '123456789012', 'operator_principal_arn': 'arn:aws:iam::123456789012:role/operator'}
+        self.a = {'aws_account_id': '123456789012', 'operator_principal_arn': 'arn:aws:iam::123456789012:role/operator', 'github_oidc_subject_prefix': 'repo:2026-Softbank-Hackathon-Charlie/infra'}
         self.write_project()
         (self.root / 'config/account.local.json').write_text(json.dumps(self.a))
         self.addCleanup(patch.stopall)
@@ -34,11 +34,36 @@ class ConfigTests(unittest.TestCase):
     def write_project(self):
         (self.root / 'config/project.json').write_text(json.dumps(self.p))
 
+    def test_account_requires_explicit_oidc_subject_prefix(self):
+        del self.a['github_oidc_subject_prefix']
+        with self.assertRaisesRegex(cfg.ConfigError, 'github_oidc_subject_prefix'):
+            cfg.variables(self.p, self.a, 'account/aws')
+
+    def test_account_preserves_explicit_oidc_subject_prefix(self):
+        for prefix in ('repo:2026-Softbank-Hackathon-Charlie/infra', 'repo:2026-Softbank-Hackathon-Charlie@123/infra@456'):
+            with self.subTest(prefix=prefix):
+                (self.root / 'config/account.local.json').write_text(json.dumps(dict(self.a, github_oidc_subject_prefix=prefix)))
+                self.assertEqual(cfg.variables(self.p, cfg.account(False), 'account/aws')['github_oidc_subject_prefix'], prefix)
+
+    def test_account_rejects_oidc_subject_for_another_repository(self):
+        for prefix in ('repo:other/infra', 'repo:2026-Softbank-Hackathon-Charlie/other', 'repo:other@123/infra@456'):
+            with self.subTest(prefix=prefix):
+                with self.assertRaises(cfg.ConfigError):
+                    cfg.variables(self.p, dict(self.a, github_oidc_subject_prefix=prefix), 'account/aws')
+
+    def test_non_account_stacks_do_not_require_oidc_subject_prefix(self):
+        del self.a['github_oidc_subject_prefix']
+        for stack in cfg.STACKS:
+            if stack != 'account/aws':
+                with self.subTest(stack=stack):
+                    self.assertNotIn('github_oidc_subject_prefix', cfg.variables(self.p, self.a, stack))
+
     def test_local_ci_parity_and_scoped_inputs(self):
         os.environ.update(AWS_ACCOUNT_ID=self.a['aws_account_id'], EKS_OPERATOR_PRINCIPAL_ARN=self.a['operator_principal_arn'])
         local, ci = cfg.account(False), cfg.account(True)
         for stack in cfg.STACKS:
-            self.assertEqual(cfg.variables(self.p, local, stack), cfg.variables(self.p, ci, stack))
+            if stack != 'account/aws':  # Account preparation is administrator-local only.
+                self.assertEqual(cfg.variables(self.p, local, stack), cfg.variables(self.p, ci, stack))
         self.assertNotIn('management_cluster_name', cfg.variables(self.p, local, 'bootstrap/aws'))
         self.assertNotIn('vpc_cidr', cfg.variables(self.p, local, 'account/aws'))
         self.p['foundation']['nat_gateway_mode'] = 'single'
