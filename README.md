@@ -78,12 +78,13 @@ cp config/account.local.json.example config/account.local.json
 python3 scripts/project-config.py check
 ```
 
-3. AWS 인증 후 `aws sts get-caller-identity`로 계정을 확인하고 관리자로 기존 GitHub OIDC provider를 조회합니다. provider가 있으면 `github_oidc_provider_arn`에 기존 ARN을 넣어 소유권을 유지합니다. 없는 경우에만 빈 문자열로 신규 생성합니다. 기본 subject는 공통 설정의 `repo:2026-Softbank-Hackathon-Charlie/infra`이며 main만 신뢰합니다. 조직의 subject customization을 쓰면 로컬 계정 JSON의 `github_oidc_subject_prefix`에 실제 `@ID` 포함 prefix를 명시합니다.
+3. AWS 인증 후 `aws sts get-caller-identity`로 계정을 확인하고 관리자로 기존 GitHub OIDC provider를 조회합니다. provider가 있으면 `github_oidc_provider_arn`에 기존 ARN을 넣어 소유권을 유지합니다. 없는 경우에만 빈 문자열로 신규 생성합니다. GitHub OIDC subject prefix는 이름으로 추측하지 말고 아래 API의 `sub_claim_prefix`를 조회해 로컬 계정 JSON의 `github_oidc_subject_prefix`에 그대로 입력합니다. 이 저장소는 `repo:2026-Softbank-Hackathon-Charlie@350278309/infra@1442353250`을 사용하며 Terraform은 뒤에 `:ref:refs/heads/main`을 붙입니다. 신규 저장소·이름 변경·소유권 이전 시 예제를 그대로 재사용하지 말고 다시 조회합니다. helper의 이름·문법 검사는 ID의 진위 확인을 대신하지 않습니다.
 
 ```bash
 aws sts get-caller-identity
 aws iam list-open-id-connect-providers
 aws iam get-open-id-connect-provider --open-id-connect-provider-arn <조회한_ARN>
+gh api repos/2026-Softbank-Hackathon-Charlie/infra/actions/oidc/customization/sub
 ```
 
 기존 `terraform.tfvars`, `terraform.tfvars.json`, `*.auto.tfvars*`, override 및 `backend.hcl`은 wrapper가 거부합니다. 기존 값을 검토해 공유 값은 project.json, 계정 값은 account.local.json으로 수동 이관한 후 해당 입력 파일을 안전하게 별도 보관합니다. state나 `.terraform`를 지워서 충돌을 우회하지 마세요. wrapper는 기존 backend 메타데이터의 bucket/key/region/account/잠금/암호화를 확인하고 다르거나 판독 불가하면 중단합니다. 기본 workspace만 지원하며 외부 `TF_VAR_*`, `TF_CLI_ARGS*`, `TF_DATA_DIR`, `TF_CLI_CONFIG_FILE`도 거부합니다. 자동 state migration/reconfigure는 하지 않습니다.
@@ -370,3 +371,4 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/account/aws/ci-administrator.tf](terraform/account/aws/ci-administrator.tf) | main OIDC Terraform 역할의 계정 전체 AdministratorAccess 연결 |
 | [docs/adr/0009-grant-ci-terraform-administrator-access.md](docs/adr/0009-grant-ci-terraform-administrator-access.md) | CI에 계정 전체 관리자 권한을 부여하는 결정 |
 | [docs/adr/0010-grant-eks-operator-access.md](docs/adr/0010-grant-eks-operator-access.md) | 기존 IAM 사용자의 두 EKS 관리자 접근 결정 |
+| [docs/adr/0011-match-github-immutable-oidc-subject.md](docs/adr/0011-match-github-immutable-oidc-subject.md) | 실제 GitHub immutable subject와 main 신뢰 조건 일치 결정 |

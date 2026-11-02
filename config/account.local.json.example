@@ -2,5 +2,6 @@
   "aws_account_id": "000000000000",
   "operator_principal_arn": "arn:aws:iam::000000000000:role/infra-operator",
   "additional_operator_principal_arns": [],
-  "github_oidc_provider_arn": ""
+  "github_oidc_provider_arn": "",
+  "github_oidc_subject_prefix": "repo:2026-Softbank-Hackathon-Charlie@350278309/infra@1442353250"
 }
