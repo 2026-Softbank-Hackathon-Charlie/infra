@@ -1,0 +1,2 @@
+bucket = "replace-with-bootstrap-state-bucket"
+prefix = "gcp/dev/workload"

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["applicationNamespace", "storageClass", "quota", "limits"],
+  "properties": {
+    "applicationNamespace": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63},
+    "storageClass": {
+      "type": "object",
+      "required": ["name", "diskType", "reclaimPolicy"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63},
+        "diskType": {"type": "string", "enum": ["pd-balanced", "pd-ssd", "pd-standard"]},
+        "reclaimPolicy": {"type": "string", "enum": ["Delete", "Retain"]}
+      },
+      "additionalProperties": false
+    },
+    "quota": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}},
+    "limits": {
+      "type": "object", "required": ["default", "defaultRequest"],
+      "properties": {
+        "default": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}},
+        "defaultRequest": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

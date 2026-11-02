@@ -1,0 +1,145 @@
+name: Charlie GCP infrastructure
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'GCP workload 변경 검토 또는 적용. bootstrap은 로컬에서 별도 실행'
+        type: choice
+        default: plan
+        options: [plan, apply]
+      confirm_apply:
+        description: 'apply 시 실제 GCP 변경 및 비용 발생을 승인했음'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [terraform/bootstrap/gcp, terraform/environments/gcp/dev/workload]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read pinned Terraform version
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < .terraform-version)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.version.outputs.value }}
+          terraform_wrapper: false
+      - name: Backend-free validation and mock tests
+        env:
+          TF_IN_AUTOMATION: 'true'
+          TF_INPUT: 'false'
+          TF_ROOT: ${{ matrix.root }}
+        run: |
+          terraform fmt -check -recursive "$TF_ROOT"
+          terraform -chdir="$TF_ROOT" init -backend=false -input=false
+          terraform -chdir="$TF_ROOT" validate
+          terraform -chdir="$TF_ROOT" test
+
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.18.3
+      - run: python -m pip install 'PyYAML==6.0.2'
+      - run: helm lint --strict helm/charts/gcp-baseline
+      - run: python scripts/tests/test-gcp-workflow.py
+
+  deploy:
+    # Dispatching from a feature branch, PR or push can never obtain credentials.
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      (inputs.action == 'plan' || (inputs.action == 'apply' && inputs.confirm_apply && vars.GCP_APPLY_ENABLED == 'true'))
+    needs: [validate, baseline]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.action == 'apply' && 'gcp-apply' || 'gcp-plan' }}
+    concurrency:
+      group: gcp-workload-state
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_STATE_BUCKET: ${{ vars.GCP_STATE_BUCKET }}
+      GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+      GCP_TERRAFORM_SA: ${{ vars.GCP_TERRAFORM_SA }}
+      GCP_TFVARS_JSON: ${{ vars.GCP_TFVARS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate deployment settings and write inputs outside checkout
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          for key in ('GCP_PROJECT_ID', 'GCP_STATE_BUCKET', 'GCP_WIF_PROVIDER', 'GCP_TERRAFORM_SA', 'GCP_TFVARS_JSON'):
+              if not os.environ.get(key):
+                  raise SystemExit(f'Missing repository/environment variable: {key}')
+          values = json.loads(os.environ['GCP_TFVARS_JSON'])
+          if not isinstance(values, dict) or values.get('project_id') != os.environ['GCP_PROJECT_ID']:
+              raise SystemExit('GCP_TFVARS_JSON.project_id must match GCP_PROJECT_ID')
+          if not values.get('control_plane_authorized_cidrs') or not values.get('node_service_account_email'):
+              raise SystemExit('Set explicit control_plane_authorized_cidrs and node_service_account_email')
+          Path(os.environ['RUNNER_TEMP'], 'gcp.auto.tfvars.json').write_text(json.dumps(values), encoding='utf-8')
+          PY
+      - name: Read pinned Terraform version
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < .terraform-version)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.version.outputs.value }}
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SA }}
+      - name: Initialize existing GCS backend
+        run: |
+          terraform -chdir=terraform/environments/gcp/dev/workload init -input=false \
+            -backend-config="bucket=$GCP_STATE_BUCKET" -backend-config="prefix=gcp/dev/workload"
+      - name: Plan workload
+        run: |
+          terraform -chdir=terraform/environments/gcp/dev/workload plan -input=false \
+            -var-file="$RUNNER_TEMP/gcp.auto.tfvars.json" -out="$RUNNER_TEMP/gcp.tfplan"
+      - name: Apply reviewed dispatch
+        if: inputs.action == 'apply'
+        run: terraform -chdir=terraform/environments/gcp/dev/workload apply -input=false "$RUNNER_TEMP/gcp.tfplan"
+      - name: Remove local inputs and saved plan
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/gcp.auto.tfvars.json" "$RUNNER_TEMP/gcp.tfplan"
