@@ -56,7 +56,7 @@ terraform -chdir=terraform/environments/gcp/dev/workload apply workload.tfplan
 
 ## 3. GitHub Actions로 Runtime 배포하는 경우
 
-로컬 runtime 배포 대신 선택하는 경로다. 같은 state에 두 경로를 동시에 실행하지 않는다. GitHub repository/environment 변수:
+로컬 runtime 배포 대신 선택하는 경로다. 같은 state에 두 경로를 동시에 실행하지 않는다. 아래 입력은 GitHub repository 변수로 등록한다:
 
 | 변수 | 값 |
 |---|---|
@@ -66,9 +66,9 @@ terraform -chdir=terraform/environments/gcp/dev/workload apply workload.tfplan
 | GCP_TERRAFORM_SA | bootstrap deploy_service_account_email |
 | GCP_TFVARS_JSON | runtime 입력을 담은 JSON 객체. project_id 일치, node_service_account_email·control_plane_authorized_cidrs 필수 |
 
-JSON에는 토큰이나 비밀값을 넣지 않는다. apply를 사용하려면 gcp-apply 환경에 required reviewers·main 제한을 별도 구성하고 GCP_APPLY_ENABLED=true를 설정한다. workflow가 승인자를 생성하거나 그 존재를 검증하지는 않는다. plan은 gcp-plan 환경을 사용한다.
+JSON에는 토큰이나 비밀값을 넣지 않는다. apply를 사용하려면 gcp-apply 환경에 required reviewers·main 제한을 별도 구성하고 GCP_APPLY_ENABLED=true를 repository 또는 organization 변수로 설정한다. 이 값은 job 시작 전 조건에서 읽으므로 environment 변수로만 등록하면 적용되지 않는다. workflow가 승인자를 생성하거나 그 존재를 검증하지는 않는다. plan은 gcp-plan 환경을 사용한다.
 
-Actions에서 Charlie GCP infrastructure를 열고 main의 수동 실행으로 action=plan을 선택한다. 계획을 확인한 뒤 action=apply와 confirm_apply=true로 새 실행한다. apply 실행에서는 계획을 다시 생성하므로 앞선 plan 실행과 동일한 계획임을 보장하지 않는다. 고정된 실행 commit·변수와 apply 실행의 계획을 승인자가 검토한다. 이후 변경 규모가 커지면 실행 간 동일 plan 승인 계약을 추가한다.
+Actions에서 Charlie GCP infrastructure를 열고 main의 수동 실행으로 action=plan을 선택한다. 계획을 확인한 뒤 action=apply와 confirm_apply=true로 새 실행한다. apply 실행에서는 계획을 다시 생성하므로 앞선 plan 실행과 동일한 계획임을 보장하지 않는다. 환경 승인은 job 시작 전에 이루어져 해당 commit·변수로 실행하는 작업을 사전 승인한다. 승인 후 새 plan과 apply가 연속 실행되며 새 계획에 대한 별도 승인 단계는 없다. 사전 plan의 변경 내용을 검토하고 실행 commit·변수를 고정한 뒤 진행한다. 이후 변경 규모가 커지면 실행 간 동일 plan 승인 계약을 추가한다.
 
 push/PR은 검증만 수행하며 credentials를 발급하지 않는다. 두 TF root는 backend 없는 validate/mock test를 수행한다. Bootstrap 자체는 Actions 배포 대상이 아니다.
 
