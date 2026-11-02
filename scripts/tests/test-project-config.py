@@ -71,6 +71,18 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.variables(self.p, ci, 'aws/dev/foundation')['nat_gateway_mode'], 'single')
         self.assertEqual(cfg.variables(self.p, local, 'aws/dev/foundation'), cfg.variables(self.p, ci, 'aws/dev/foundation'))
 
+    def test_immutable_oidc_prefix_is_forwarded_without_removing_ids(self):
+        prefix = 'repo:2026-Softbank-Hackathon-Charlie@350278309/infra@1442353250'
+        self.a['github_oidc_subject_prefix'] = prefix
+        (self.root / 'config/account.local.json').write_text(json.dumps(self.a))
+        inputs = cfg.variables(cfg.project(), cfg.account(False), 'account/aws')
+        self.assertEqual(inputs['github_oidc_subject_prefix'], prefix)
+        # The helper checks syntax/name consistency, not ID authenticity.
+        # Production IDs must come from GitHub's sub_claim_prefix API response.
+        self.a['github_oidc_subject_prefix'] = 'repo:other@111/infra@222'
+        with self.assertRaises(ValueError):
+            cfg.variables(self.p, self.a, 'account/aws')
+
     def test_original_names_and_state_keys(self):
         s = cfg.settings(self.p, self.a)
         self.assertEqual(s['bucket'], 'charlie-tfstate-123456789012-ap-northeast-2')

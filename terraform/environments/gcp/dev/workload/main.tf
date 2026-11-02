@@ -73,6 +73,7 @@ resource "google_container_cluster" "workload" {
     service_account = var.node_service_account_email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
   }
+  depends_on = [google_compute_router_nat.egress]
 }
 resource "google_container_node_pool" "workload" {
   name       = "workload"

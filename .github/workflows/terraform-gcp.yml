@@ -47,7 +47,7 @@ jobs:
           TF_ROOT: ${{ matrix.root }}
         run: |
           terraform fmt -check -recursive "$TF_ROOT"
-          terraform -chdir="$TF_ROOT" init -backend=false -input=false
+          terraform -chdir="$TF_ROOT" init -backend=false -input=false -lockfile=readonly
           terraform -chdir="$TF_ROOT" validate
           terraform -chdir="$TF_ROOT" test
 
@@ -61,10 +61,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: azure/setup-helm@v4.3.0
+      - uses: azure/setup-helm@v4.3.1
         with:
           version: v3.18.3
-      - run: python -m pip install 'PyYAML==6.0.2'
+      - run: python -m pip install 'PyYAML==6.0.3'
       - run: helm lint --strict helm/charts/gcp-baseline
       - run: python scripts/tests/test-gcp-workflow.py
 
@@ -131,7 +131,7 @@ jobs:
           service_account: ${{ vars.GCP_TERRAFORM_SA }}
       - name: Initialize existing GCS backend
         run: |
-          terraform -chdir=terraform/environments/gcp/dev/workload init -input=false \
+          terraform -chdir=terraform/environments/gcp/dev/workload init -input=false -lockfile=readonly \
             -backend-config="bucket=$GCP_STATE_BUCKET" -backend-config="prefix=gcp/dev/workload"
       - name: Plan workload
         run: |

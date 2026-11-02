@@ -42,9 +42,9 @@ flowchart TD
 - 애플리케이션, 빌드 파이프라인, 서비스 ECR, RDS는 별도로 구성합니다.
 - 실제 tfvars·backend 설정·state·plan·kubeconfig와 비밀값은 Git에 저장하지 않습니다.
 
-## GCP 추가 초안
+## GCP 이전 대상 인프라
 
-GCP 대상 GKE1개·GCS state·GitHub WIF·전용 baseline/workflow를 추가한 **미배포 Draft**입니다. [배포 초안](docs/gcp-deployment.md)을 먼저 읽으세요. 기존 AWS 경로와 분리하며 CNPG·cross-cloud 연결은 후속 작업입니다.
+GCP 대상 GKE1개·GCS state·GitHub WIF·전용 baseline/workflow를 제공합니다. [GCP 구축·배포 절차](docs/gcp-deployment.md)를 먼저 읽으세요. 코드 검사와 실제 배포·연결 검증을 구분합니다. 기존 AWS 경로와 분리하며 CNPG·cross-cloud 연결은 후속 작업입니다.
 
 ## 검증
 
@@ -97,6 +97,8 @@ gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix
 ```
 
 반환된 값을 Git에서 제외한 `config/account.local.json`의 `github_oidc_subject_prefix`에 그대로 넣습니다. 예제의 `repo:OWNER/REPO`는 반드시 교체할 placeholder입니다. `account/aws` 입력 생성은 이 값이 없으면 중단하며 저장소 이름으로 추측하지 않습니다. `use_default=true`여도 prefix에 불변 ID(`@ID`)가 포함될 수 있으므로 위 API의 실제 값을 사용합니다. API가 반환한 기존 `repo:OWNER/REPO` 형식과 `repo:OWNER@ID/REPO@ID` 형식을 모두 지원합니다. `:ref:refs/heads/main`은 입력하지 않습니다. Terraform이 이 suffix를 붙여 main 브랜치만 신뢰합니다. bootstrap/foundation에는 이 입력이 필요하지 않습니다.
+
+현재 이 저장소에서 확인한 prefix는 `repo:2026-Softbank-Hackathon-Charlie@350278309/infra@1442353250`입니다. 예제 placeholder를 그대로 쓰지 말고 API에서 재확인한 값으로 로컬 계정 입력을 설정합니다.
 
 코드 merge만으로 실제 IAM trust는 바뀌지 않습니다. 기존 역할의 trust를 콘솔에서 변경했다면 같은 prefix를 로컬 JSON에 반영하고, **해당 역할을 이미 관리하는 기존 account state와 backend**로 변경 계획을 확인해야 합니다. 새 state로 역할을 다시 만들거나 기존 state를 삭제하지 마세요. 실제 IAM 변경은 별도 승인된 `account/aws` apply로 수행합니다.
 
@@ -385,26 +387,33 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [docs/adr/0009-grant-ci-terraform-administrator-access.md](docs/adr/0009-grant-ci-terraform-administrator-access.md) | CI에 계정 전체 관리자 권한을 부여하는 결정 |
 | [docs/adr/0010-grant-eks-operator-access.md](docs/adr/0010-grant-eks-operator-access.md) | 기존 IAM 사용자의 두 EKS 관리자 접근 결정 |
 | [docs/adr/0011-require-explicit-github-oidc-subject-prefix.md](docs/adr/0011-require-explicit-github-oidc-subject-prefix.md) | account 입력의 실제 GitHub OIDC subject prefix 명시 결정 |
+| [docs/adr/0012-match-github-immutable-oidc-subject.md](docs/adr/0012-match-github-immutable-oidc-subject.md) | 실제 GitHub immutable subject와 main 신뢰 조건 일치 결정 |
 
-### GCP 초안 추가 파일
+
+### GCP 추가 파일
 
 | 파일 | 역할 |
 |---|---|
-| [.github/workflows/terraform-gcp.yml](.github/workflows/terraform-gcp.yml) | GCP 추가 초안: 독립 검증·main 수동 배포 workflow |
-| [docs/adr/0012-add-gcp-workload-draft.md](docs/adr/0012-add-gcp-workload-draft.md) | GCP 추가 초안: 구성·검토 문서 |
-| [helm/charts/gcp-baseline/Chart.yaml](helm/charts/gcp-baseline/Chart.yaml) | GCP 추가 초안: 구성·검토 문서 |
-| [helm/charts/gcp-baseline/templates/baseline.yaml](helm/charts/gcp-baseline/templates/baseline.yaml) | GCP 추가 초안: 구성·검토 문서 |
-| [helm/charts/gcp-baseline/values.schema.json](helm/charts/gcp-baseline/values.schema.json) | GCP 추가 초안: 구성·검토 문서 |
-| [helm/charts/gcp-baseline/values.yaml](helm/charts/gcp-baseline/values.yaml) | GCP 추가 초안: 구성·검토 문서 |
-| [scripts/tests/test-gcp-workflow.py](scripts/tests/test-gcp-workflow.py) | GCP 추가 초안: 배포 게이트·baseline 회귀시험 |
-| [terraform/bootstrap/gcp/main.tf](terraform/bootstrap/gcp/main.tf) | GCP 추가 초안: 클라우드 리소스 정의 |
-| [terraform/bootstrap/gcp/outputs.tf](terraform/bootstrap/gcp/outputs.tf) | GCP 추가 초안: 후속 배포용 출력 |
-| [terraform/bootstrap/gcp/terraform.tfvars.example](terraform/bootstrap/gcp/terraform.tfvars.example) | GCP 추가 초안: 계정별 입력 예제 |
-| [terraform/bootstrap/gcp/variables.tf](terraform/bootstrap/gcp/variables.tf) | GCP 추가 초안: 필수 입력·유효성 검사 |
-| [terraform/bootstrap/gcp/versions.tf](terraform/bootstrap/gcp/versions.tf) | GCP 추가 초안: provider·backend 정의 |
-| [terraform/environments/gcp/dev/workload/backend.hcl.example](terraform/environments/gcp/dev/workload/backend.hcl.example) | GCP 추가 초안: GCS backend 입력 예제 |
-| [terraform/environments/gcp/dev/workload/main.tf](terraform/environments/gcp/dev/workload/main.tf) | GCP 추가 초안: 클라우드 리소스 정의 |
-| [terraform/environments/gcp/dev/workload/outputs.tf](terraform/environments/gcp/dev/workload/outputs.tf) | GCP 추가 초안: 후속 배포용 출력 |
-| [terraform/environments/gcp/dev/workload/terraform.tfvars.example](terraform/environments/gcp/dev/workload/terraform.tfvars.example) | GCP 추가 초안: 계정별 입력 예제 |
-| [terraform/environments/gcp/dev/workload/variables.tf](terraform/environments/gcp/dev/workload/variables.tf) | GCP 추가 초안: 필수 입력·유효성 검사 |
-| [terraform/environments/gcp/dev/workload/versions.tf](terraform/environments/gcp/dev/workload/versions.tf) | GCP 추가 초안: provider·backend 정의 |
+| [.github/workflows/terraform-gcp.yml](.github/workflows/terraform-gcp.yml) | GCP: 독립 검증·main 수동 배포 workflow |
+| [docs/adr/0013-add-gcp-workload.md](docs/adr/0013-add-gcp-workload.md) | GCP: 구성·검토 문서 |
+| [helm/charts/gcp-baseline/Chart.yaml](helm/charts/gcp-baseline/Chart.yaml) | GCP: 구성·검토 문서 |
+| [helm/charts/gcp-baseline/templates/baseline.yaml](helm/charts/gcp-baseline/templates/baseline.yaml) | GCP: 구성·검토 문서 |
+| [helm/charts/gcp-baseline/values.schema.json](helm/charts/gcp-baseline/values.schema.json) | GCP: 구성·검토 문서 |
+| [helm/charts/gcp-baseline/values.yaml](helm/charts/gcp-baseline/values.yaml) | GCP: 구성·검토 문서 |
+| [scripts/tests/test-gcp-workflow.py](scripts/tests/test-gcp-workflow.py) | GCP: 배포 게이트·baseline 회귀시험 |
+| [terraform/bootstrap/gcp/main.tf](terraform/bootstrap/gcp/main.tf) | GCP: 클라우드 리소스 정의 |
+| [terraform/bootstrap/gcp/outputs.tf](terraform/bootstrap/gcp/outputs.tf) | GCP: 후속 배포용 출력 |
+| [terraform/bootstrap/gcp/terraform.tfvars.example](terraform/bootstrap/gcp/terraform.tfvars.example) | GCP: 계정별 입력 예제 |
+| [terraform/bootstrap/gcp/variables.tf](terraform/bootstrap/gcp/variables.tf) | GCP: 필수 입력·유효성 검사 |
+| [terraform/bootstrap/gcp/versions.tf](terraform/bootstrap/gcp/versions.tf) | GCP: provider·backend 정의 |
+| [terraform/environments/gcp/dev/workload/backend.hcl.example](terraform/environments/gcp/dev/workload/backend.hcl.example) | GCP: GCS backend 입력 예제 |
+| [terraform/environments/gcp/dev/workload/main.tf](terraform/environments/gcp/dev/workload/main.tf) | GCP: 클라우드 리소스 정의 |
+| [terraform/environments/gcp/dev/workload/outputs.tf](terraform/environments/gcp/dev/workload/outputs.tf) | GCP: 후속 배포용 출력 |
+| [terraform/environments/gcp/dev/workload/terraform.tfvars.example](terraform/environments/gcp/dev/workload/terraform.tfvars.example) | GCP: 계정별 입력 예제 |
+| [terraform/environments/gcp/dev/workload/variables.tf](terraform/environments/gcp/dev/workload/variables.tf) | GCP: 필수 입력·유효성 검사 |
+| [terraform/environments/gcp/dev/workload/versions.tf](terraform/environments/gcp/dev/workload/versions.tf) | GCP: provider·backend 정의 |
+
+| [terraform/bootstrap/gcp/.terraform.lock.hcl](terraform/bootstrap/gcp/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
+| [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
+| [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
+| [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |

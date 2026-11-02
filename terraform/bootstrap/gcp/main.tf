@@ -2,7 +2,8 @@ locals {
   apis = toset([
     "serviceusage.googleapis.com", "cloudresourcemanager.googleapis.com",
     "iam.googleapis.com", "iamcredentials.googleapis.com", "sts.googleapis.com",
-    "compute.googleapis.com", "container.googleapis.com", "artifactregistry.googleapis.com"
+    "compute.googleapis.com", "container.googleapis.com", "artifactregistry.googleapis.com",
+    "storage.googleapis.com", "logging.googleapis.com", "monitoring.googleapis.com"
   ])
 }
 resource "google_project_service" "required" {
@@ -37,7 +38,7 @@ resource "google_project_iam_member" "deploy" {
   member   = "serviceAccount:${google_service_account.deploy.email}"
 }
 resource "google_project_iam_member" "nodes" {
-  for_each = toset(["roles/logging.logWriter", "roles/monitoring.metricWriter", "roles/artifactregistry.reader"])
+  for_each = toset(["roles/container.defaultNodeServiceAccount", "roles/artifactregistry.reader"])
   project  = var.project_id
   role     = each.value
   member   = "serviceAccount:${google_service_account.nodes.email}"

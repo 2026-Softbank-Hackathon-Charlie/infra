@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 import yaml
@@ -24,15 +25,37 @@ class GCPDeliveryTests(unittest.TestCase):
         self.assertIn("'gcp-apply'", deploy['environment'])
         self.assertEqual(deploy['concurrency']['cancel-in-progress'], False)
         self.assertEqual(deploy['permissions'], {'contents': 'read', 'id-token': 'write'})
-        for name in ('validate', 'baseline'):
-            self.assertNotIn('id-token', self.workflow['jobs'][name].get('permissions', {}))
-            self.assertFalse(any('google-github-actions/auth' in step.get('uses', '') for step in self.workflow['jobs'][name]['steps']))
+        self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
+        credential_jobs = [name for name, job in self.workflow['jobs'].items()
+                           if job.get('permissions', {}).get('id-token') == 'write'
+                           or any('google-github-actions/auth' in step.get('uses', '') for step in job['steps'])]
+        self.assertEqual(credential_jobs, ['deploy'])
+
+    def test_dispatch_gate_rejects_automatic_events_and_unapproved_apply(self):
+        # This guard uses only string equality and typed booleans; exercise its decision table.
+        condition = self.workflow['jobs']['deploy']['if'].replace('&&', ' and ').replace('||', ' or ')
+        cases = [
+            ('push', 'refs/heads/main', 'apply', True, 'true', False),
+            ('pull_request', 'refs/heads/main', 'plan', False, 'true', False),
+            ('workflow_dispatch', 'refs/heads/feature', 'apply', True, 'true', False),
+            ('workflow_dispatch', 'refs/heads/main', 'plan', False, '', True),
+            ('workflow_dispatch', 'refs/heads/main', 'apply', False, 'true', False),
+            ('workflow_dispatch', 'refs/heads/main', 'apply', True, '', False),
+            ('workflow_dispatch', 'refs/heads/main', 'apply', True, 'false', False),
+            ('workflow_dispatch', 'refs/heads/main', 'apply', True, 'true', True),
+        ]
+        for event, ref, action, confirmation, enabled, expected in cases:
+            with self.subTest(event=event, ref=ref, action=action, confirmation=confirmation, enabled=enabled):
+                context = {'github': SimpleNamespace(event_name=event, ref=ref),
+                           'inputs': SimpleNamespace(action=action, confirm_apply=confirmation),
+                           'vars': SimpleNamespace(GCP_APPLY_ENABLED=enabled)}
+                self.assertEqual(bool(eval(condition, {'__builtins__': {}}, context)), expected)
 
     def test_both_roots_get_backend_free_checks_and_mock_tests(self):
         validate = self.workflow['jobs']['validate']
         self.assertEqual(set(validate['strategy']['matrix']['root']), {'terraform/bootstrap/gcp', 'terraform/environments/gcp/dev/workload'})
         command = validate['steps'][-1]['run']
-        for part in ('-backend=false', 'validate', ' test'):
+        for part in ('-backend=false', '-lockfile=readonly', 'validate', ' test'):
             self.assertIn(part, command)
 
     def test_saved_plan_is_applied_without_bootstrap_or_artifact_upload(self):
@@ -44,6 +67,8 @@ class GCPDeliveryTests(unittest.TestCase):
         self.assertFalse(any('upload-artifact' in s.get('uses', '') for s in deploy['steps']))
         self.assertFalse(any('terraform/bootstrap/gcp' in s.get('run', '') for s in deploy['steps']))
         self.assertEqual(deploy['steps'][-1]['if'], 'always()')
+        init = next(step for step in deploy['steps'] if step.get('name') == 'Initialize existing GCS backend')
+        self.assertIn('-lockfile=readonly', init['run'])
 
     def test_tfvars_materialization_treats_repository_values_as_data(self):
         step = next(s for s in self.workflow['jobs']['deploy']['steps'] if s.get('name', '').startswith('Validate deployment'))
@@ -70,6 +95,12 @@ class GCPDeliveryTests(unittest.TestCase):
         quota = next(d for d in docs if d['kind'] == 'ResourceQuota')
         self.assertEqual(quota['spec']['hard']['pods'], '12')
         self.assertNotIn('ebs.csi.aws.com', rendered.stdout)
+
+    def test_gke_baseline_rejects_aws_disk_types_and_unknown_values(self):
+        for setting in ('storageClass.diskType=gp3', 'externalAlb.enabled=true'):
+            with self.subTest(setting=setting):
+                result = subprocess.run(['helm', 'template', 'gcp-baseline', str(ROOT / 'helm/charts/gcp-baseline'), '--set', setting], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == '__main__':

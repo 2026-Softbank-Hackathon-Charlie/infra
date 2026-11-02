@@ -33,7 +33,17 @@ run "create_new_provider_and_scope_ci" {
 }
 run "reuse_existing_provider_without_ownership" {
   command = plan
-  variables { github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com" }
+  variables {
+    github_oidc_provider_arn   = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+    github_oidc_subject_prefix = "repo:example@111/charlie-infra@222"
+  }
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.terraform_apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:example@111/charlie-infra@222:ref:refs/heads/main" &&
+      jsondecode(aws_iam_role.terraform_apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
+    )
+    error_message = "Preserve immutable owner/repository IDs and trust only main with the AWS audience."
+  }
   assert {
     condition     = length(aws_iam_openid_connect_provider.github) == 0 && jsondecode(aws_iam_role.terraform_apply.assume_role_policy).Statement[0].Principal.Federated == var.github_oidc_provider_arn
     error_message = "Existing provider stays in its original state; only reference the ARN."
