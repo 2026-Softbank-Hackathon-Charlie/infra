@@ -79,10 +79,10 @@ GKE 자격 증명을 가져온 뒤 의도한 project/cluster/context인지 직�
 ```bash
 helm lint --strict helm/charts/gcp-baseline
 helm template charlie-gcp-baseline helm/charts/gcp-baseline
-helm upgrade --install charlie-gcp-baseline helm/charts/gcp-baseline --namespace charlie-apps --create-namespace
+helm upgrade --install charlie-gcp-baseline helm/charts/gcp-baseline --namespace charlie-system --create-namespace
 ```
 
-전용 StorageClass는 charlie-gcp-balanced이며 AWS EBS·기존 GKE 기본 클래스를 덮어쓰지 않는다. baseline 자체에는 플랫폼 RBAC, NetworkPolicy, CNPG operator, 이미지 registry 접근이나 cross-cloud 네트워크가 포함되지 않는다. 실제 DB/앱의 자원 요청에 맞춰 quota/limits를 조정한다.
+release namespace charlie-system은 chart가 생성하는 앱 namespace charlie-apps와 분리한다. 기존 앱 namespace가 있다면 Helm 소유권을 먼저 확인한다. 전용 StorageClass는 charlie-gcp-balanced이며 AWS EBS·기존 GKE 기본 클래스를 덮어쓰지 않는다. baseline 자체에는 플랫폼 RBAC, NetworkPolicy, CNPG operator, 이미지 registry 접근이나 cross-cloud 네트워크가 포함되지 않는다. 실제 DB/앱의 자원 요청에 맞춰 quota/limits를 조정한다.
 
 완료 확인은 GKE 생성뿐 아니라 API 접근, Pod 실행·이미지 pull, PVC 생성, CNPG 설치, 관리 플랫폼 인증/RBAC, DB·파일 전송 경로 및 실제 이전 시험까지 필요하다. 이 PR은 해당 환경별 통합이 완료됐다는 증거가 아니다.
 
