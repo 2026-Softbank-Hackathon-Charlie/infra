@@ -1,4 +1,4 @@
-# Public names of the platform on the management EKS cluster (ADR 0014 in the
+# Public names of the platform on the management EKS cluster (ADR 0016 in the
 # infra repo): an ACM certificate for *.<domain> and the Cloudflare records.
 # The domain is registered in Route 53 Domains, and its DNS is on Cloudflare.
 #
@@ -45,12 +45,13 @@ variable "domain" {
 variable "cloudflare_zone_id" {
   description = "Zone ID of the domain in Cloudflare (Overview page of the zone)."
   type        = string
+  default     = "257a362c84334d1b91c48d10b88fc266" # hopcharlie.dev
 }
 
 variable "alb_name" {
-  description = "Name of the shared ALB of the management cluster (infra baseline externalAlb.groupName). Empty until the ALB exists."
+  description = "Name of the shared ALB of the management cluster (infra baseline externalAlb.groupName). Empty while no ALB exists."
   type        = string
-  default     = ""
+  default     = "charlie-management-external"
 }
 
 provider "aws" {

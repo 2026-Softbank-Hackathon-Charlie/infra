@@ -6,8 +6,8 @@
   ],
   "applicationNamespace": "charlie-platform",
   "externalAlb": {
-    "enabled": false,
+    "enabled": true,
     "groupName": "charlie-management-external",
-    "certificateArn": ""
+    "certificateArn": "arn:aws:acm:ap-northeast-2:525091405886:certificate/5ceab147-5503-4cc9-950f-09135d8d3567"
   }
 }
