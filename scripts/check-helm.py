@@ -107,7 +107,11 @@ def main():
             baseline_ns = "charlie-platform" if purpose == "management" else "charlie-apps"
             docs = render(ROOT / "helm/charts/cluster-baseline", values_root / "baseline.yaml", "baseline", baseline_ns)
             assert {"Namespace", "StorageClass", "ResourceQuota", "LimitRange", "NetworkPolicy"} <= {d["kind"] for d in docs}
-            assert not any(d["kind"] in {"Ingress", "ClusterRole", "ClusterRoleBinding"} for d in docs)
+            assert not any(d["kind"] in {"ClusterRole", "ClusterRoleBinding"} for d in docs)
+            # The only Ingress is the shared ALB anchor, and only where externalAlb is on.
+            alb = json.loads((values_root / "baseline.yaml").read_text())["externalAlb"]
+            ingresses = [d for d in docs if d["kind"] == "Ingress"]
+            assert [d["metadata"]["name"] for d in ingresses] == ([f"{alb['groupName']}-anchor"] if alb["enabled"] else [])
             check_project(docs, projects[purpose], baseline_ns)
             for name in fixture["addons"][purpose] + ["opentelemetry-collector"]:
                 pin = VERSIONS["charts"][name]
@@ -125,7 +129,7 @@ def main():
         # HopCharlie platform: before and after the shared ALB is turned on.
         platform_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml"
         for ingress in (False, True):
-            extra = ("--set", "ingress.enabled=true") if ingress else ()
+            extra = ("--set", f"ingress.enabled={str(ingress).lower()}")
             docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", extra)
             kinds = {d["kind"] for d in docs}
             assert {"StatefulSet", "Deployment", "Service", "NetworkPolicy", "ConfigMap", "ServiceAccount"} <= kinds
