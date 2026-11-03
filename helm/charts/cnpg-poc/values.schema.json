@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["imageName", "backup", "resources", "backupResources", "quota"],
+  "properties": {
+    "imageName": {
+      "type": "string",
+      "pattern": "^ghcr\\.io/cloudnative-pg/postgresql:[^@ ]+@sha256:[a-f0-9]{64}$"
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bucketName", "region", "retentionPolicy", "schedule"],
+      "properties": {
+        "bucketName": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"},
+        "region": {"const": "ap-northeast-2"},
+        "retentionPolicy": {"const": "7d"},
+        "schedule": {"const": "0 0 18 * * *"}
+      }
+    },
+    "resources": {"$ref": "#/definitions/resources"},
+    "backupResources": {"$ref": "#/definitions/resources"},
+    "quota": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "required": ["requests.cpu", "requests.memory", "limits.cpu", "limits.memory", "pods", "persistentvolumeclaims", "requests.storage"]
+    }
+  },
+  "definitions": {
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {"$ref": "#/definitions/quantities"},
+        "limits": {"$ref": "#/definitions/quantities"}
+      }
+    },
+    "quantities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": {"type": "string", "pattern": "^[0-9]+([.][0-9]+)?m?$"},
+        "memory": {"type": "string", "pattern": "^[0-9]+([.][0-9]+)?(Ki|Mi|Gi)$"}
+      }
+    }
+  }
+}

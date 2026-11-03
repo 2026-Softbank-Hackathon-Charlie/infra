@@ -1,0 +1,45 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-poc
+  namespace: charlie-db
+  labels:
+    {{- include "cnpg-poc.labels" . | nindent 4 }}
+spec:
+  instances: 1
+  imageName: {{ .Values.imageName | quote }}
+  imagePullPolicy: IfNotPresent
+  enableSuperuserAccess: false
+  primaryUpdateStrategy: supervised
+  bootstrap:
+    initdb:
+      database: db_a
+      owner: svc_a_owner
+      secret:
+        name: svc-a-owner
+  storage:
+    storageClass: cnpg-gp3-retain
+    size: 20Gi
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+  certificates:
+    serverAltDNSNames:
+      - postgres-poc-rw.charlie-db.svc
+      - postgres-poc-rw.charlie-db.svc.cluster.local
+  postgresql:
+    parameters:
+      max_connections: "50"
+      archive_timeout: 5min
+      password_encryption: scram-sha-256
+    # CNPG prepends its mandatory local/operator/replication rules. App users
+    # require TLS and may authenticate only against their own service database.
+    pg_hba:
+      - hostssl db_a svc_a_owner,svc_a_runtime all scram-sha-256
+      - hostssl db_b svc_b_owner,svc_b_runtime all scram-sha-256
+      - host all all all reject
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgres-poc-source
+        serverName: postgres-poc

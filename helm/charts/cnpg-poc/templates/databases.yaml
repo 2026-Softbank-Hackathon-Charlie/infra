@@ -1,0 +1,39 @@
+{{- range $service := list "a" "b" }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: postgres-poc-db-{{ $service }}
+  namespace: charlie-db
+spec:
+  cluster:
+    name: postgres-poc
+  name: db_{{ $service }}
+  owner: svc_{{ $service }}_owner
+  databaseReclaimPolicy: retain
+---
+{{- range $role := list "owner" "runtime" }}
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: postgres-poc-svc-{{ $service }}-{{ $role }}
+  namespace: charlie-db
+spec:
+  cluster:
+    name: postgres-poc
+  name: svc_{{ $service }}_{{ $role }}
+  comment: Service {{ $service }} {{ $role }} for the AWS CNPG PoC
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: false
+  inherit: false
+  inRoles: []
+  connectionLimit: {{ if eq $role "runtime" }}10{{ else }}3{{ end }}
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: svc-{{ $service }}-{{ $role }}
+---
+{{- end }}
+{{- end }}

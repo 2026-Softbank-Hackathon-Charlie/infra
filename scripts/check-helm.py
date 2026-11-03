@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import yaml
@@ -137,7 +138,8 @@ def main():
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
-        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform; {len(seen)} pinned images.")
+        subprocess.check_call([sys.executable, str(ROOT / "scripts/check-cnpg.py")])
+        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform and CNPG PoC; {len(seen)} baseline pinned images.")
 
 
 if __name__ == "__main__":

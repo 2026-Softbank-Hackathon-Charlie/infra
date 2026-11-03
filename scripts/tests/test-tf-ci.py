@@ -216,7 +216,7 @@ class TerraformCITest(unittest.TestCase):
         for stack in STACKS[2:]:
             (self.directory(stack) / ".scaffold").unlink()
         for actions in (["delete"], ["delete", "create"], ["create", "delete"]):
-            for address in ('aws_vpc.shared', 'aws_s3_bucket.loki', 'aws_subnet.private["management-0"]', 'aws_nat_gateway.egress["0"]', 'aws_nat_gateway.egress["1"]'):
+            for address in ('aws_vpc.shared', 'aws_s3_bucket.loki', 'aws_s3_bucket.cnpg', 'aws_subnet.private["management-0"]', 'aws_nat_gateway.egress["0"]', 'aws_nat_gateway.egress["1"]'):
                 with self.subTest(actions=actions, address=address):
                     self.log.unlink(missing_ok=True)
                     self.env["FAKE_PLAN_JSON"] = json.dumps({"format_version":"1.2", "resource_changes":[{"address":address, "change":{"actions":actions}, "secret":"never-print-this"}]})
@@ -232,6 +232,29 @@ class TerraformCITest(unittest.TestCase):
             {"address":'aws_route.private_internet["workload-1"]',"change":{"actions":["update"]}}]})
         result=self.run_script()
         self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_cnpg_backup_bucket_creation_and_updates_are_allowed(self):
+        for action in ("create", "update"):
+            with self.subTest(action=action):
+                self.log.unlink(missing_ok=True)
+                self.env["FAKE_PLAN_JSON"] = json.dumps({"format_version": "1.2", "resource_changes": [
+                    {"address": "aws_s3_bucket.cnpg", "change": {"actions": [action]}}
+                ]})
+                result = self.run_script("apply", "foundation")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual([call[1] for call in self.calls("terraform")], ["init", "plan", "show", "apply"])
+                self.assert_no_plans()
+
+    def test_cnpg_backup_bucket_remains_protected_after_an_address_move(self):
+        self.env["FAKE_PLAN_JSON"] = json.dumps({"format_version": "1.2", "resource_changes": [
+            {"address": "aws_s3_bucket.renamed_backup", "previous_address": "aws_s3_bucket.cnpg",
+             "change": {"actions": ["delete", "create"]}, "secret": "never-print-backup-data"}
+        ]})
+        result = self.run_script("apply", "foundation")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual([call[1] for call in self.calls("terraform")], ["init", "plan", "show"])
+        self.assertNotIn("never-print-backup-data", result.stdout + result.stderr)
+        self.assert_no_plans()
 
     def test_invalid_show_output_fails_closed(self):
         self.env["FAKE_PLAN_JSON"]="not-json secret"

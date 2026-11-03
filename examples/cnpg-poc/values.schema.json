@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service", "mode", "runId", "clusterName", "image"],
+  "properties": {
+    "service": {"enum": ["a", "b"]},
+    "mode": {"enum": ["migrate", "verify", "network-denied", "marker", "fingerprint", "recover-a"]},
+    "runId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,20}$"},
+    "clusterName": {"enum": ["postgres-poc", "postgres-poc-restore"]},
+    "image": {"type": "string", "pattern": "^ghcr\\.io/cloudnative-pg/postgresql:[^@]+@sha256:[a-f0-9]{64}$"},
+    "markerLabel": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"}
+  },
+  "allOf": [{
+    "if": {"properties": {"mode": {"const": "recover-a"}}},
+    "then": {"properties": {"service": {"const": "a"}, "clusterName": {"const": "postgres-poc"}}}
+  }]
+}

@@ -66,8 +66,12 @@ if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
     def test_original_mock_runs_preserved(self):
         # Preserve the original AWS suite without counting independent cloud suites.
         roots = [ROOT / 'terraform' / verify.relative(stack) for stack in verify.ROOTS]
-        self.assertEqual(sum(len(__import__('re').findall(r'^run\s+"', p.read_text(), __import__('re').M))
-                             for root in roots for p in root.rglob('*.tftest.hcl')), 28)
+        tests = [p for root in roots for p in root.rglob('*.tftest.hcl')]
+        cnpg = ROOT / 'terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl'
+        runs = lambda path: __import__('re').findall(r'^run\s+"([^"]+)"', path.read_text(), __import__('re').M)
+        self.assertEqual(sum(len(runs(p)) for p in tests if p != cnpg), 28)
+        self.assertIn(cnpg, tests)
+        self.assertEqual(runs(cnpg), ['cnpg_backup_and_restore_boundaries'])
         self.assertEqual(len(verify.ROOTS), 6)
 
 

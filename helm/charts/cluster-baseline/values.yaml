@@ -16,7 +16,10 @@
     "pods": "30"
   },
   "networkPolicy": {
-    "enabled": true
+    "enabled": true,
+    "cnpg": {
+      "enabled": false
+    }
   },
   "externalAlb": {
     "enabled": false,

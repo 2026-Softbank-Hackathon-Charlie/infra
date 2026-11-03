@@ -84,6 +84,32 @@ spec:
     # AWS APIs, remote Kubernetes API and external HTTPS dependencies.
     - ports:
         - {protocol: TCP, port: 443}
+{{- if .Values.networkPolicy.cnpg.enabled }}
+---
+# Only opted-in workload clients gain egress to the dedicated PostgreSQL pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: application-cnpg-egress
+  namespace: {{ .Values.applicationNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      charlie.dev/cnpg-client: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: charlie-db
+          podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: In
+                values: [postgres-poc, postgres-poc-restore]
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- end }}
 {{- end }}
 {{- with .Values.externalAlb }}{{ if .enabled }}
 ---

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cnpg-poc-checks
+description: Explicitly rendered, manually approved synthetic DB checks; never an Argo hook
+type: application
+version: 0.1.0
