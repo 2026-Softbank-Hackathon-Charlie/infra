@@ -73,9 +73,14 @@ spec:
   destination:
     server: {{ $target.endpoint | quote }}
     namespace: charlie-platform
+  # The API server fills defaults (apiVersion, kind, volumeMode, status) into
+  # the PostgreSQL volumeClaimTemplates, which are immutable; without this
+  # Argo CD reports the StatefulSet OutOfSync forever and keeps re-syncing.
+  ignoreDifferences:
+    - {group: apps, kind: StatefulSet, name: hopcharlie-postgres, jsonPointers: [/spec/volumeClaimTemplates]}
   syncPolicy:
     automated: {prune: false, selfHeal: true}
-    syncOptions: [ServerSideApply=true]
+    syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
 ---
 # Apps the platform deploys from GitHub (ADR 0023): an AppProject and an
 # ApplicationSet that turn each apps/<app>/<env>.yaml of the gitops repository
