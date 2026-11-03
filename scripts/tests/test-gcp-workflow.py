@@ -51,9 +51,9 @@ class GCPDeliveryTests(unittest.TestCase):
                            'vars': SimpleNamespace(GCP_APPLY_ENABLED=enabled)}
                 self.assertEqual(bool(eval(condition, {'__builtins__': {}}, context)), expected)
 
-    def test_both_roots_get_backend_free_checks_and_mock_tests(self):
+    def test_all_gcp_roots_get_backend_free_checks_and_mock_tests(self):
         validate = self.workflow['jobs']['validate']
-        self.assertEqual(set(validate['strategy']['matrix']['root']), {'terraform/bootstrap/gcp', 'terraform/environments/gcp/dev/workload'})
+        self.assertEqual(set(validate['strategy']['matrix']['root']), {'terraform/bootstrap/gcp', 'terraform/environments/gcp/dev/workload', 'terraform/integrations/gcp/argocd'})
         command = validate['steps'][-1]['run']
         for part in ('-backend=false', '-lockfile=readonly', 'validate', ' test'):
             self.assertIn(part, command)
@@ -66,6 +66,7 @@ class GCPDeliveryTests(unittest.TestCase):
         self.assertNotIn('-auto-approve', apply['run'])
         self.assertFalse(any('upload-artifact' in s.get('uses', '') for s in deploy['steps']))
         self.assertFalse(any('terraform/bootstrap/gcp' in s.get('run', '') for s in deploy['steps']))
+        self.assertFalse(any('terraform/integrations/gcp/argocd' in s.get('run', '') for s in deploy['steps']))
         self.assertEqual(deploy['steps'][-1]['if'], 'always()')
         init = next(step for step in deploy['steps'] if step.get('name') == 'Initialize existing GCS backend')
         self.assertIn('-lockfile=readonly', init['run'])

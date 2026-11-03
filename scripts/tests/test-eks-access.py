@@ -184,6 +184,54 @@ class AccessTests(unittest.TestCase):
         self.invoke('argo-port-forward', expected=1)
         self.assertFalse(any('port-forward' in c for c in self.calls()))
 
+    def test_update_kubeconfig_discards_locale_encoded_status(self):
+        spec = importlib.util.spec_from_file_location('eks_access', self.root / 'scripts/eks-access.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        project = module.config.project()
+        name = project['management_cluster_name']
+        arn = f'arn:aws:eks:ap-northeast-2:123456789012:cluster/{name}'
+        cluster = {'arn': arn, 'endpoint': 'https://example.eks.amazonaws.com',
+                   'certificateAuthority': {'data': 'ZmFrZS1jYQ=='},
+                   'resourcesVpcConfig': {'vpcId': 'vpc-test'}}
+        responses = {
+            'get-caller-identity': {'Account': '123456789012'},
+            'describe-cluster': {'cluster': cluster},
+            'describe-instances': {'Reservations': [{'Instances': [
+                {'InstanceId': 'i-test', 'VpcId': 'vpc-test', 'State': {'Name': 'running'}}]}]},
+            'describe-instance-information': {'InstanceInformationList': [
+                {'InstanceId': 'i-test', 'PingStatus': 'Online'}]},
+        }
+        captured_run, native_run = module.run, subprocess.run
+
+        def read_response(args):
+            if 'update-kubeconfig' in args:
+                return captured_run(args)
+            if args[0] == 'kubectl':
+                return json.dumps({'clusters': [{'name': arn, 'cluster': {
+                    'server': cluster['endpoint'], 'certificate-authority-data': 'ZmFrZS1jYQ=='}}]})
+            return json.dumps(next(value for command, value in responses.items() if command in args))
+
+        def locale_status(args, **kwargs):
+            self.assertIn('update-kubeconfig', args)
+            # Emulate AWS CLI's Windows locale status line, not a JSON response.
+            status = 'Updated context: C:/사용자/소뱅/config\n'.encode('cp949')
+            if kwargs.get('text'):
+                kwargs['encoding'] = 'utf-8'
+            return native_run([sys.executable, '-c', f'import sys; sys.stdout.buffer.write({status!r})'], **kwargs)
+
+        with patch.object(module, 'run', side_effect=read_response), \
+                patch.object(module.subprocess, 'run', side_effect=locale_status) as update, \
+                patch.object(module.subprocess, 'call', side_effect=SystemExit(0)), \
+                patch.object(module.os, 'execvpe', side_effect=SystemExit(0)), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as result:
+                module.tunnel(project, '123456789012', 'management', 10443, 'charlie-admin', self.kube_path())
+        self.assertEqual(result.exception.code, 0)
+        self.assertEqual(update.call_args.kwargs, {'check': True, 'stdout': subprocess.DEVNULL})
+        self.assertTrue(self.kube_path().is_file())
+        self.assertEqual(self.global_config.read_text(), 'do not touch\n')
+
     def test_busy_port_fails_before_cloud_calls(self):
         spec = importlib.util.spec_from_file_location('eks_access', self.root / 'scripts/eks-access.py')
         module = importlib.util.module_from_spec(spec)

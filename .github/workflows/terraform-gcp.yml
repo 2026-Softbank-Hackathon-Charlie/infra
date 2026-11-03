@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        root: [terraform/bootstrap/gcp, terraform/environments/gcp/dev/workload]
+        root: [terraform/bootstrap/gcp, terraform/environments/gcp/dev/workload, terraform/integrations/gcp/argocd]
     steps:
       - uses: actions/checkout@v4
         with:
