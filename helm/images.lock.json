@@ -2,6 +2,7 @@
   "schema_version": 1,
   "images": {
     "ghcr.io/headlamp-k8s/headlamp:v0.46.0": "sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75",
+    "quay.io/oauth2-proxy/oauth2-proxy:v7.15.5": "sha256:8498b0d0ef0a7b29686414000a08aee467f02d0299c9ed1e006a8f33fc017916",
     "quay.io/argoproj/argocd:v3.5.3": "sha256:dd3f47d5a5e4da563a7a398506e892481b358a7cec50abdf320c71aa55904bfa",
     "ecr-public.aws.com/docker/library/redis:8.6.4-alpine": "sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763",
     "docker.io/grafana/grafana:13.2.3-distroless": "sha256:202e5d5b3f8499e70ccac7991eea6d7da72d2790eb2e0597e7987acf724e7180",

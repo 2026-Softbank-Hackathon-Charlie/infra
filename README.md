@@ -25,6 +25,13 @@
 | [docs/adr/0020-add-gke-to-team-headlamp.md](docs/adr/0020-add-gke-to-team-headlamp.md) | GKE 개인 Google 인증 분리 제안 |
 | [scripts/register-headlamp-gke.py](scripts/register-headlamp-gke.py) | 오프라인 GKE 연결 미리보기와 승인 후 기존 Secret 갱신 |
 | [scripts/tests/test-headlamp-gke.py](scripts/tests/test-headlamp-gke.py) | AWS 설정 보존·무자격 GKE context·적용 경계 회귀 검사 |
+| [docs/headlamp-gke-google.md](docs/headlamp-gke-google.md) | GKE 개인 Google 로그인·자동 갱신 준비와 운영 검증 절차 |
+| [docs/adr/0027-headlamp-google-auto-refresh.md](docs/adr/0027-headlamp-google-auto-refresh.md) | GKE 인증 프록시와 자동 갱신 제안 |
+| [docs/plans/2026-11-03-headlamp-google-refresh.md](docs/plans/2026-11-03-headlamp-google-refresh.md) | Google 자동 갱신 구현·검증 계획 |
+| [helm/charts/headlamp-gke-google/Chart.yaml](helm/charts/headlamp-gke-google/Chart.yaml) | GKE Google 인증 전용 Headlamp 차트 |
+| [helm/charts/headlamp-gke-google/values.yaml](helm/charts/headlamp-gke-google/values.yaml) | OAuth 프록시 및 GKE 연결 기본값 |
+| [helm/charts/headlamp-gke-google/templates/web.yaml](helm/charts/headlamp-gke-google/templates/web.yaml) | GKE 전용 인증 프록시·서비스·Ingress |
+| [scripts/tests/test-headlamp-gke-google.py](scripts/tests/test-headlamp-gke-google.py) | Google 인증 프록시와 보안 경계 렌더링 검사 |
 
 2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.
 
