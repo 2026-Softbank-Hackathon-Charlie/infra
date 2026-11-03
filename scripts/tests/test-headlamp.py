@@ -63,6 +63,9 @@ class HeadlampTests(unittest.TestCase):
         self.assertEqual(provider['name'], 'oidc')
         self.assertEqual(provider['config']['client-secret'], 'test-secret')
         self.assertEqual(provider['config']['client-id'], 'test-client')
+        self.assertIn('scope', provider['config'])
+        self.assertEqual(provider['config']['scope'], 'profile,email')
+        self.assertNotIn('extra-scopes', provider['config'])
         self.assertNotIn('token', kube['users'][0]['user'])
         for broken in ({**values, 'clusters': []}, {**values, 'oidc': {'issuerURL': '', 'clientID': 'x'}}):
             with self.assertRaises(SystemExit):
