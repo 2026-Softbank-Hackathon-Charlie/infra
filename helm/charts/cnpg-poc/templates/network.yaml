@@ -26,6 +26,14 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    {{- range .Values.dnsExtraCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -67,7 +75,7 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: cloudnative-pg
-              app.kubernetes.io/instance: cloudnative-pg
+              app.kubernetes.io/instance: {{ .Values.operatorInstance }}
       ports:
         - {protocol: TCP, port: 8000}
   egress:
@@ -80,15 +88,19 @@ spec:
       ports:
         - {protocol: TCP, port: 5432}
         - {protocol: TCP, port: 8000}
-    # The EKS API and S3 use HTTPS. This is egress-only and does not publish DB.
+    # The Kubernetes API and object storage use HTTPS; this does not publish DB.
     - ports:
         - {protocol: TCP, port: 443}
-    # EKS Pod Identity agent; EC2 IMDS (169.254.169.254) is not permitted.
+    # Only the selected cloud's workload-identity metadata endpoint is allowed.
+    {{- range .Values.metadataEgress }}
     - to:
         - ipBlock:
-            cidr: 169.254.170.23/32
+            cidr: {{ .cidr }}
       ports:
-        - {protocol: TCP, port: 80}
+        {{- range .ports }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

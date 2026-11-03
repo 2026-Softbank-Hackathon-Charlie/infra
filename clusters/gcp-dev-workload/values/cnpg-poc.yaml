@@ -1,0 +1,15 @@
+storageClass:
+  name: cnpg-gcp-pd-retain
+  provisioner: pd.csi.storage.gke.io
+  type: pd-balanced
+operatorInstance: cnpg
+dnsExtraCIDRs:
+  - 169.254.20.10/32
+  - 10.82.0.10/32
+metadataEgress:
+  - cidr: 169.254.169.252/32
+    ports: [987, 988]
+backup:
+  provider: gcs
+  bucketName: charlie-414068132732-cnpg-poc-backup
+  gcpServiceAccount: charlie-cnpg-poc-backup@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com

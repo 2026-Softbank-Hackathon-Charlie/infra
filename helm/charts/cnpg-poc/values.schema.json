@@ -2,22 +2,57 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["imageName", "backup", "resources", "backupResources", "quota"],
+  "required": ["imageName", "storageClass", "operatorInstance", "dnsExtraCIDRs", "metadataEgress", "backup", "resources", "backupResources", "quota"],
   "properties": {
     "imageName": {
       "type": "string",
       "pattern": "^ghcr\\.io/cloudnative-pg/postgresql:[^@ ]+@sha256:[a-f0-9]{64}$"
     },
+    "storageClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "provisioner", "type"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"},
+        "provisioner": {"enum": ["ebs.csi.aws.com", "pd.csi.storage.gke.io"]},
+        "type": {"enum": ["gp3", "pd-balanced"]}
+      }
+    },
+    "operatorInstance": {"type": "string", "minLength": 1},
+    "dnsExtraCIDRs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[0-9.]+/32$"}
+    },
+    "metadataEgress": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cidr", "ports"],
+        "properties": {
+          "cidr": {"type": "string", "pattern": "^[0-9.]+/32$"},
+          "ports": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 65535}}
+        }
+      }
+    },
     "backup": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["bucketName", "region", "retentionPolicy", "schedule"],
+      "required": ["provider", "bucketName", "region", "retentionPolicy", "schedule"],
       "properties": {
+        "provider": {"enum": ["s3", "gcs"]},
         "bucketName": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"},
         "region": {"const": "ap-northeast-2"},
+        "gcpServiceAccount": {"type": "string"},
         "retentionPolicy": {"const": "7d"},
         "schedule": {"const": "0 0 18 * * *"}
-      }
+      },
+      "allOf": [{
+        "if": {"properties": {"provider": {"const": "gcs"}}},
+        "then": {"required": ["gcpServiceAccount"], "properties": {"gcpServiceAccount": {"pattern": "^[a-z][a-z0-9-]+@[a-z0-9-]+\\.iam\\.gserviceaccount\\.com$"}}}
+      }]
     },
     "resources": {"$ref": "#/definitions/resources"},
     "backupResources": {"$ref": "#/definitions/resources"},

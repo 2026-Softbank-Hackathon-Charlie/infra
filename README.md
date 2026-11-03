@@ -54,6 +54,7 @@
 | [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
 | [docs/adr/0029-add-gcp-app-image-repository.md](docs/adr/0029-add-gcp-app-image-repository.md) | 기존 GCP bootstrap의 앱 이미지 저장소와 노드 읽기 권한 재사용 제안 |
 | [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
+| [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
 | [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
@@ -501,6 +502,12 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/bootstrap/gcp/.terraform.lock.hcl](terraform/bootstrap/gcp/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 | [terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl](terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl) | 모임룸의 선택적 WIF·저장소 게시 권한과 입력 검증 |
+| [terraform/bootstrap/gcp/cnpg-poc-backup.tf](terraform/bootstrap/gcp/cnpg-poc-backup.tf) | 선택적 PoC 백업 GCS·전용 계정·버킷 한정 Workload Identity |
+| [terraform/bootstrap/gcp/tests/cnpg-poc-backup.tftest.hcl](terraform/bootstrap/gcp/tests/cnpg-poc-backup.tftest.hcl) | PoC 백업의 비활성 기본값·정확한 KSA·버킷 권한 검사 |
+| [clusters/gcp-dev-workload/namespaces.yaml](clusters/gcp-dev-workload/namespaces.yaml) | GCP DB·인증서 컨트롤러 전용 namespace와 기본 Pod 보안 |
+| [clusters/gcp-dev-workload/values/cnpg-poc.yaml](clusters/gcp-dev-workload/values/cnpg-poc.yaml) | 공통 PoC 차트의 GCP 디스크·operator·네트워크·백업 값 |
+| [clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml](clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml) | AWS와 같은 고정 Barman 컨트롤러·sidecar 이미지 |
+| [clusters/gcp-dev-workload/values/cert-manager.yaml](clusters/gcp-dev-workload/values/cert-manager.yaml) | AWS와 같은 고정 cert-manager 이미지·CRD 설정 |
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 

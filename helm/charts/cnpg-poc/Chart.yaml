@@ -1,6 +1,6 @@
 apiVersion: v2
 name: cnpg-poc
-description: AWS workload PostgreSQL PoC with service databases and Barman backups
+description: Workload PostgreSQL PoC with service databases and Barman backups
 type: application
 version: 0.1.0
-kubeVersion: ">=1.35.0-0 <1.36.0-0"
+kubeVersion: ">=1.35.0-0 <1.37.0-0"

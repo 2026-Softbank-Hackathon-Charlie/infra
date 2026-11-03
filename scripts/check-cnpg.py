@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CNPG PoC의 고정 upstream CRD·이미지·수동 배포 계약을 AWS 접속 없이 검사한다."""
+"""CNPG PoC의 고정 CRD·이미지와 AWS/GCP 배포 계약을 클라우드 접속 없이 검사한다."""
 import importlib.util
 import json
 import os
@@ -21,6 +21,7 @@ DEPENDENCIES = {
 }
 REPO = "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git"
 VALUES = ROOT / "clusters/aws-dev-workload/values"
+GCP_VALUES = ROOT / "clusters/gcp-dev-workload/values"
 
 
 def pinned_image(ref):
@@ -163,6 +164,12 @@ def main():
             assert not any(d["kind"] in {"PodMonitor", "ServiceMonitor", "PrometheusRule"} for d in docs)
             check_project(docs, project, namespace)
             seen.update(pinned_image(ref) for ref in operand_images(docs))
+            if name != "cloudnative-pg":
+                gcp_values = GCP_VALUES / f"{name}.yaml"
+                assert yaml.safe_load(gcp_values.read_text()) == yaml.safe_load((VALUES / f"{name}.yaml").read_text()), "GCP must reuse the fixed AWS backup dependencies"
+                gcp_dependencies = checks.render(chart, gcp_values, name, namespace, ("--kube-version", "1.36.0"))
+                assert not any(d["kind"] == "Namespace" for d in gcp_dependencies)
+                seen.update(pinned_image(ref) for ref in operand_images(gcp_dependencies))
             if name == "cloudnative-pg":
                 configuration = next(d for d in docs if d["kind"] == "ConfigMap" and "POSTGRES_IMAGE_NAME" in d.get("data", {}))
                 assert not configuration["data"].get("WATCH_NAMESPACE"), "CNPG must watch every application namespace"
@@ -206,6 +213,51 @@ def main():
         assert config["s3Credentials"] == {"inheritFromIAMRole": True} and config["destinationPath"].endswith("/source/")
         assert "serverName" not in config, "Barman0.15 serverName belongs in Cluster plugin parameters"
         assert objects[0]["spec"]["retentionPolicy"] == "7d"
+        gcp_docs = checks.render(chart, GCP_VALUES / "cnpg-poc.yaml", "cnpg-poc", "charlie-db", ("--kube-version", "1.36.0"))
+        assert len(gcp_docs) == 16, "GCP parity must preserve the reviewed resource scope"
+        assert not any(d["kind"] in {"Namespace", "Secret", "Service", "Ingress", "ClusterRole", "ClusterRoleBinding"} for d in gcp_docs)
+        for doc in gcp_docs:
+            check_cluster_update_policy(doc)
+            schema = crds.get((doc["apiVersion"], doc["kind"]))
+            if schema:
+                structural(doc["spec"], schema["properties"]["spec"], "gcp." + doc["kind"] + ".spec")
+        gcp_cluster = next(d for d in gcp_docs if d["kind"] == "Cluster")
+        for key, value in cluster["spec"].items():
+            if key != "storage":
+                assert gcp_cluster["spec"][key] == value, f"GCP database contract changed: {key}"
+        assert gcp_cluster["spec"]["storage"] == {"storageClass": "cnpg-gcp-pd-retain", "size": "20Gi"}
+        assert gcp_cluster["spec"]["serviceAccountTemplate"]["metadata"]["annotations"] == {
+            "iam.gke.io/gcp-service-account": "charlie-cnpg-poc-backup@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com"
+        }
+        assert [d for d in gcp_docs if d["kind"] in {"Database", "DatabaseRole"}] == [d for d in docs if d["kind"] in {"Database", "DatabaseRole"}]
+        storage = next(d for d in gcp_docs if d["kind"] == "StorageClass")
+        assert storage["provisioner"] == "pd.csi.storage.gke.io" and storage["parameters"] == {"type": "pd-balanced"}
+        assert storage["reclaimPolicy"] == "Retain" and storage["volumeBindingMode"] == "WaitForFirstConsumer" and storage["allowVolumeExpansion"] is True
+        gcp_store = next(d for d in gcp_docs if d["kind"] == "ObjectStore")["spec"]
+        assert gcp_store["configuration"] == {
+            "destinationPath": "gs://charlie-414068132732-cnpg-poc-backup/source/",
+            "googleCredentials": {"gkeEnvironment": True},
+            "wal": {"compression": "gzip"}, "data": {"compression": "gzip"},
+        }
+        assert gcp_store["retentionPolicy"] == "7d" and "env" not in gcp_store["instanceSidecarConfiguration"]
+        assert next(d for d in gcp_docs if d["kind"] == "ScheduledBackup")["spec"] == next(d for d in docs if d["kind"] == "ScheduledBackup")["spec"]
+        network = next(d for d in gcp_docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "cnpg-poc-database")["spec"]
+        operator = network["ingress"][-1]["from"][0]
+        assert operator["namespaceSelector"]["matchLabels"] == {"kubernetes.io/metadata.name": "cnpg-system"}
+        assert operator["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": "cloudnative-pg", "app.kubernetes.io/instance": "cnpg"}
+        dns = next(d for d in gcp_docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "cnpg-poc-dns")["spec"]["egress"]
+        assert all(entry.get("to") for entry in dns), "DNS must not allow arbitrary destinations"
+        extra_dns = {entry["to"][0]["ipBlock"]["cidr"]: {(port["protocol"], port["port"]) for port in entry["ports"]}
+            for entry in dns if entry["to"][0].get("ipBlock")}
+        assert extra_dns == {"169.254.20.10/32": {("TCP", 53), ("UDP", 53)}, "10.82.0.10/32": {("TCP", 53), ("UDP", 53)}}
+        metadata = {entry["to"][0]["ipBlock"]["cidr"]: {(port["protocol"], port["port"]) for port in entry["ports"]}
+            for entry in network["egress"] if entry.get("to", [{}])[0].get("ipBlock")}
+        assert metadata == {"169.254.169.252/32": {("TCP", 987), ("TCP", 988)}}
+        assert not any(marker in yaml.safe_dump(gcp_docs) for marker in ("s3Credentials", "AWS_REGION", "AWS_DEFAULT_REGION", "eks.amazonaws.com/role-arn", "s3://"))
+        result = subprocess.run([checks.HELM, "template", "cnpg-poc", str(chart), "--namespace", "charlie-db",
+            "--kube-version", "1.36.0", "-f", str(GCP_VALUES / "cnpg-poc.yaml"), "--set", "backup.gcpServiceAccount="], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        assert result.returncode != 0, "GCS backups must fail closed without their Workload Identity service account"
+        seen.update(pinned_image(ref) for ref in operand_images(gcp_docs))
         example = ROOT / "examples/cnpg-poc"
         assert example.is_dir(), "Manual migration/verification Jobs are required"
         cases = [(service, mode) for service in ("a", "b") for mode in ("migrate", "verify", "network-denied", "marker", "fingerprint")]
@@ -286,7 +338,7 @@ def main():
         assert any("plugin-barman-cloud-sidecar:" in ref for ref in seen)
         assert any("postgresql:18.6-minimal-trixie@" in ref for ref in seen)
         assert any("cert-manager-acmesolver:" in ref for ref in seen)
-    print(f"CNPG checks passed: fixed CRD structural fields, 4 manual apps, least-privilege roles, eleven manual Job variants, initial backup/full restore/PITR with isolated archives; {len(seen)} pinned images.")
+    print(f"CNPG checks passed: fixed CRDs, AWS/GCP source profiles, GCS Workload Identity and metadata isolation, 4 manual apps, least-privilege roles, eleven manual Job variants, initial backup/full restore/PITR; {len(seen)} pinned images.")
 
 
 if __name__ == "__main__":

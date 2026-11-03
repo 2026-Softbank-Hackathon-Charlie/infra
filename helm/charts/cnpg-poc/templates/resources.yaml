@@ -2,13 +2,15 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: cnpg-gp3-retain
+  name: {{ .Values.storageClass.name }}
   labels:
     {{- include "cnpg-poc.labels" . | nindent 4 }}
-provisioner: ebs.csi.aws.com
+provisioner: {{ .Values.storageClass.provisioner }}
 parameters:
-  type: gp3
+  type: {{ .Values.storageClass.type }}
+  {{- if eq .Values.storageClass.provisioner "ebs.csi.aws.com" }}
   encrypted: "true"
+  {{- end }}
 reclaimPolicy: Retain
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true

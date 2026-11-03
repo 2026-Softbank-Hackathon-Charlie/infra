@@ -16,3 +16,18 @@ output "moimroom_image_repository" {
   description = "GCP_IMAGE_REPOSITORY for the optional moimroom image publishing workflow."
   value       = var.enable_moimroom_image_publishing ? "${google_artifact_registry_repository.apps.location}-docker.pkg.dev/${google_artifact_registry_repository.apps.project}/${google_artifact_registry_repository.apps.repository_id}/moimroom" : null
 }
+
+output "cnpg_poc_backup_bucket_name" {
+  description = "Dedicated native GCS bucket for the optional CNPG PoC backup."
+  value       = var.enable_cnpg_poc_backup ? google_storage_bucket.cnpg_poc_backup[0].name : null
+}
+
+output "cnpg_poc_backup_destination_path" {
+  description = "Barman destinationPath for the optional CNPG PoC source backup."
+  value       = var.enable_cnpg_poc_backup ? "gs://${google_storage_bucket.cnpg_poc_backup[0].name}/source/" : null
+}
+
+output "cnpg_poc_backup_service_account_email" {
+  description = "GSA annotation for the charlie-db/postgres-poc Kubernetes service account."
+  value       = var.enable_cnpg_poc_backup ? google_service_account.cnpg_poc_backup[0].email : null
+}

@@ -8,3 +8,7 @@ github_ref                 = "refs/heads/main"
 # After enabling, keep both values in the authoritative bootstrap tfvars for every later plan/apply.
 enable_moimroom_image_publishing = false
 moimroom_repository_id           = ""
+
+# Keep both values in authoritative bootstrap tfvars after enabling native GCS backups.
+enable_cnpg_poc_backup      = false
+cnpg_poc_backup_bucket_name = ""
