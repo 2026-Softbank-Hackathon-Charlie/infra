@@ -137,7 +137,7 @@ def main():
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
-        # Apps the platform deploys from GitHub (ADR 0022): the root's Application
+        # Apps the platform deploys from GitHub (ADR 0023): the root's Application
         # and AppProject, the ApplicationSet chart with the values the root passes,
         # and the app chart, whose every object its AppProject must allow.
         apps_project = next(d for d in root_docs if d["kind"] == "AppProject" and d["metadata"]["name"] == "charlie-hopcharlie-apps")

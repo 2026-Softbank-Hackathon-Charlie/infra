@@ -1,4 +1,4 @@
-# 0022. GitHub에서 배포하는 앱의 차트와 ApplicationSet을 infra에서 관리한다
+# 0023. GitHub에서 배포하는 앱의 차트와 ApplicationSet을 infra에서 관리한다
 
 - 날짜: 2026-11-03
 - 상태: 제안

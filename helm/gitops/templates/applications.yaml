@@ -77,7 +77,7 @@ spec:
     automated: {prune: false, selfHeal: true}
     syncOptions: [ServerSideApply=true]
 ---
-# Apps the platform deploys from GitHub (ADR 0022): an AppProject and an
+# Apps the platform deploys from GitHub (ADR 0023): an AppProject and an
 # ApplicationSet that turn each apps/<app>/<env>.yaml of the gitops repository
 # into an Application with helm/charts/hopcharlie-app. Environment eks is the
 # workload cluster.

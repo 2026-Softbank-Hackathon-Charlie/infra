@@ -42,7 +42,7 @@ spec:
     - {group: "*", kind: "*"}
 {{- if eq $purpose "management" }}
 ---
-# The platform's app ApplicationSet (helm/charts/hopcharlie-apps, ADR 0022):
+# The platform's app ApplicationSet (helm/charts/hopcharlie-apps, ADR 0023):
 # only its AppProject, ApplicationSet and the platform's Role in argocd, and
 # the admission policy that limits that Role.
 apiVersion: argoproj.io/v1alpha1
