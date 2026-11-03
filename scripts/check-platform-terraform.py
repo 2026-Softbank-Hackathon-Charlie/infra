@@ -8,7 +8,7 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parents[1] / 'terraform/platform/aws'
 ASSETS = (
-    'backend.tf', 'main.tf', 'eks.tf', 'outputs.tf', 'variables.tf', 'versions.tf',
+    'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'outputs.tf', 'variables.tf', 'versions.tf',
     '.terraform.lock.hcl', 'user_data.sh.tftpl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',
@@ -49,6 +49,8 @@ def main():
                             ['init', '-backend=false', '-input=false', '-lockfile=readonly'],
                             ['validate']):
                 subprocess.run(['terraform', f'-chdir={path}', *command], cwd=path, env=env, check=True)
+            if path == tree:
+                subprocess.run(['terraform', f'-chdir={path}', 'test'], cwd=path, env=env, check=True)
 
 
 if __name__ == '__main__':
