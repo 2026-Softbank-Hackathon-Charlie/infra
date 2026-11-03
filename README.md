@@ -13,6 +13,8 @@
 | [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
+| [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
+| [docs/adr/0017-adopt-existing-helm-resources-in-argocd.md](docs/adr/0017-adopt-existing-helm-resources-in-argocd.md) | 기존 Helm 리소스를 보존하는 단계적 Argo CD 연결 결정 |
 | [docs/plans/metrics-and-management-monitoring.md](docs/plans/metrics-and-management-monitoring.md) | metrics-server 양쪽과 관리 Prometheus 스택의 한정 설치 계획·실행 결과 |
 | [docs/adr/0018-stage-minimal-management-monitoring.md](docs/adr/0018-stage-minimal-management-monitoring.md) | HyperDX 선택을 유지하는 기본 모니터링 단계적 도입 결정 |
 | [docs/adr/0019-use-chart-managed-prometheus-scrape-token.md](docs/adr/0019-use-chart-managed-prometheus-scrape-token.md) | Prometheus scrape용 장기 ServiceAccount 토큰의 추가 승인 경계 |
