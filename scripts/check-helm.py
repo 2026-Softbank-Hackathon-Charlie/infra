@@ -80,6 +80,10 @@ def main():
         helm("dependency", "build", bootstrap)
         bootstrap_docs = render(bootstrap, bootstrap / "values.yaml", "argocd", "argocd")
         assert any(d["kind"] == "Deployment" for d in bootstrap_docs)
+        subprocess.run(
+            [os.environ.get("PYTHON", "python3"), str(ROOT / "scripts/tests/test-argocd-gcp.py"),
+             "ArgoGCPTests.test_actual_pinned_bootstrap_overlay"],
+            env={**os.environ, "ARGO_BOOTSTRAP_CHART": str(bootstrap)}, check=True)
         seen = check_images(bootstrap_docs)
         projects = {}
         for enable_otel in (False, True):

@@ -1,0 +1,35 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ .Values.googleServiceAccountEmail | quote }}
+{{- range .Values.managedNamespaces }}
+{{- if $.Values.createNamespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ . | quote }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $.Release.Name }}-edit
+  namespace: {{ . | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $.Values.googleServiceAccountEmail | quote }}
+{{- end }}

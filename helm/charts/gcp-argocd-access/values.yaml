@@ -1,0 +1,5 @@
+googleServiceAccountEmail: ""
+managedNamespaces:
+  - charlie-apps
+# Existing baseline normally owns these namespaces.
+createNamespaces: false

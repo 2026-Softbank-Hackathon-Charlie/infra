@@ -603,3 +603,26 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/environments/aws/dev/foundation/cnpg.tf](terraform/environments/aws/dev/foundation/cnpg.tf) | CNPG 구현·검증·운영 기록 |
 | [terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl](terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl) | CNPG 구현·검증·운영 기록 |
 | [terraform/environments/aws/dev/workload/identity.tf](terraform/environments/aws/dev/workload/identity.tf) | CNPG 구현·검증·운영 기록 |
+
+## GKE 운영 접근 준비
+
+EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준비다. 실제 적용과 권한 검증은 별도 승인 후 진행하며, 기존 AWS 연결·GitHub WIF는 유지한다.
+
+| 파일 | 역할 |
+|---|---|
+| [helm/charts/gcp-argocd-access/Chart.yaml](helm/charts/gcp-argocd-access/Chart.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/values.yaml](helm/charts/gcp-argocd-access/values.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/values.schema.json](helm/charts/gcp-argocd-access/values.schema.json) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/templates/rbac.yaml](helm/charts/gcp-argocd-access/templates/rbac.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [scripts/prepare-argocd-gcp.py](scripts/prepare-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [scripts/tests/test-argocd-gcp.py](scripts/tests/test-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [docs/gcp-operational-access.md](docs/gcp-operational-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [docs/adr/0021-keyless-argocd-gke-access.md](docs/adr/0021-keyless-argocd-gke-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/.terraform.lock.hcl](terraform/integrations/gcp/argocd/.terraform.lock.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/backend.hcl.example](terraform/integrations/gcp/argocd/backend.hcl.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/main.tf](terraform/integrations/gcp/argocd/main.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/outputs.tf](terraform/integrations/gcp/argocd/outputs.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/terraform.tfvars.example](terraform/integrations/gcp/argocd/terraform.tfvars.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/variables.tf](terraform/integrations/gcp/argocd/variables.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/versions.tf](terraform/integrations/gcp/argocd/versions.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/tests/federation.tftest.hcl](terraform/integrations/gcp/argocd/tests/federation.tftest.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |

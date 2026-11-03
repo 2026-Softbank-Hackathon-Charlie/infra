@@ -101,8 +101,9 @@ def tunnel(p, aid, kind, number, profile, path):
     path.parent.chmod(0o700)
     with tempfile.TemporaryDirectory(prefix='.kube-', dir=path.parent) as directory:
         temporary = Path(directory) / 'config'
-        run(aws('eks', 'update-kubeconfig', '--name', name, '--alias', name,
-                '--kubeconfig', str(temporary)))
+        # The status line can use the Windows locale; only the generated file is needed.
+        subprocess.run(aws('eks', 'update-kubeconfig', '--name', name, '--alias', name,
+                           '--kubeconfig', str(temporary)), check=True, stdout=subprocess.DEVNULL)
         generated = read_kube(temporary)
         entries = generated.get('clusters', [])
         require(len(entries) == 1 and entries[0]['name'] == arn
