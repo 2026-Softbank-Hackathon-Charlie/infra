@@ -1,0 +1,11 @@
+host: headlamp.hopcharlie.dev
+albGroup: charlie-management-external
+headlampImage: ghcr.io/headlamp-k8s/headlamp:v0.46.0@sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75
+proxy:
+  image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5@sha256:8498b0d0ef0a7b29686414000a08aee467f02d0299c9ed1e006a8f33fc017916
+  # Observed IPv4 ALB source ranges. Never trust an unrestricted source range.
+  trustedProxyCIDRs: []
+oauth:
+  existingSecret: ""
+# Secret key config must be a kubeconfig containing only the GKE context, no credentials.
+clustersSecret: ""

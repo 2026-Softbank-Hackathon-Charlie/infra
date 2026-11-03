@@ -142,6 +142,16 @@ def main():
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
+        google_values = work / "headlamp-gke-google.json"
+        google_values.write_text(json.dumps({
+            "proxy": {"trustedProxyCIDRs": ["10.40.0.0/16"]},
+            "oauth": {"existingSecret": "fixture-oauth"},
+            "clustersSecret": "fixture-clusters",
+        }))
+        google_docs = render(ROOT / "helm/charts/headlamp-gke-google", google_values,
+                             "headlamp-gke-google", "headlamp")
+        assert {"Deployment", "Service", "Ingress", "NetworkPolicy"} <= {d["kind"] for d in google_docs}
+        seen.update(check_images(google_docs))
         # Apps the platform deploys from GitHub (ADR 0023): the root's Application
         # and AppProject, the ApplicationSet chart with the values the root passes,
         # and the app chart, whose every object its AppProject must allow.

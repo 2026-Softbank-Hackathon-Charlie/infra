@@ -47,6 +47,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-cnpg-jobs.py
 	@$(PYTHON) scripts/tests/test-cnpg-freeze.py
 	@$(PYTHON) scripts/tests/test-headlamp-gke.py
+	@$(PYTHON) scripts/tests/test-headlamp-gke-google.py
 	@$(PYTHON) scripts/tests/test-argocd-gcp.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 inventory-check:
