@@ -1,7 +1,7 @@
 # metrics-server와 관리 클러스터 모니터링 설치 계획
 
 - 날짜: 2026-11-03
-- 상태: 승인된 metrics-server 실행 준비 중 — Prometheus의 신규 장기 SA 토큰 발견으로 해당 앱 sync 보류
+- 상태: 세 앱 설치 실행 준비 — 장기 SA 토큰의 변경 계획 리뷰·추가 사용자 승인 완료
 - 분류: 영향이 크거나 불확실한 작업. 두 클러스터 APIService/RBAC와 관리 클러스터 CRD·webhook·관리자 Secret·PVC 생성을 포함한다.
 
 ## 목표·완료 기준
@@ -72,10 +72,16 @@ Argo operation 근거: [SetAppOperation](https://github.com/argoproj/argo-cd/blo
 실제 렌더링으로 발견한 `observability/monitoring-prometheus-token` 추가 권한만 검토한다. metrics-server 두 앱의 기존 승인과 실행은 유지하고, monitoring sync는 새 리뷰·사용자 승인 전 보류한다. 새 설계 선택은 [ADR0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)에 제안으로 기록한다.
 
 - 목표: 원래 chart91.8.2가 선언한 control-plane 수집을 유지하되 만료 없는 SA 토큰 Secret 생성 여부를 명시적 승인받는다. 코드/image/PVC/설치 대상/기본 TLS/수동 sync·중단·검증 방식은 기존 계획대로다.
-- 추가 승인 대상: management/observability의 Secret `monitoring-prometheus-token` 하나와 SA `monitoring-prometheus` 연결. 기본 ClusterRole/Binding의 nodes·nodes/metrics·services·endpoints·pods·endpointslices·ingresses 조회 및 metrics URL GET 권한으로 쓰이며, Secret 값 읽기/변경/cluster-admin 권한은 없다.
+- 추가 승인 대상: management/observability의 Secret `monitoring-prometheus-token` 하나와 SA `monitoring-prometheus` 연결. 기본 ClusterRole/Binding의 nodes·nodes/metrics·services·endpoints·pods·endpointslices·ingresses 조회 및 metrics URL GET 권한으로 쓰이며, Secret API 리소스의 직접 조회·변경 및 cluster-admin 권한은 없다. 다만 전체 namespace의 Pod spec 조회에는 직접 설정된 환경변수/설정이 포함될 수 있다.
 - 구현: 사용자가 승인하면 기존 chart 선언을 유지해 Argo가 Secret을 만들고 Kubernetes controller가 토큰을 채우게 한다. 직접 TokenRequest/토큰 추출/로그 출력/로컬 저장은 하지 않는다. TLS·설정 Secret과 이 장기 토큰을 혼동하지 않는다.
 - 검증: 렌더링으로 Secret 종류/SA annotation/참조/연결 RBAC를 검사한다. 실행 후 Secret metadata와 scrape 성공만 확인하고 값은 읽지 않는다. Prometheus query/targets, 기존 Pod/PVC 보존, 대상 앱 operation/health 및 제외 앱 manual 상태를 확인한다.
 - 위험/중단: 자동 만료·회전이 없는 자격 증명이다. 새 승인 전에는 monitoring sync를 하지 않는다. 보류된 Grafana 관리자 자격 증명도 아직 만들지 않는다. 미승인 시 두 metrics-server 완료 결과와 monitoring 보류를 보고한다. 토큰 폐기·회전은 별도 승인 대상이며 prune=false를 자동 폐기로 표현하지 않는다.
 - 범위 변경 없음: Loki/HyperDX/OTel/다른 앱/전체 root sync, 신규 외부 노출, 기존 token/Secret 값 조회는 계속 제외한다.
 
-변경 계획 독립 리뷰: 대기 중.
+변경 계획 독립 리뷰: 신규 plan-reviewer GREEN. Pod spec 조회의 정보 범위와 추가 RoleBinding/ClusterRoleBinding 확인 권고를 반영했다. 추가 사용자 승인 전 monitoring sync/토큰 생성은 계속 보류한다.
+
+추가 검증: 해당 SA를 참조하는 다른 RoleBinding/ClusterRoleBinding으로 권한이 합산되지 않았는지 설치 전후 확인한다. 예상 밖 추가 binding이 있으면 토큰 생성/다음 sync를 시작하지 않고 보고한다.
+
+### 장기 토큰 추가 승인 완료 — 2026-11-03
+
+신규 plan-reviewer GREEN 후 사용자는 위의 장기 토큰 생성과 권한·만료 없음·Pod spec 정보 범위·별도 폐기 필요·값 조회/저장 제외 조건을 명시한 질문에 “토큰 생성 포함해 모니터링 진행”을 선택했다. 기존 변경 계획의 보류 조건은 해소됐다. 해당 SA를 참조하는 기존 다른 binding은 없다. 세 앱만 순차 설치하며, monitoring 토큰은 여전히 실제 sync 전에는 생성하지 않는다.

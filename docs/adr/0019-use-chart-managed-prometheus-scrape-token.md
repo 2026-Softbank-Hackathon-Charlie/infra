@@ -1,7 +1,7 @@
 # 0019. Prometheus 기본 control-plane scrape용 ServiceAccount 토큰의 승인 경계
 
 - 날짜: 2026-11-03
-- 상태: 제안 — 추가 권한 승인 전, 토큰 생성 미실행
+- 상태: 채택 — 신규 plan-reviewer GREEN 및 사용자 장기 토큰 추가 승인, 생성 전
 - 관련 ADR: [0018 한정 모니터링 설치](0018-stage-minimal-management-monitoring.md)
 
 ## 배경과 제약
@@ -17,7 +17,7 @@
 
 ## 결정과 이유
 
-추가 승인 시에만 chart가 `monitoring-prometheus` ServiceAccount용 장기 토큰 Secret 하나를 생성하도록 허용한다. 현재 렌더링된 동일 이름 ClusterRole/Binding의 권한은 전체 namespace의 nodes·nodes/metrics·services·endpoints·pods·endpointslices·ingresses 조회(get/list/watch), /metrics 및 활성화된 metrics 하위 경로 get이다. Secret 값 조회·리소스 변경·cluster-admin을 이 토큰에 부여하지 않는다. 기존 계획에 승인된 다른 스택 리소스 범위를 늘리지 않는다.
+추가 승인 시에만 chart가 `monitoring-prometheus` ServiceAccount용 장기 토큰 Secret 하나를 생성하도록 허용한다. 현재 렌더링된 동일 이름 ClusterRole/Binding의 권한은 전체 namespace의 nodes·nodes/metrics·services·endpoints·pods·endpointslices·ingresses 조회(get/list/watch), /metrics 및 활성화된 metrics 하위 경로 get이다. Secret API 리소스의 직접 조회·리소스 변경·cluster-admin을 이 토큰에 부여하지 않는다. 전체 namespace의 Pod 조회는 Pod spec에 직접 넣은 환경변수/설정도 볼 수 있다는 점을 사용자에게 명시한다. 기존 계획에 승인된 다른 스택 리소스 범위를 늘리지 않는다.
 
 토큰 원문을 직접 조회/출력/로컬 파일/Git/문서에 저장하지 않는다. Pod/Operator가 chart의 참조대로 Kubernetes 내부에서 사용한다. 자동 expiry/rotation이 없음을 사용자에게 명시하고, 미승인 또는 답변 불명확 시 monitoring sync를 시작하지 않는다.
 
@@ -32,3 +32,9 @@
 - [설치 계획](../plans/metrics-and-management-monitoring.md)
 - [Kubernetes ServiceAccount 수동 토큰](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#manually-create-a-long-lived-api-token-for-a-serviceaccount)
 - chart91.8.2 `templates/prometheus/serviceaccount-token-secret.yaml`, `templates/prometheus/clusterrole.yaml`, `values.yaml`의 createTokenSecret/authorization
+
+추가 검증: 해당 SA를 참조하는 다른 RoleBinding/ClusterRoleBinding으로 권한이 합산되지 않았는지 설치 전후 확인한다. 예상 밖 추가 binding이 있으면 토큰 생성/다음 sync를 시작하지 않고 보고한다.
+
+## 추가 승인 — 2026-11-03
+
+독립 리뷰 GREEN 후 사용자는 정확한 토큰 Secret·SA·전체 namespace Pod spec 조회 범위·만료 없음·별도 폐기 필요·값 미출력 조건에 대해 “토큰 생성 포함해 모니터링 진행”을 선택했다. 생성 전 해당 SA를 참조하는 기존 RoleBinding/ClusterRoleBinding이 없음을 확인했다. 실제 토큰 생성·배포 결과는 계획에 별도로 기록한다.
