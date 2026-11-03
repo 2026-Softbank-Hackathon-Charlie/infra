@@ -38,6 +38,7 @@
 | [scripts/prepare-headlamp-google.py](scripts/prepare-headlamp-google.py) | Google backend의 실제 GKE context 준비·안전한 기존 별칭 보존 |
 | [scripts/tests/test-headlamp-google-config.py](scripts/tests/test-headlamp-google-config.py) | GKE kubeconfig 준비·충돌·무자격 인증 경계 검사 |
 | [docs/adr/0028-unify-headlamp-cluster-ui.md](docs/adr/0028-unify-headlamp-cluster-ui.md) | 단일 UI와 클러스터별 인증 경로 결정 |
+| [docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md](docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md) | 단일 CNPG 인스턴스의 업데이트 정책과 admission 제약 |
 | [docs/plans/2026-11-03-headlamp-unified.md](docs/plans/2026-11-03-headlamp-unified.md) | 세 클러스터 통합 구현·검증·배포 계획 |
 
 2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.

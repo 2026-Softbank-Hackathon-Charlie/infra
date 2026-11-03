@@ -2,14 +2,14 @@
 
 - 날짜: 2026-11-02
 - 재검토: 2026-11-03 — 업데이트된 저장소/실행 기록 반영 후 개발 계획 승인
-- 상태: 채택 — 2026-11-03 개발 계획 승인, 코드 구현. 실제 설치·운영 검증 미실행
+- 상태: 채택 — 2026-11-03 기반·컨트롤러·인증정보 준비. PoC DB는 admission 호환성 수정 배포 대기
 - 관련 ADR: [0001](0001-record-decisions-as-adrs.md), [0002](0002-require-approval-for-privileged-operations.md), [0006](0006-back-up-cnpg-poc-with-barman.md)
 
 ## 배경과 제약
 
 해커톤 PoC에서 현실적인 합성 서비스 데이터를 사용한다. 사용자는 AWS workload 우선 도입 및 서비스별 접근 격리·백업·복원 검증 범위의 계획을 요청했고, 2026-11-03 “시작해줘”로 코드 구현을 승인했다. 이 결정의 채택은 실제 배포·운영 검증 완료를 의미하지 않는다.
 
-저장소 기본 workload는 2AZ·노드 2대이며 CNPG는 없다. 관리 플랫폼에는 별도의 PostgreSQL StatefulSet이 추가됐고 실행 기록에 기존 DB/PVC 보존이 확인돼 있다. 이 관리 DB는 실험·통합·이전 대상이 아니다. 최신 실제 배포 상태와 여유 용량은 이번에 조회하지 않았다. 초기부터 3개 인스턴스를 서로 다른 노드에 배치하려면 증설 검토가 필요하다.
+초기 검토 당시 workload는 2AZ·노드 2대이며 CNPG가 없었다. 후속 확인에서는 다른 작업으로 CNPG Operator가 먼저 설치돼 있어 이를 재사용한다. 관리 플랫폼에는 별도의 PostgreSQL StatefulSet이 있으며 이 관리 DB는 실험·통합·이전 대상이 아니다. source·임시 restore와 나머지 controller·검증 Job까지 계산한 2026-11-03 점검의 workload 잔여 요청량은 CPU 25.39%, 메모리 69.06%였고 노드별 20% 여유 배치가 가능했다. 이 값은 당시 관측이며 다음 실행의 용량 보장이 아니다. 초기부터 3개 DB 인스턴스를 서로 다른 노드에 배치하려면 증설 검토가 필요하다.
 
 ## 검토한 대안
 
@@ -27,6 +27,10 @@ AWS workload에 CNPG Operator 하나와 `instances: 1`의 공용 PostgreSQL `Clu
 Terraform은 클라우드 기반, Argo CD는 workload addon·CNPG CR을 관리한다. DB 내부 schema/grant는 명시적 migration 작업이 관리한다. DB Provisioner·Migration Controller·PgBouncer·논리복제·GKE·HA는 제외한다. 이후 서로 다른 SLO·부하·보안 요구가 생기면 별도 CNPG Cluster 또는 HA 계획을 검토한다.
 
 11월3일 수정안에서는 기존 root/앱의 수동 운영 기록을 유지하며 CNPG 전용 수동 AppProject/Application으로 등록·단계별 sync한다. root 전체 sync·기존 앱 자동화·management 플랫폼 DB/SSM 소유권 변경은 제외한다. workload baseline과 Git에만 준비된 Sealed Secrets의 실제 준비를 선행 조건으로 명시한다. 기존 관리 플랫폼의 SSM 비밀값을 새 DB에 재사용하지 않는다.
+
+후속 재점검에서 기존 CNPG Operator와 전용 AppProject, 관리 플랫폼의 자동 Sync를 확인했다. 수정 계획을 독립 리뷰한 뒤 사용자는 기존 Operator·Project·관리 플랫폼 자동화를 보존하는 계획과 baseline 단계의 실행을 승인했다. Operator의 앱 namespace 감시 범위를 되돌리거나 재설치하지 않는다. 명시적으로 승인한 baseline 8개 자원 생성과 기존 `gp3`·`cnpg-system`의 설정 불변 Argo 관리 연결을 완료했으며, DB·자격 증명·추가 addon 설치는 아직 실행하지 않았다. 상세 실행 범위는 [계획의 후속 기록](../plans/cnpg-aws-poc.md#13-terraform-및-workload-baseline-적용--2026-11-03)을 따른다.
+
+그 뒤 별도 실행 승인으로 Sealed Secrets·cert-manager·Barman과 인증정보 준비를 완료했다. DB Cluster는 단일 인스턴스의 `supervised` 정책을 webhook이 거부해 생성되지 않았다. 이 호환성 수정과 향후 Primary 재시작 정책은 [ADR0029](0029-use-unsupervised-updates-for-single-instance-cnpg.md)에 기록한다. DB·PVC와 실제 데이터/백업·복원 검증은 아직 완료되지 않았다.
 
 관리 Prometheus 설치 기록은 workload exporter의 자동 수집·경보 보장이 아니다. 첫 검증은 상태/SQL/metrics 수동 확인과 RPO/RTO 측정으로 한정한다. workload Prometheus·cross-cluster scrape·외부 통지는 별도 설계·승인 범위로 둔다. 사용자는 이 수정안을 검토한 뒤 “시작해줘”로 코드 구현을 승인했다. GCP 기반 코드는 추가됐으나 이번 AWS CNPG의 GKE 등록·이전 제외는 유지한다.
 
