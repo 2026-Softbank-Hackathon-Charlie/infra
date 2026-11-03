@@ -69,13 +69,7 @@
       "userKey": "admin-user",
       "passwordKey": "admin-password"
     },
-    "additionalDataSources": [
-      {
-        "name": "Loki",
-        "type": "loki",
-        "url": "http://loki.observability:3100"
-      }
-    ],
+    "additionalDataSources": [],
     "service": {
       "type": "ClusterIP"
     },
