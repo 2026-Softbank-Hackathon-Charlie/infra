@@ -1,0 +1,66 @@
+{{- with .Values.platform.serviceAccount }}
+# The platform's deploy executor annotates the ApplicationSet and the
+# Applications to ask for a refresh, and reads an Application's status. It
+# cannot create, delete or sync anything: Git stays the desired state.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hopcharlie-platform-deployer
+  namespace: {{ $.Values.argocdNamespace }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [applicationsets]
+    resourceNames: [{{ $.Values.name | quote }}]
+    verbs: [get, patch]
+  # The Applications' names come from the gitops files, so they are not listed.
+  - apiGroups: [argoproj.io]
+    resources: [applications]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hopcharlie-platform-deployer
+  namespace: {{ $.Values.argocdNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hopcharlie-platform-deployer
+subjects:
+  - kind: ServiceAccount
+    name: {{ . | quote }}
+    namespace: {{ required "platform.namespace is required with platform.serviceAccount" $.Values.platform.namespace | quote }}
+---
+# RBAC cannot tell the apps' Applications from the infra ones in the same
+# namespace, nor limit a patch to some fields. Without this policy the platform
+# could change the spec of an infra Application, which Argo CD syncs with
+# cluster-admin rights.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-deployer
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: ["*"]
+        operations: [UPDATE]
+        resources: [applications, applicationsets]
+  matchConditions:
+    - name: platform-service-account
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" $.Values.platform.namespace . | quote }}
+  validations:
+    - expression: "request.resource.resource == 'applicationsets' || (has(oldObject.metadata.labels) && 'hopcharlie.dev/app' in oldObject.metadata.labels)"
+      message: the platform may only change the Applications of its ApplicationSet
+    - expression: "object.spec == oldObject.spec"
+      message: the platform may only change annotations
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-deployer
+spec:
+  policyName: hopcharlie-platform-deployer
+  validationActions: [Deny]
+{{- end }}

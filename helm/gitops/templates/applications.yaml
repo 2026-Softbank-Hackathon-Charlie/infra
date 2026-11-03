@@ -77,6 +77,38 @@ spec:
     automated: {prune: false, selfHeal: true}
     syncOptions: [ServerSideApply=true]
 ---
+# Apps the platform deploys from GitHub (ADR 0023): an AppProject and an
+# ApplicationSet that turn each apps/<app>/<env>.yaml of the gitops repository
+# into an Application with helm/charts/hopcharlie-app. Environment eks is the
+# workload cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-management-hopcharlie-apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: charlie-hopcharlie-apps
+  source:
+    repoURL: {{ $.Values.repoURL | quote }}
+    targetRevision: {{ $.Values.revision | quote }}
+    path: helm/charts/hopcharlie-apps
+    helm:
+      releaseName: hopcharlie-apps
+      valueFiles:
+        - ../../../clusters/aws-dev-management/values/hopcharlie-apps.yaml
+      parameters:
+        - {name: chart.repoURL, value: {{ $.Values.repoURL | quote }}}
+        - {name: chart.revision, value: {{ $.Values.revision | quote }}}
+        - {name: environments.eks.cluster.server, value: {{ (required "targets.workload is required for the app ApplicationSet" $.Values.targets.workload).endpoint | quote }}}
+  destination:
+    server: {{ $target.endpoint | quote }}
+    namespace: argocd
+  syncPolicy:
+    automated: {prune: false, selfHeal: true}
+    syncOptions: [ServerSideApply=true]
+---
 {{- end }}
 {{- range $name := index $.Values.addons $purpose }}
 {{- $addon := index $addons $name }}
