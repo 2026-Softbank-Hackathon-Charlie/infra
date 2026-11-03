@@ -22,8 +22,8 @@
     "storage": {
       "type": "s3",
       "bucketNames": {
-        "chunks": "charlie-dev-loki-REPLACE_AWS_ACCOUNT_ID-ap-northeast-2",
-        "ruler": "charlie-dev-loki-REPLACE_AWS_ACCOUNT_ID-ap-northeast-2"
+        "chunks": "charlie-dev-loki-525091405886-ap-northeast-2",
+        "ruler": "charlie-dev-loki-525091405886-ap-northeast-2"
       },
       "s3": {
         "region": "ap-northeast-2"
