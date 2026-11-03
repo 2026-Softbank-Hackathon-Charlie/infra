@@ -53,6 +53,7 @@
 | [docs/adr/template.md](docs/adr/template.md) | 배경·대안·결정 이유·영향을 기록하는 ADR 템플릿 |
 | [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
 | [docs/adr/0029-add-gcp-app-image-repository.md](docs/adr/0029-add-gcp-app-image-repository.md) | 기존 GCP bootstrap의 앱 이미지 저장소와 노드 읽기 권한 재사용 제안 |
+| [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
 | [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
@@ -499,6 +500,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 | [terraform/bootstrap/gcp/.terraform.lock.hcl](terraform/bootstrap/gcp/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
+| [terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl](terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl) | 모임룸의 선택적 WIF·저장소 게시 권한과 입력 검증 |
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 
@@ -569,7 +571,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
 | [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
 | [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
-| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform, frontend main만 신뢰하는 ECR 게시 OIDC 역할 |
+| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend·moimroom 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
 | [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
