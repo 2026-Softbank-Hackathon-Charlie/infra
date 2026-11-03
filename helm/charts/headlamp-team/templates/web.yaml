@@ -23,6 +23,9 @@ spec:
       labels: {app.kubernetes.io/name: headlamp-team}
       annotations:
         checksum/public-config: {{ toJson (dict "oidc" .Values.oidc "clusters" .Values.clusters) | sha256sum }}
+        {{- if .Values.googleAuth.enabled }}
+        checksum/google-auth-plugin: {{ include (print $.Template.BasePath "/google-auth-plugin.yaml") . | sha256sum }}
+        {{- end }}
     spec:
       serviceAccountName: headlamp
       automountServiceAccountToken: false
@@ -61,11 +64,20 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - {name: clusters, mountPath: /etc/headlamp/clusters, readOnly: true}
+            {{- if .Values.googleAuth.enabled }}
+            - {name: google-auth-plugin, mountPath: /headlamp/static-plugins/hopcharlie-google-login, readOnly: true}
+            {{- end }}
       volumes:
         - name: clusters
           secret:
             secretName: {{ required "clustersSecret is required" .Values.clustersSecret | quote }}
             defaultMode: 0440
+        {{- if .Values.googleAuth.enabled }}
+        - name: google-auth-plugin
+          configMap:
+            name: headlamp-google-auth-plugin
+            defaultMode: 0444
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,15 @@
+{{- if and .Values.webEnabled .Values.googleAuth.enabled }}
+{{- $cluster := required "googleAuth.clusterName is required" .Values.googleAuth.clusterName }}
+{{- if not (regexMatch `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` $cluster) }}
+{{- fail "googleAuth.clusterName must be a single safe cluster name" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headlamp-google-auth-plugin
+data:
+  package.json: |
+    {"name":"hopcharlie-google-login","version":"0.1.0","description":"Google sign-in for the GKE cluster","devDependencies":{"@kinvolk/headlamp-plugin":"0.14.0"}}
+  main.js: |
+    {{- tpl (.Files.Get "files/google-login.js") . | nindent 4 }}
+{{- end }}

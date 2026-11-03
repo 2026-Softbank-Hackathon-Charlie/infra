@@ -1,7 +1,7 @@
 # 0027. GKE Headlamp에 개인 Google 로그인과 토큰 자동 갱신을 분리한다
 
 - 날짜: 2026-11-03
-- 상태: 제안
+- 상태: 대체됨 — UI 분리 결정을 [ADR 0028](0028-unify-headlamp-cluster-ui.md)로 대체한다. Google 인증 프록시와 자동 갱신은 유지한다.
 - 관련 ADR: [0017 팀 Headlamp](0017-team-headlamp-with-cognito.md), [0020 개인 Google 인증](0020-add-gke-to-team-headlamp.md)
 
 ## 배경과 제약

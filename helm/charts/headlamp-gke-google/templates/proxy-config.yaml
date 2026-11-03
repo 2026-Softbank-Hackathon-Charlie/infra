@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headlamp-gke-google-proxy
+data:
+  alpha.yaml: |
+    server:
+      bindAddress: 0.0.0.0:4180
+    upstreamConfig:
+      upstreams:
+        - id: headlamp
+          path: /
+          uri: http://127.0.0.1:4466
+          passHostHeader: false
+          proxyWebSockets: true
+    providers:
+      - id: 'google=${OAUTH2_PROXY_CLIENT_ID}'
+        provider: google
+        clientID: '${OAUTH2_PROXY_CLIENT_ID}'
+        clientSecret: '${OAUTH2_PROXY_CLIENT_SECRET}'
+        scope: openid email profile https://www.googleapis.com/auth/cloud-platform
+        loginURLParameters:
+          - name: prompt
+            default: [consent]
+    injectRequestHeaders:
+      - name: Authorization
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: access_token
+              prefix: 'Bearer '
+      - name: X-Forwarded-Access-Token
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: access_token
+      - name: X-Forwarded-User
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: user
+      - name: X-Forwarded-Email
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: email
+      - name: X-Forwarded-Groups
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: groups
+      - name: X-Forwarded-Preferred-Username
+        preserveRequestValue: false
+        values:
+          - claimSource:
+              claim: preferred_username
+      - name: Cookie
+        preserveRequestValue: false
+        values: []
