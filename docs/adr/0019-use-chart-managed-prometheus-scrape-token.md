@@ -1,7 +1,7 @@
 # 0019. Prometheus 기본 control-plane scrape용 ServiceAccount 토큰의 승인 경계
 
 - 날짜: 2026-11-03
-- 상태: 채택 — 신규 plan-reviewer GREEN 및 사용자 장기 토큰 추가 승인, 생성 전
+- 상태: 채택 — 명시적 추가 승인 후 chart/controller 생성·메타데이터/수집 검증 완료
 - 관련 ADR: [0018 한정 모니터링 설치](0018-stage-minimal-management-monitoring.md)
 
 ## 배경과 제약
@@ -38,3 +38,7 @@
 ## 추가 승인 — 2026-11-03
 
 독립 리뷰 GREEN 후 사용자는 정확한 토큰 Secret·SA·전체 namespace Pod spec 조회 범위·만료 없음·별도 폐기 필요·값 미출력 조건에 대해 “토큰 생성 포함해 모니터링 진행”을 선택했다. 생성 전 해당 SA를 참조하는 기존 RoleBinding/ClusterRoleBinding이 없음을 확인했다. 실제 토큰 생성·배포 결과는 계획에 별도로 기록한다.
+
+## 실행 결과 — 2026-11-03
+
+승인한 Secret은 chart/controller가 생성했다. 원문을 직접 조회·출력·로컬 저장하지 않았다. 해당 SA의 binding은 예상 ClusterRoleBinding 하나뿐이며 실제 Prometheus target19개가 정상 수집됨을 확인했다. 토큰은 자동 만료되지 않고 향후 폐기/회전은 별도 승인 범위라는 조건을 유지한다.

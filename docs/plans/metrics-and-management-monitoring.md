@@ -1,7 +1,7 @@
 # metrics-server와 관리 클러스터 모니터링 설치 계획
 
 - 날짜: 2026-11-03
-- 상태: 세 앱 설치 실행 준비 — 장기 SA 토큰의 변경 계획 리뷰·추가 사용자 승인 완료
+- 상태: 승인된 세 앱 설치·검증 완료 — 자동 sync와 제외 앱은 유지
 - 분류: 영향이 크거나 불확실한 작업. 두 클러스터 APIService/RBAC와 관리 클러스터 CRD·webhook·관리자 Secret·PVC 생성을 포함한다.
 
 ## 목표·완료 기준
@@ -85,3 +85,37 @@ Argo operation 근거: [SetAppOperation](https://github.com/argoproj/argo-cd/blo
 ### 장기 토큰 추가 승인 완료 — 2026-11-03
 
 신규 plan-reviewer GREEN 후 사용자는 위의 장기 토큰 생성과 권한·만료 없음·Pod spec 정보 범위·별도 폐기 필요·값 조회/저장 제외 조건을 명시한 질문에 “토큰 생성 포함해 모니터링 진행”을 선택했다. 기존 변경 계획의 보류 조건은 해소됐다. 해당 SA를 참조하는 기존 다른 binding은 없다. 세 앱만 순차 설치하며, monitoring 토큰은 여전히 실제 sync 전에는 생성하지 않는다.
+
+## 설치·검증 완료 — 2026-11-03
+
+### 실제 수행 범위
+
+- [PR #10](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/10)을 모든 CI 성공 후 merge했다. 배포에 고정한 Git revision은 `82b6617c6a0ee7e4a53b700c798f902b55cafa5c`다.
+- `charlie-management-metrics-server`, `charlie-workload-metrics-server`는 chart3.14.0으로, `charlie-management-kube-prometheus-stack`은 chart91.8.2로 수동 sync했다. 세 앱 모두 최종 operation Succeeded / Synced / Healthy다.
+- metrics APIService는 승인받은 insecureSkipTLSVerify=true를 유지했고 kubelet CA 검증 설정을 변경하지 않았다. 두 EKS 모두 APIService Available, `kubectl top nodes`와 `kubectl top pods -A`가 성공했다.
+- management monitoring은 Pod7개가 Running/Ready이고 Prometheus20GiB/Grafana5GiB/Alertmanager2GiB PVC3개가 Bound다. 기존 플랫폼 PVC3개는 UID/PV/spec 그대로다.
+- absent였던 `observability/grafana-admin`을 승인한 난수 비밀번호로 create했다. 원문은 출력하거나 Git/state에 넣지 않았고 `.generated/monitoring/grafana-admin-credentials`(0600)에 사용자 인수용으로만 남겼다. 기존 Secret 값은 조회하지 않았다.
+- 추가 승인된 `observability/monitoring-prometheus-token`은 chart/SA controller가 생성했다. 메타데이터로 타입·필드 개수 및 SA binding을 확인했으며 토큰 값은 읽지 않았다. 해당 SA를 가리키는 binding은 예상한 `monitoring-prometheus` ClusterRoleBinding 하나뿐이다.
+- admission create/patch Hook을 완료했으며 webhook CA가 채워졌다. failurePolicy Ignore는 chart의 기존 설정대로 유지했다.
+
+### 실제 데이터·사용자 접근 검증
+
+- Grafana13.2.3 `/api/health` DB ok, 새 관리자 자격 증명의 Basic 인증 성공, Prometheus datasource backend health OK를 확인했다. 브라우저 로그인 세션/API token은 만들지 않았다.
+- provision된 datasource는 Prometheus(default)와 Alertmanager이며 Loki datasource는 없다.
+- Prometheus active target19개 전부 up, down0개였다. `count(node_cpu_seconds_total)=32`, `count(kube_pod_info)=33`으로 실제 수집 데이터를 확인했다.
+- Grafana는 `http://127.0.0.1:3000` 로컬 포트포워딩을 사용자 인수용으로 유지했다. 이를 받치는 이번 management SSM 세션/보호 kubeconfig도 유지한다. access-info.json과 README.txt에 대상·주소·재접속/종료 방법을 기록했다. 유휴 시 터널 만료 가능성이 있다.
+- Prometheus 검증용19090 포워딩과 workload 점검 SSM은 종료했다. 기존 사용자 Argo/SSM 포워딩은 종료하지 않았다. 비밀값 없는 검증 보고서와 access kubeconfig는 `.generated/monitoring/`(0700/0600)에 보존한다.
+
+### 기존 서비스·제외 범위
+
+- preflight의 관리 Pod24개 중 기존 플랫폼·Argo·시스템 Pod23개, workload 기존 Pod12개의 UID/Ready/phase/restart count는 그대로였다. 별도 headlamp namespace는 외부 rollout으로 기존 Pod1개가 교체된 것을 구분해 기록했다. 이 작업은 해당 namespace 리소스를 변경하지 않았다.
+- root 및 모든 앱의 자동 sync가 계속 비활성화이며, 종료 시 queued/Running/Terminating operation은 없다. 제외 앱의 spec/operation은 변경하지 않았다.
+- Loki/HyperDX/OTel/workload Prometheus/Sealed Secrets/Argo Rollouts/LBC/baseline/기존 플랫폼의 sync는 하지 않았다. 공개 ingress·DNS·IAM·SG·Terraform·state·PVC 삭제는 실행하지 않았다.
+- 외부 알림 수신처는 구성하지 않았다. 로그·트레이스 수집 및 HyperDX 선택은 별도 범위다.
+
+### 계획 대비 변경과 한계
+
+- 렌더링에서 발견한 새 장기 SA 토큰은 ADR0019·신규 독립 리뷰·명시적 추가 승인을 받은 뒤에만 생성했다.
+- 첫 monitoring sync는 Prometheus task가 Failed로 기록되어 종료됐다. 초기 준비 중 health 판정이 원인인 것으로 추정한다. 당시 resource apply는 성공했고 이후 Available/Reconciled는 True, Pod/PVC는 정상으로 확인됐다. 동일 chart/Git revision으로 일반 수동 sync를 한 번 더 수행해 미완료 PostSync 인증서 patch Hook을 완료했다. Force/Replace/재설치·설정/권한 변경은 하지 않았다. 최종 CA 패치와 실제 scrape 정상까지 검증했다.
+- CI 대기 중 만료된 점검 터널은 재연결했다. 그 시점 sync 요청은 조회/dry-run 전에 멈춰 실제 operation이 없음을 확인했다.
+- ADR0018/0019는 승인·실제 생성/설치 결과를 구분해 갱신했다. 추가 운영 결정은 없다.

@@ -1,7 +1,7 @@
 # 0018. 기본 메트릭과 관리 클러스터 모니터링을 단계적으로 설치
 
 - 날짜: 2026-11-03
-- 상태: 채택 — 세 앱 한정 설치와 명시한 APIService TLS 기본값 승인, 실제 배포 전
+- 상태: 채택 — 승인한 세 앱 설치·실제 메트릭/Grafana 검증 완료
 - 관련 ADR: [0017 수동 연결 준비](https://github.com/2026-Softbank-Hackathon-Charlie/infra/blob/c6e1034/docs/adr/0017-adopt-existing-helm-resources-in-argocd.md)
 
 ## 배경과 제약
@@ -37,3 +37,7 @@ metrics-server는 autoscaling/resource API를, Prometheus/Grafana는 현재 클�
 ## 승인 범위 — 2026-11-03
 
 사용자는 APIService의 인증서 검증 생략 기본값, kubelet CA 검증 유지, 관리자·내부 TLS/설정 Secret 생성, 수정 PR merge, 세 앱만의 수동 sync/중단 및 PVC27GiB를 명시한 계획을 승인했다. 이 ADR의 채택은 실제 배포 성공을 뜻하지 않으며 결과는 설치 계획에 별도로 기록한다.
+
+## 실행 결과 — 2026-11-03
+
+승인한 metrics-server 두 앱과 관리 kube-prometheus-stack이 Synced/Healthy, operation Succeeded다. 관리 관측 PVC27GiB가 Bound이고 Grafana 인증·Prometheus datasource와 target19개 정상 수집을 확인했다. 기존 플랫폼·PVC는 유지했다. root/앱 자동화와 다른 애드온 설치는 계속 제외한다. 최초 monitoring 준비 중 실패는 동일 revision의 일반 sync1회로 Hook 완료 후 해소했다. 상세 결과와 접근·정리 상태는 연결한 계획에 기록했다.
