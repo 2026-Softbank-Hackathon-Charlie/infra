@@ -207,3 +207,7 @@ docker compose exec gateway sh -c 'wget -qO- --header "Authorization: Bearer $GA
 ECR 이미지, Elastic IP, SSM 파라미터까지 모두 지웁니다. PostgreSQL 데이터도 함께 사라집니다.
 
 상태 버킷은 `prevent_destroy`로 막혀 있습니다. 해커톤이 끝나고 정말 지울 때만 `state/main.tf`의 `prevent_destroy`를 풀고, 버킷 안의 모든 객체 버전을 비운 뒤 `./tf.sh -chdir=state destroy`를 실행합니다. 관리 호스트를 먼저 destroy해야 합니다.
+
+## 앱 이미지 빌드 준비
+
+`app-build.tf`는 전용 CodeBuild 프로젝트, 역할·정책과 3일 보존 로그 그룹을 추가한다. 플랫폼 Pod Identity에는 해당 프로젝트 시작·상태와 로그 조회 권한만 추가한다. 플랫폼이 빌드마다 buildspec과 GitHub token을 전달해야 하며 기본 buildspec은 실패한다. 권한 범위와 운영 전 확인 사항은 [ADR 0022](../../../docs/adr/0022-platform-app-build.md)를 참조한다. 실제 계정 및 state는 확인하지 않았고 plan/apply도 실행하지 않았다.
