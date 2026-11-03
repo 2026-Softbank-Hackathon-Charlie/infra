@@ -21,6 +21,10 @@
 | [terraform/platform/aws/headlamp/tests/main.tftest.hcl](terraform/platform/aws/headlamp/tests/main.tftest.hcl) | 클라우드 연결 없는 Terraform mock 검사 |
 | [scripts/prepare-headlamp.py](scripts/prepare-headlamp.py) | 공개 values 생성 및 승인 후 Secret 등록 |
 | [scripts/tests/test-headlamp.py](scripts/tests/test-headlamp.py) | 인증 경계·RBAC·GitOps 로컬 렌더링 검사 |
+| [docs/headlamp-gke.md](docs/headlamp-gke.md) | 기존 AWS 로그인을 유지하는 GKE 개인 인증 연결 절차와 승인 경계 |
+| [docs/adr/0020-add-gke-to-team-headlamp.md](docs/adr/0020-add-gke-to-team-headlamp.md) | GKE 개인 Google 인증 분리 제안 |
+| [scripts/register-headlamp-gke.py](scripts/register-headlamp-gke.py) | 오프라인 GKE 연결 미리보기와 승인 후 기존 Secret 갱신 |
+| [scripts/tests/test-headlamp-gke.py](scripts/tests/test-headlamp-gke.py) | AWS 설정 보존·무자격 GKE context·적용 경계 회귀 검사 |
 
 2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.
 
@@ -512,6 +516,11 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | 파일 | 역할 |
 |---|---|
 | [.github/workflows/platform-terraform.yml](.github/workflows/platform-terraform.yml) | AWS 인증 없는 두 root 전용 검증 workflow |
+| [docs/adr/0022-platform-app-build.md](docs/adr/0022-platform-app-build.md) | 앱 CodeBuild 및 제한된 IAM 제안 |
+| [docs/plans/2026-11-03-app-deploy-infra-spec.md](docs/plans/2026-11-03-app-deploy-infra-spec.md) | 앱 배포 인프라 명세 및 실제 완료 조건 |
+| [docs/plans/2026-11-03-app-deploy-infra.md](docs/plans/2026-11-03-app-deploy-infra.md) | 앱 배포 인프라 순차 실행 계획 |
+| [terraform/platform/aws/app-build.tf](terraform/platform/aws/app-build.tf) | 전용 CodeBuild 프로젝트와 최소 IAM 정책 |
+| [terraform/platform/aws/tests/app-build.tftest.hcl](terraform/platform/aws/tests/app-build.tftest.hcl) | 빌드 설정·IAM 범위 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
 | [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
 | [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |
