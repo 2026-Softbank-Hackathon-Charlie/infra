@@ -21,7 +21,6 @@
     "docker.io/bitnami/sealed-secrets-controller:0.40.0": "sha256:b1ff382e9300dc9e74991f3177b18cafc06ce43b5c21349c86adbdd1d1c177d3",
     "quay.io/argoproj/argo-rollouts:v1.10.0": "sha256:187630ba722846bb8e079630364d3c29c8246a256be95785fd957b088f621c4e",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:5cb1c2e": "sha256:ba52b02ba4e113093b30b0e5459581b5b8fe93c49b618b3bb4404524a526834b",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:5712152": "sha256:9916fa9c53377233c486e02711597bbefe26f779a3c64aab6f7b19c6cbb102f8",
     "docker.io/library/postgres:17.11-alpine": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "public.ecr.aws/aws-cli/aws-cli:2.31.0": "sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487",
     "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.1": "sha256:923c267ec29636db3bee20f993d0ec4973fa22998e1adad37da79e4d32b5bc07",
@@ -32,6 +31,7 @@
     "quay.io/jetstack/cert-manager-webhook:v1.21.3": "sha256:055ac8e9de6a0ba6763794838fe38944acc650f68ebe1b01dd8be079e580f458",
     "quay.io/jetstack/cert-manager-cainjector:v1.21.3": "sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f",
     "quay.io/jetstack/cert-manager-startupapicheck:v1.21.3": "sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1",
-    "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7"
+    "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:ceeb50f": "sha256:8e22208373af7fbfc42bdf9f0a36bda2d3693faeb14b59dee814491702f297bd"
   }
 }
