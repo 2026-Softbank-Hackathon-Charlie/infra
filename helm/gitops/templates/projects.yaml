@@ -40,5 +40,32 @@ spec:
     - {group: elbv2.k8s.aws, kind: IngressClassParams}
   namespaceResourceWhitelist:
     - {group: "*", kind: "*"}
+{{- if eq $purpose "management" }}
+---
+# The platform's app ApplicationSet (helm/charts/hopcharlie-apps, ADR 0022):
+# only its AppProject, ApplicationSet and the platform's Role in argocd, and
+# the admission policy that limits that Role.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: charlie-hopcharlie-apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceRepos:
+    - {{ $.Values.repoURL | quote }}
+  destinations:
+    - server: {{ $target.endpoint | quote }}
+      namespace: argocd
+  clusterResourceWhitelist:
+    - {group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy}
+    - {group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding}
+  namespaceResourceWhitelist:
+    - {group: argoproj.io, kind: AppProject}
+    - {group: argoproj.io, kind: ApplicationSet}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+{{- end }}
 ---
 {{- end }}

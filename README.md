@@ -502,6 +502,32 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress |
 
+### GitHub에서 배포하는 앱
+
+플랫폼은 GitHub 저장소로 등록한 앱을 빌드하고 gitops 저장소에 `apps/<app>/<env>.yaml`을 커밋합니다. Argo CD Application `charlie-management-hopcharlie-apps`가 그리는 ApplicationSet이 파일마다 Application `<app>-<env>`를 만들고, `hopcharlie-app` 차트로 워크로드 클러스터의 `<app>` 네임스페이스에 배포합니다. 결정 이유와 남은 작업은 [ADR 0022](docs/adr/0022-deploy-github-apps-with-applicationset.md)에 있습니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0022-deploy-github-apps-with-applicationset.md](docs/adr/0022-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
+| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
+| [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
+| [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
+| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet |
+| [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
+| [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
+| [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
+| [helm/charts/hopcharlie-app/Chart.yaml](helm/charts/hopcharlie-app/Chart.yaml) | 앱 chart 메타데이터 |
+| [helm/charts/hopcharlie-app/values.yaml](helm/charts/hopcharlie-app/values.yaml) | gitops 파일 형식과 환경 프로필 기본값 |
+| [helm/charts/hopcharlie-app/values.schema.json](helm/charts/hopcharlie-app/values.schema.json) | gitops 파일과 프로필 검증 |
+| [helm/charts/hopcharlie-app/ci/stateful-values.yaml](helm/charts/hopcharlie-app/ci/stateful-values.yaml) | DB와 버킷이 있는 앱의 검사용 값 |
+| [helm/charts/hopcharlie-app/ci/stateless-values.yaml](helm/charts/hopcharlie-app/ci/stateless-values.yaml) | 상태 없는 앱의 검사용 값 |
+| [helm/charts/hopcharlie-app/templates/_helpers.tpl](helm/charts/hopcharlie-app/templates/_helpers.tpl) | label, 플랫폼이 넣는 환경 변수, 값 검사 |
+| [helm/charts/hopcharlie-app/templates/namespace.yaml](helm/charts/hopcharlie-app/templates/namespace.yaml) | 앱 네임스페이스와 Pod Security label |
+| [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
+| [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
+| [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
+| [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
+
 
 ## 플랫폼 Terraform 이관
 

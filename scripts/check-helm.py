@@ -16,7 +16,7 @@ HELM = os.environ.get("HELM", "helm")
 VERSIONS = json.loads((ROOT / "helm/versions.json").read_text())
 LOCK = json.loads((ROOT / "helm/images.lock.json").read_text())["images"]
 yaml.SafeLoader.add_constructor("tag:yaml.org,2002:value", lambda loader, node: loader.construct_scalar(node))
-CLUSTER_KINDS = {"Namespace", "StorageClass", "ClusterRole", "ClusterRoleBinding", "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration", "APIService", "IngressClass", "IngressClassParams", "PriorityClass", "PersistentVolume", "CSIDriver"}
+CLUSTER_KINDS = {"Namespace", "StorageClass", "ClusterRole", "ClusterRoleBinding", "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "APIService", "IngressClass", "IngressClassParams", "PriorityClass", "PersistentVolume", "CSIDriver"}
 
 
 def helm(*args):
@@ -137,7 +137,40 @@ def main():
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
-        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform; {len(seen)} pinned images.")
+        # Apps the platform deploys from GitHub (ADR 0022): the root's Application
+        # and AppProject, the ApplicationSet chart with the values the root passes,
+        # and the app chart, whose every object its AppProject must allow.
+        apps_project = next(d for d in root_docs if d["kind"] == "AppProject" and d["metadata"]["name"] == "charlie-hopcharlie-apps")
+        apps_app = next(d for d in root_docs if d["kind"] == "Application" and d["metadata"]["name"] == "charlie-management-hopcharlie-apps")
+        assert apps_app["spec"]["project"] == "charlie-hopcharlie-apps"
+        assert apps_app["spec"]["destination"] == {"server": fixture["targets"]["management"]["endpoint"], "namespace": "argocd"}
+        params = {p["name"]: p["value"] for p in apps_app["spec"]["source"]["helm"]["parameters"]}
+        assert params["environments.eks.cluster.server"] == fixture["targets"]["workload"]["endpoint"]
+        extra = [arg for name, value in params.items() for arg in ("--set-string", f"{name}={value}")]
+        apps_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-apps.yaml"
+        docs = render(ROOT / "helm/charts/hopcharlie-apps", apps_values, "hopcharlie-apps", "argocd", extra)
+        assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]
+        check_project(docs, apps_project, "argocd")
+        allowed = {(d["group"], d["kind"]) for d in apps_project["spec"]["namespaceResourceWhitelist"]}
+        for doc in docs:
+            if doc["kind"] not in CLUSTER_KINDS:
+                assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in allowed, f"AppProject charlie-hopcharlie-apps denies {doc['kind']}"
+        app_project = next(d for d in docs if d["kind"] == "AppProject")
+        app_allowed = {(d["group"], d["kind"]) for d in app_project["spec"]["clusterResourceWhitelist"] + app_project["spec"]["namespaceResourceWhitelist"]}
+        eks_profile = work / "eks-profile.json"
+        eks_profile.write_text(json.dumps({"profile": json.loads(apps_values.read_text())["environments"]["eks"]["profile"]}))
+        for ci in sorted((ROOT / "helm/charts/hopcharlie-app/ci").glob("*.yaml")):
+            gitops_file = yaml.safe_load(ci.read_text())
+            public = any(s.get("public") for s in gitops_file["values"]["services"])
+            for extra in ((), ("-f", eks_profile)):
+                docs = render(ROOT / "helm/charts/hopcharlie-app", ci, gitops_file["namespace"], gitops_file["namespace"], extra)
+                for doc in docs:
+                    assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+                if extra:
+                    # The gateway reaches every app's internal load balancer on port 80.
+                    ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
+                    assert ports == ([80] if public else []), ports
+        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform, app ApplicationSet and app chart; {len(seen)} pinned images.")
 
 
 if __name__ == "__main__":
