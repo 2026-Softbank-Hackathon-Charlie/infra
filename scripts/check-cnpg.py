@@ -158,6 +158,7 @@ def main():
             seen.update(pinned_image(ref) for ref in operand_images(docs))
             if name == "cloudnative-pg":
                 configuration = next(d for d in docs if d["kind"] == "ConfigMap" and "POSTGRES_IMAGE_NAME" in d.get("data", {}))
+                assert not configuration["data"].get("WATCH_NAMESPACE"), "CNPG must watch every application namespace"
                 operand_default = configuration["data"]["POSTGRES_IMAGE_NAME"]
             for doc in docs:
                 if doc["kind"] == "CustomResourceDefinition":
