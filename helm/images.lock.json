@@ -20,7 +20,7 @@
     "docker.io/grafana/loki:3.6.12": "sha256:2483b71b28b15dee230f85512cae2b20c4b5f6e98a6eabe686cbccfa5ea3ba4a",
     "docker.io/bitnami/sealed-secrets-controller:0.40.0": "sha256:b1ff382e9300dc9e74991f3177b18cafc06ce43b5c21349c86adbdd1d1c177d3",
     "quay.io/argoproj/argo-rollouts:v1.10.0": "sha256:187630ba722846bb8e079630364d3c29c8246a256be95785fd957b088f621c4e",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:5cb1c2e": "sha256:ba52b02ba4e113093b30b0e5459581b5b8fe93c49b618b3bb4404524a526834b",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:2aea035": "sha256:095adeb4c377a1f737291a07220a01c6931fd6bbbbdc0f3ec4a23c7a2291347c",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:5712152": "sha256:9916fa9c53377233c486e02711597bbefe26f779a3c64aab6f7b19c6cbb102f8",
     "docker.io/library/postgres:17.11-alpine": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "public.ecr.aws/aws-cli/aws-cli:2.31.0": "sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
