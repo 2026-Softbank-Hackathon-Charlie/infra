@@ -44,6 +44,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-tf-ci.py
 	@$(PYTHON) scripts/tests/test-workflow.py
 	@$(PYTHON) scripts/tests/test-eks-access.py
+	@$(PYTHON) scripts/tests/test-headlamp-gke.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 inventory-check:
 	@$(PYTHON) scripts/check-inventory.py

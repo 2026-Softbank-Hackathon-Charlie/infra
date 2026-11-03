@@ -26,7 +26,7 @@ def cluster_kubeconfig(values, client_secret):
         'contexts': [{'name': c['name'], 'context': {'cluster': c['name'], 'user': 'team-oidc'}} for c in clusters],
         'users': [{'name': 'team-oidc', 'user': {'auth-provider': {'name': 'oidc', 'config': {
             'client-id': oidc['clientID'], 'client-secret': client_secret,
-            'idp-issuer-url': oidc['issuerURL'], 'extra-scopes': SCOPES}}}}],
+            'idp-issuer-url': oidc['issuerURL'], 'scope': SCOPES}}}}],
     }
 
 

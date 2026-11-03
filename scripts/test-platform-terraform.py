@@ -10,7 +10,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts/check-platform-terraform.py'
 ASSETS = {
-    'backend.tf', 'main.tf', 'eks.tf', 'outputs.tf', 'variables.tf', 'versions.tf',
+    'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'outputs.tf', 'variables.tf', 'versions.tf',
     '.terraform.lock.hcl', 'user_data.sh.tftpl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',
@@ -106,15 +106,15 @@ class PlatformTerraformTests(unittest.TestCase):
                     patch.object(verify.subprocess, 'run', side_effect=fake_terraform):
                 verify.main()
             commands = [['fmt', '-check'], ['init', '-backend=false', '-input=false', '-lockfile=readonly'], ['validate']]
-            self.assertEqual([args for _, args in calls], commands * 3)
-            self.assertEqual(calls[3][0], calls[0][0] / 'state')
-            self.assertEqual(calls[6][0], calls[0][0] / 'dns')
+            self.assertEqual([args for _, args in calls], commands + [['test']] + commands * 2)
+            self.assertEqual(calls[4][0], calls[0][0] / 'state')
+            self.assertEqual(calls[7][0], calls[0][0] / 'dns')
             self.assertFalse(calls[0][0].exists(), 'Temporary assets must be removed')
             self.assertEqual((source / 'terraform.tfstate').read_text(), 'local secret\n')
 
     def test_each_terraform_failure_propagates_and_stops(self):
         verify = load_script(SCRIPT, 'platform_verify')
-        for failure in ('fmt', 'init', 'validate'):
+        for failure in ('fmt', 'init', 'validate', 'test'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
                 source = self.fixture(Path(temp))
                 calls = []
@@ -129,7 +129,7 @@ class PlatformTerraformTests(unittest.TestCase):
                     with self.assertRaises(subprocess.CalledProcessError) as error:
                         verify.main()
                 self.assertEqual(error.exception.returncode, 7)
-                self.assertEqual(calls, ['fmt', 'init', 'validate'][:len(calls)])
+                self.assertEqual(calls, ['fmt', 'init', 'validate', 'test'][:len(calls)])
                 self.assertEqual(calls[-1], failure)
 
     def test_generic_runtime_and_project_roots_stay_separate(self):
