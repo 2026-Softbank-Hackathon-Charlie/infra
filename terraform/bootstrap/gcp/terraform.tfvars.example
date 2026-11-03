@@ -1,6 +1,10 @@
-project_id                = "replace-with-project-id"
-region                    = "asia-northeast3"
-state_bucket_name         = "replace-with-globally-unique-state-bucket"
+project_id                 = "replace-with-project-id"
+region                     = "asia-northeast3"
+state_bucket_name          = "replace-with-globally-unique-state-bucket"
 github_repository_id       = "123456789"
 github_repository_owner_id = "987654321"
-github_ref                = "refs/heads/main"
+github_ref                 = "refs/heads/main"
+
+# After enabling, keep both values in the authoritative bootstrap tfvars for every later plan/apply.
+enable_moimroom_image_publishing = false
+moimroom_repository_id           = ""

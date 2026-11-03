@@ -49,6 +49,16 @@ resource "aws_ecr_lifecycle_policy" "console" {
   policy     = aws_ecr_lifecycle_policy.platform.policy
 }
 
+resource "aws_ecr_repository" "moimroom" {
+  name                 = "${local.name}/apps/moimroom"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
 # --- secrets: generated here, stored as SSM SecureString, read by the platform pods ---
 
 resource "random_password" "db" {
