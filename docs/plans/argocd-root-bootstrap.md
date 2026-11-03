@@ -161,3 +161,37 @@
 ### 정리 결과
 
 이번 준비 단계의 임시 SSM 세션 두 개를 정상 종료했고 kubeconfig·EKS 연결 메타데이터·실행 스크립트를 정리했다. 보호된 수동 입력과 비밀값 없는 비교 결과만 `.generated/argocd-preparation/`에 남겼다. Secret 입력/원문은 파일로 저장하지 않았다.
+
+## 읽기 전용 차이 재검토 — 2026-11-03
+
+사용자의 “차이 검토 해주고, 미설치 애드온은 뭐 말하는거야” 요청으로 기존 승인한 management 읽기 전용 범위에서 재검토했다. sync·refresh 요청·추가 Secret 값 조회·설정 변경은 하지 않았다. 이번 문서 보완은 기존 검토 결과의 기록이며 새 운영 결정을 내리지 않아 새 ADR은 추가하지 않는다.
+
+### 검토 결과
+
+- 기준 main: `bea060e14133f82fa46dc6ac5a51f6f329b72e96`. 기존 서비스·baseline·LBC는 Healthy이며 리소스 생성/교체를 요구하는 선언 설정 차이는 검토 범위에서 발견하지 못했다.
+- LBC `vingress.elbv2.k8s.aws`의 objectSelector/namespaceSelector는 chart가 `null`, 실제 API 저장값은 `{}`였다. 둘 다 빈 selector이며 추가 label 제한이 없다. 앞서 남긴 차이 후보는 동작상 차이가 아닌 표현/defaulting 차이로 해소했다. 다른 webhook의 matchPolicy/timeoutSeconds/rule scope 추가도 Equivalent/10초/* 기본값과 일치했다. 근거: [Kubernetes ValidatingWebhookConfiguration API](https://kubernetes.io/docs/reference/kubernetes-api/admissionregistration/validating-webhook-configuration-v1/).
+- 플랫폼·baseline의 양방향 spec 필드 비교에서 live-only 필드 115개를 확인했다. Kubernetes 기본값·자동 할당값(서비스 IP, PVC volumeName 등)과 일치했으며 예상 밖 값은 없었다. image/replica/Pod template의 선언값, 네트워크 정책, PVC 요청 크기/StorageClass, Ingress 선언 등에는 값 차이가 없었다. Service/PVC의 자동 할당 identity 필드는 Git의 리소스 교체 요청으로 해석하지 않았다.
+- 기존 Helm release annotation은 남아 있고 예시 플랫폼 Deployment/StatefulSet/Ingress에 Argo 추적정보는 아직 없었다. 이전 23개 desired 필드 비교 및 현재 양방향 spec 비교와 함께, 운영 설정 차이와 관리용 metadata 차이를 구분했다. 모든 OutOfSync가 기능 오류라는 뜻은 아니다.
+- management LBC의 CRD 7개는 Argo 자체 비교에서도 Synced였다. webhook TLS Secret 값과 CA 원문은 기존 범위대로 비교에서 제외했다. 따라서 실제 sync/인증서 변경까지 성공을 보증하는 검토는 아니다.
+- root가 생성할 하위 Application 13개의 spec을 실제 객체와 비교했다. 차이는 모두 Git의 `automated: {prune: false, selfHeal: true}`가 live에는 없다는 한 항목뿐이었다. root Sync 시 이 정책을 복원하여 미설치 리소스 배포도 시작할 수 있다.
+- 현재 health 집계는 Healthy 4개(root 포함), Missing 10개, Progressing 0개다. 모든 앱에 queued/Running/Terminating operation이 없고 자동 동기화도 꺼져 있음을 재확인했다.
+
+### 미설치 목록과 의미
+
+| 구성 요소 | management | workload | 역할 |
+| --- | --- | --- | --- |
+| metrics-server | 미설치 | 미설치 | CPU/메모리 메트릭 API·HPA 기반 |
+| kube-prometheus-stack | 미설치 | 미설치 | Prometheus/Grafana/Alertmanager·메트릭/대시보드/알림 |
+| Loki | 미설치 | 기본 목록에 없음 | 로그 저장·조회 |
+| Sealed Secrets | 미설치 | 미설치 | 암호화된 SealedSecret의 Secret 변환 |
+| AWS Load Balancer Controller | 기존 설치 | 미설치 | ALB/NLB 및 관련 Kubernetes 리소스 관리 |
+| Argo Rollouts | 기본 목록에 없음 | 미설치 | Canary/Blue-Green 배포 controller |
+| baseline (기반 설정) | 기존 설치 | 미설치 | namespace/gp3/Quota/LimitRange/NetworkPolicy |
+
+미설치 애드온은 9개 Application이고 workload baseline 1개를 합쳐 Missing 10개다. Application 등록만 했고 실제 리소스 sync를 하지 않은 결과다. CoreDNS/VPC CNI/kube-proxy/EBS CSI/Pod Identity 같은 이미 설치된 EKS 기본 구성 요소와 구분한다. OTel은 기본 addon 목록에 없어 이 Missing 수에 포함되지 않는다.
+
+모니터링 values는 두 클러스터 모두 `observability/grafana-admin`이라는 기존 Secret(admin-user/admin-password)을 참조한다. 이번 범위에서 해당 Secret의 존재/내용은 확인하지 않았으므로 Prometheus/Grafana 설치 전 준비 여부를 확인해야 한다. 새 애드온 설치 시 관측 스택 PVC·리소스와 CRD/RBAC/APIService 등도 생성되므로 기존 리소스 관리 전환과 별도 단계로 실행 범위를 정해야 한다.
+
+### 검증·계획 대비 변경·ADR
+
+검토는 예정대로 읽기 전용으로 수행했으며 코드·클러스터 설정 변경과 실제 sync는 없다. 비교 산출물은 `.generated/argocd-preparation/difference-review.json`에 비밀값 없이 보존했다. 기존 문서 PR #9에 결과를 추가하며 새 ADR은 필요하지 않다. ADR 0017의 실제 sync 미실행 경계를 유지한다.
