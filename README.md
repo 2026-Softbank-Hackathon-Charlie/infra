@@ -1,5 +1,27 @@
 # Charlie Infra
 
+## 팀 공용 Headlamp (배포 준비)
+
+`https://headlamp.hopcharlie.dev`에서 개인 Cognito 로그인으로 두 EKS를 읽기 전용 조회하는 구성입니다.
+실제 배포는 별도 승인과 라이브 검증이 필요하며 GitOps의 `headlamp.enabled`는 기본 false입니다.
+
+| 파일 | 설명 |
+| --- | --- |
+| [docs/headlamp-team.md](docs/headlamp-team.md) | 배포·검증·팀원 등록·비용·정리 절차 |
+| [docs/adr/0017-team-headlamp-with-cognito.md](docs/adr/0017-team-headlamp-with-cognito.md) | 인증·권한·배포 구성 제안 |
+| [helm/charts/headlamp-team/Chart.yaml](helm/charts/headlamp-team/Chart.yaml) | Headlamp 팀 차트 |
+| [helm/charts/headlamp-team/values.yaml](helm/charts/headlamp-team/values.yaml) | 고정 이미지와 기본값 |
+| [helm/charts/headlamp-team/templates/web.yaml](helm/charts/headlamp-team/templates/web.yaml) | OIDC 웹 앱·클러스터 설정·HTTPS Ingress |
+| [helm/charts/headlamp-team/templates/rbac.yaml](helm/charts/headlamp-team/templates/rbac.yaml) | Secret을 제외한 조회 권한 |
+| [helm/charts/headlamp-team/templates/network.yaml](helm/charts/headlamp-team/templates/network.yaml) | Headlamp 네트워크 정책 |
+| [clusters/aws-dev-management/values/headlamp-team.yaml](clusters/aws-dev-management/values/headlamp-team.yaml) | 관리 EKS 설정 초안 |
+| [clusters/aws-dev-workload/values/headlamp-team.yaml](clusters/aws-dev-workload/values/headlamp-team.yaml) | 워크로드 EKS 조회 권한 설정 |
+| [terraform/platform/aws/headlamp/main.tf](terraform/platform/aws/headlamp/main.tf) | Cognito·EKS OIDC·DNS·API 네트워크 |
+| [terraform/platform/aws/headlamp/.terraform.lock.hcl](terraform/platform/aws/headlamp/.terraform.lock.hcl) | provider 버전 고정 |
+| [terraform/platform/aws/headlamp/tests/main.tftest.hcl](terraform/platform/aws/headlamp/tests/main.tftest.hcl) | 클라우드 연결 없는 Terraform mock 검사 |
+| [scripts/prepare-headlamp.py](scripts/prepare-headlamp.py) | 공개 values 생성 및 승인 후 Secret 등록 |
+| [scripts/tests/test-headlamp.py](scripts/tests/test-headlamp.py) | 인증 경계·RBAC·GitOps 로컬 렌더링 검사 |
+
 2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.
 
 저장소: [2026-Softbank-Hackathon-Charlie/infra](https://github.com/2026-Softbank-Hackathon-Charlie/infra). 아래 명령과 경로는 모두 이 저장소 루트를 기준으로 합니다.
@@ -13,6 +35,8 @@
 | [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
+| [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
+| [docs/adr/0017-adopt-existing-helm-resources-in-argocd.md](docs/adr/0017-adopt-existing-helm-resources-in-argocd.md) | 기존 Helm 리소스를 보존하는 단계적 Argo CD 연결 결정 |
 | [docs/plans/metrics-and-management-monitoring.md](docs/plans/metrics-and-management-monitoring.md) | metrics-server 양쪽과 관리 Prometheus 스택의 한정 설치 계획·실행 결과 |
 | [docs/adr/0018-stage-minimal-management-monitoring.md](docs/adr/0018-stage-minimal-management-monitoring.md) | HyperDX 선택을 유지하는 기본 모니터링 단계적 도입 결정 |
 | [docs/adr/0019-use-chart-managed-prometheus-scrape-token.md](docs/adr/0019-use-chart-managed-prometheus-scrape-token.md) | Prometheus scrape용 장기 ServiceAccount 토큰의 추가 승인 경계 |

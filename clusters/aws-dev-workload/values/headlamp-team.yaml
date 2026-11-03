@@ -1,0 +1,3 @@
+webEnabled: false
+oidc:
+  viewerGroup: headlamp:team-viewers

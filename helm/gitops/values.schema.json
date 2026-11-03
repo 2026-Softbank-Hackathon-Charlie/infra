@@ -9,6 +9,12 @@
     "addons"
   ],
   "properties": {
+    "headlamp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {"enabled": {"type": "boolean"}}
+    },
     "repoURL": {
       "type": "string",
       "pattern": "^(https://github.com/|git@github.com:)"
