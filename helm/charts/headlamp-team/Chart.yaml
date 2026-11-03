@@ -1,0 +1,6 @@
+apiVersion: v2
+name: headlamp-team
+description: Team Headlamp with individual OIDC authentication and read-only Kubernetes RBAC
+type: application
+version: 0.1.0
+appVersion: 0.46.0
