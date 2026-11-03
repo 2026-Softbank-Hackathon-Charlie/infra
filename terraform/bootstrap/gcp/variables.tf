@@ -54,3 +54,25 @@ variable "moimroom_repository_id" {
     error_message = "moimroom_repository_id is required when enable_moimroom_image_publishing is true."
   }
 }
+
+variable "enable_cnpg_poc_backup" {
+  type        = bool
+  default     = false
+  nullable    = false
+  description = "Create a dedicated native GCS backup bucket and workload identity for charlie-db/postgres-poc."
+}
+
+variable "cnpg_poc_backup_bucket_name" {
+  type        = string
+  default     = ""
+  nullable    = false
+  description = "Globally unique CNPG backup bucket name; required when backup is enabled."
+  validation {
+    condition     = var.cnpg_poc_backup_bucket_name == "" || can(regex("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", var.cnpg_poc_backup_bucket_name))
+    error_message = "Use a 3-63 character bucket name with lowercase letters, digits and internal hyphens."
+  }
+  validation {
+    condition     = !var.enable_cnpg_poc_backup || var.cnpg_poc_backup_bucket_name != ""
+    error_message = "cnpg_poc_backup_bucket_name is required when enable_cnpg_poc_backup is true."
+  }
+}

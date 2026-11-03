@@ -11,6 +11,12 @@ spec:
   imagePullPolicy: IfNotPresent
   enableSuperuserAccess: false
   primaryUpdateStrategy: unsupervised
+  {{- if eq .Values.backup.provider "gcs" }}
+  serviceAccountTemplate:
+    metadata:
+      annotations:
+        iam.gke.io/gcp-service-account: {{ .Values.backup.gcpServiceAccount | quote }}
+  {{- end }}
   bootstrap:
     initdb:
       database: db_a
@@ -18,7 +24,7 @@ spec:
       secret:
         name: svc-a-owner
   storage:
-    storageClass: cnpg-gp3-retain
+    storageClass: {{ .Values.storageClass.name }}
     size: 20Gi
   resources:
     {{- toYaml .Values.resources | nindent 4 }}

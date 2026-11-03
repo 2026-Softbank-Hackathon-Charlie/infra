@@ -5,20 +5,28 @@ metadata:
   namespace: charlie-db
 spec:
   configuration:
+    {{- if eq .Values.backup.provider "gcs" }}
+    destinationPath: {{ printf "gs://%s/source/" .Values.backup.bucketName | quote }}
+    googleCredentials:
+      gkeEnvironment: true
+    {{- else }}
     destinationPath: {{ printf "s3://%s/source/" .Values.backup.bucketName | quote }}
     s3Credentials:
       inheritFromIAMRole: true
+    {{- end }}
     wal:
       compression: gzip
     data:
       compression: gzip
   retentionPolicy: {{ .Values.backup.retentionPolicy | quote }}
   instanceSidecarConfiguration:
+    {{- if eq .Values.backup.provider "s3" }}
     env:
       - name: AWS_REGION
         value: {{ .Values.backup.region | quote }}
       - name: AWS_DEFAULT_REGION
         value: {{ .Values.backup.region | quote }}
+    {{- end }}
     resources:
       {{- toYaml .Values.backupResources | nindent 6 }}
 ---
