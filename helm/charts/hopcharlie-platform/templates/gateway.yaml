@@ -70,6 +70,10 @@ spec:
             {{- with .Values.gateway.initialBackend }}
             - {name: GATEWAY_INITIAL_BACKEND, value: {{ . | quote }}}
             {{- end }}
+            {{- with .Values.appDomain }}
+            # <app>.<appDomain> goes to the app registered as <app>; app.<appDomain> stays the default app.
+            - {name: GATEWAY_APP_DOMAIN, value: {{ . | quote }}}
+            {{- end }}
           ports:
             - {name: http, containerPort: 8000}
             - {name: admin, containerPort: 9901}

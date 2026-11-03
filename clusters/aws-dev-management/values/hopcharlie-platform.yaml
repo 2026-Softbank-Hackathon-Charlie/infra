@@ -16,5 +16,15 @@
   "ingress": {
     "enabled": true,
     "domain": "hopcharlie.dev"
+  },
+  "appDomain": "hopcharlie.dev",
+  "github": {
+    "appId": "5589608",
+    "installationId": "178050051"
+  },
+  "deploy": {
+    "builder": "codebuild",
+    "codebuildProject": "hopcharlie-app-build",
+    "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com"
   }
 }

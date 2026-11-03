@@ -149,6 +149,8 @@ Terraform이 관리하는 설정(`host/compose.yaml`, `host/Caddyfile`, `host/en
 | `/hopcharlie/rclone-env` | 파일 이전에 쓰는 rclone 원격. 한 줄에 `RCLONE_CONFIG_<원격>_<옵션>=값` | 아래 명령 |
 | `/hopcharlie/kube/<이름>` | 클러스터마다 kubeconfig 하나 | `bash "$PLATFORM_DIR/deploy/aws/put-kubeconfig.sh"` |
 | `/hopcharlie/tailscale-authkey` | 있으면 호스트가 Tailscale에 붙음 | 아래 명령 |
+| `/hopcharlie/github-app-private-key` | GitHub App `hopcharlie-platform`의 private key PEM. 관리 EKS의 API pod만 읽음 ([ADR 0021](../../../docs/adr/0021-configure-platform-github-app-deploy.md)) | 아래 명령 |
+| `/hopcharlie/github-webhook-secret` | 같은 App의 webhook secret. App 설정의 값과 같아야 함 | 아래 명령 |
 
 ```bash
 # 파일 내용을 그대로 넣는다. 파일은 넣은 뒤 지운다.
@@ -158,8 +160,14 @@ aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 --overwrite \
   --name /hopcharlie/rclone-env --type SecureString --value file://rclone.env
 aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 \
   --name /hopcharlie/tailscale-authkey --type SecureString --value 'tskey-auth-...'
+aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 \
+  --name /hopcharlie/github-app-private-key --type SecureString --value file://github-app.pem
+aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 \
+  --name /hopcharlie/github-webhook-secret --type SecureString --value file://github-webhook-secret.txt
 bash "$PLATFORM_DIR/deploy/aws/redeploy.sh"
 ```
+
+GitHub App 파라미터 두 개는 관리 EKS의 API pod가 시작할 때만 읽습니다. 차트에 `github.appId`를 넣기 전에 만들어 두고, 값을 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
 
 ### 클러스터 연결
 
