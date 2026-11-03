@@ -1,5 +1,7 @@
 # AWS 관리 호스트
 
+> **2026-11-03: EC2 관리 호스트를 철거했습니다**([ADR 0026](../../../docs/adr/0026-retire-platform-ec2-host.md)). 플랫폼은 관리 EKS에서 Argo CD로 돕니다. 이 root에는 ECR, 생성한 비밀값과 토큰, 플랫폼 pod가 읽는 SSM 파라미터, pod 역할, CodeBuild, 이미지 게시 역할만 남았습니다. 아래의 호스트 구성과 운영 절차는 기록으로 남겨 둡니다.
+
 platform@5cb1c2e의 운영 문서를 이 위치로 이관했다. [이관·인수 절차](../../../docs/platform-terraform-migration.md)를 먼저 확인한다. 아래 구성·비용·배포 보고는 원문 기준이며 이번 소스 이관에서 실제 AWS 상태를 재조회하지 않았다.
 
 Terraform은 이 저장소가 소유하고, 앱 이미지·재배포·kubeconfig helper는 platform에 남는다. 다음 두 checkout을 지정한 상태에서 예시를 실행한다.
