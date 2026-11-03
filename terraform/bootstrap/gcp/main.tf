@@ -12,6 +12,15 @@ resource "google_project_service" "required" {
   service            = each.value
   disable_on_destroy = false
 }
+resource "google_artifact_registry_repository" "apps" {
+  project       = var.project_id
+  location      = var.region
+  repository_id = "charlie-apps"
+  description   = "Application images for Charlie GKE workloads"
+  format        = "DOCKER"
+  mode          = "STANDARD_REPOSITORY"
+  depends_on    = [google_project_service.required]
+}
 resource "google_storage_bucket" "state" {
   name                        = var.state_bucket_name
   location                    = var.region
