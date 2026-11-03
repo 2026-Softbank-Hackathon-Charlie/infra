@@ -1,9 +1,9 @@
 # Charlie Infra
 
-## 팀 공용 Headlamp (배포 준비)
+## 팀 공용 Headlamp
 
-`https://headlamp.hopcharlie.dev`에서 개인 Cognito 로그인으로 두 EKS를 읽기 전용 조회하는 구성입니다.
-실제 배포는 별도 승인과 라이브 검증이 필요하며 GitOps의 `headlamp.enabled`는 기본 false입니다.
+`https://headlamp.hopcharlie.dev`의 한 화면에서 관리 EKS·워크로드 EKS·GKE를 전환합니다. EKS는 기존 개인 Cognito 로그인을 사용하며 GKE는 Google 로그인과 자동 토큰 갱신을 사용합니다. GKE 권한은 개인 IAM/RBAC를 따릅니다.
+통합 Google 로그인은 opt-in이며 [운영 절차](docs/headlamp-gke-google.md)에 따라 적용합니다. 실제 배포·검증 상태는 실행 기록과 구분하며 GitOps의 `headlamp.enabled`는 기본 false입니다.
 
 | 파일 | 설명 |
 | --- | --- |
@@ -32,6 +32,13 @@
 | [helm/charts/headlamp-gke-google/values.yaml](helm/charts/headlamp-gke-google/values.yaml) | OAuth 프록시 및 GKE 연결 기본값 |
 | [helm/charts/headlamp-gke-google/templates/web.yaml](helm/charts/headlamp-gke-google/templates/web.yaml) | GKE 전용 인증 프록시·서비스·Ingress |
 | [scripts/tests/test-headlamp-gke-google.py](scripts/tests/test-headlamp-gke-google.py) | Google 인증 프록시와 보안 경계 렌더링 검사 |
+| [helm/charts/headlamp-team/templates/google-auth-plugin.yaml](helm/charts/headlamp-team/templates/google-auth-plugin.yaml) | GKE 로그인 화면 플러그인 ConfigMap |
+| [helm/charts/headlamp-team/files/google-login.js](helm/charts/headlamp-team/files/google-login.js) | 기존 UI의 GKE 인증 경로만 Google 로그인으로 연결 |
+| [helm/charts/headlamp-gke-google/templates/proxy-config.yaml](helm/charts/headlamp-gke-google/templates/proxy-config.yaml) | Google access token 전달과 신뢰 헤더 재생성 설정 |
+| [scripts/prepare-headlamp-google.py](scripts/prepare-headlamp-google.py) | Google backend의 실제 GKE context 준비·안전한 기존 별칭 보존 |
+| [scripts/tests/test-headlamp-google-config.py](scripts/tests/test-headlamp-google-config.py) | GKE kubeconfig 준비·충돌·무자격 인증 경계 검사 |
+| [docs/adr/0028-unify-headlamp-cluster-ui.md](docs/adr/0028-unify-headlamp-cluster-ui.md) | 단일 UI와 클러스터별 인증 경로 결정 |
+| [docs/plans/2026-11-03-headlamp-unified.md](docs/plans/2026-11-03-headlamp-unified.md) | 세 클러스터 통합 구현·검증·배포 계획 |
 
 2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.
 

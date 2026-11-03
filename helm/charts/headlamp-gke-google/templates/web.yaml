@@ -9,6 +9,10 @@
 {{- end }}
 {{- $secret := required "oauth.existingSecret is required" .Values.oauth.existingSecret }}
 {{- $clusters := required "clustersSecret is required" .Values.clustersSecret }}
+{{- $cluster := required "clusterName is required" .Values.clusterName }}
+{{- if not (regexMatch `^[A-Za-z0-9][A-Za-z0-9._-]*$` $cluster) }}{{ fail "clusterName must be a safe path segment" }}{{ end }}
+{{- $clusterPattern := regexReplaceAll `\.` $cluster `\.` }}
+{{- $encodedCluster := $cluster | b64enc | replace "+" "-" | replace "/" "_" | replace "=" "" }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -26,6 +30,8 @@ spec:
   template:
     metadata:
       labels: {app.kubernetes.io/name: headlamp-gke-google}
+      annotations:
+        checksum/proxy-config: {{ include (print $.Template.BasePath "/proxy-config.yaml") . | sha256sum | quote }}
     spec:
       serviceAccountName: headlamp-gke-google
       automountServiceAccountToken: false
@@ -39,17 +45,16 @@ spec:
           args:
             - -kubeconfig=/etc/headlamp/clusters/config
             - -in-cluster=false
-            - -base-url=/gke
             - -listen-addr=127.0.0.1
             - -proxy-auth=true
             - -proxy-auth-token-header=X-Forwarded-Access-Token
             - -proxy-auth-group-header=X-Forwarded-Groups
           readinessProbe:
             exec:
-              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4466/gke/]
+              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4466/]
           livenessProbe:
             exec:
-              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4466/gke/]
+              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4466/]
             initialDelaySeconds: 10
           securityContext:
             runAsUser: 100
@@ -64,27 +69,19 @@ spec:
         - name: oauth2-proxy
           image: {{ $image | quote }}
           args:
-            - --provider=google
-            - --http-address=0.0.0.0:4180
-            - --upstream=http://127.0.0.1:4466
+            - --alpha-config=/etc/oauth2-proxy-config/alpha.yaml
             - --proxy-prefix=/gke/oauth2
+            - {{ printf "--api-route=^/clusters/%s(/|$)" $clusterPattern | quote }}
             - {{ printf "--redirect-url=https://%s/gke/oauth2/callback" .Values.host | quote }}
-            - "--scope=openid email profile https://www.googleapis.com/auth/cloud-platform"
-            - --prompt=consent
             - --authenticated-emails-file=/etc/oauth2-proxy/allowed-emails
-            - --pass-access-token=true
-            - --pass-authorization-header=true
-            - --pass-user-headers=true
-            - --pass-basic-auth=false
-            - --skip-auth-strip-headers=true
             - --reverse-proxy=true
             - {{ printf "--whitelist-domain=%s" .Values.host | quote }}
             - --request-logging=false
             {{- range $trusted }}
             - {{ printf "--trusted-proxy-ip=%s" . | quote }}
             {{- end }}
-            - --cookie-name=__Secure-headlamp_gke
-            - --cookie-path=/gke
+            - --cookie-name=__Host-headlamp_gke
+            - --cookie-path=/
             - --cookie-refresh=5m
             - --cookie-expire=168h
             - --cookie-secure=true
@@ -109,7 +106,10 @@ spec:
             limits: {cpu: 500m, memory: 256Mi}
           volumeMounts:
             - {name: oauth, mountPath: /etc/oauth2-proxy, readOnly: true}
+            - {name: proxy-config, mountPath: /etc/oauth2-proxy-config, readOnly: true}
       volumes:
+        - name: proxy-config
+          configMap: {name: headlamp-gke-google-proxy, defaultMode: 0444}
         - name: clusters
           secret: {secretName: {{ $clusters | quote }}, defaultMode: 0440}
         - name: oauth
@@ -137,16 +137,32 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/healthcheck-path: /ping
+    alb.ingress.kubernetes.io/actions.redirect-gke-root: >-
+      {"type":"redirect","redirectConfig":{"protocol":"HTTPS","port":"443","host":"#{host}","path":"/c/{{ $cluster }}/","query":"#{query}","statusCode":"HTTP_302"}}
+    alb.ingress.kubernetes.io/actions.redirect-gke-sign-out: >-
+      {"type":"redirect","redirectConfig":{"protocol":"HTTPS","port":"443","host":"#{host}","path":"/gke/oauth2/sign_out","query":"rd=%2F","statusCode":"HTTP_302"}}
 spec:
   ingressClassName: alb
   rules:
     - host: {{ .Values.host | quote }}
       http:
         paths:
-          - path: /gke
+          - path: {{ printf "/encoded-clusters/%s/clear-token" $encodedCluster | quote }}
+            pathType: Exact
+            backend:
+              service: {name: redirect-gke-sign-out, port: {name: use-annotation}}
+          - path: {{ printf "/clusters/%s" $cluster | quote }}
             pathType: Prefix
             backend:
               service: {name: headlamp-gke-google, port: {number: 80}}
+          - path: /gke/oauth2
+            pathType: Prefix
+            backend:
+              service: {name: headlamp-gke-google, port: {number: 80}}
+          - path: /gke
+            pathType: Prefix
+            backend:
+              service: {name: redirect-gke-root, port: {name: use-annotation}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

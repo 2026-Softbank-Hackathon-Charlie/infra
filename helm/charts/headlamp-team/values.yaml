@@ -13,6 +13,10 @@ clusters: []
 clustersSecret: headlamp-clusters
 # Workload installs only the same read-only RBAC; the web application runs on management.
 webEnabled: true
+# Opt in only when the matching Google-authenticated GKE API route is deployed.
+googleAuth:
+  enabled: false
+  clusterName: charlie-dev-gcp-workload
 resources:
   requests: {cpu: 100m, memory: 128Mi}
   limits: {cpu: 500m, memory: 512Mi}
