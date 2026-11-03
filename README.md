@@ -552,6 +552,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/tests/app-build.tftest.hcl](terraform/platform/aws/tests/app-build.tftest.hcl) | 빌드 설정·IAM 범위 mock 계약 검사 |
 | [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
 | [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
+| [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
 | [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform, frontend main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
@@ -561,19 +562,14 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/.terraform.lock.hcl](terraform/platform/aws/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
 | [terraform/platform/aws/README.md](terraform/platform/aws/README.md) | 관리 호스트 운영·앱 helper 연결 안내 |
 | [terraform/platform/aws/backend.tf](terraform/platform/aws/backend.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/host/Caddyfile](terraform/platform/aws/host/Caddyfile) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
 | [terraform/platform/aws/host/apps.yaml](terraform/platform/aws/host/apps.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
-| [terraform/platform/aws/host/compose.tailscale.yaml](terraform/platform/aws/host/compose.tailscale.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
-| [terraform/platform/aws/host/compose.yaml](terraform/platform/aws/host/compose.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
 | [terraform/platform/aws/host/envs.yaml](terraform/platform/aws/host/envs.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
-| [terraform/platform/aws/host/sync.sh](terraform/platform/aws/host/sync.sh) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
 | [terraform/platform/aws/main.tf](terraform/platform/aws/main.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
 | [terraform/platform/aws/outputs.tf](terraform/platform/aws/outputs.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
 | [terraform/platform/aws/state/.terraform.lock.hcl](terraform/platform/aws/state/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
 | [terraform/platform/aws/state/backend.tf](terraform/platform/aws/state/backend.tf) | 별도 state 버킷 root·기존 backend 보존 |
 | [terraform/platform/aws/state/main.tf](terraform/platform/aws/state/main.tf) | 별도 state 버킷 root·기존 backend 보존 |
 | [terraform/platform/aws/tf.sh](terraform/platform/aws/tf.sh) | 기존 계정 guard·Docker Terraform1.17.1 실행 입구 |
-| [terraform/platform/aws/user_data.sh.tftpl](terraform/platform/aws/user_data.sh.tftpl) | 기존 EC2 bootstrap 템플릿 |
 | [terraform/platform/aws/variables.tf](terraform/platform/aws/variables.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
 | [terraform/platform/aws/versions.tf](terraform/platform/aws/versions.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
 | [terraform/platform/aws/dns/.terraform.lock.hcl](terraform/platform/aws/dns/.terraform.lock.hcl) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |

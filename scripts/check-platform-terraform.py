@@ -9,11 +9,10 @@ import tempfile
 SOURCE = Path(__file__).resolve().parents[1] / 'terraform/platform/aws'
 ASSETS = (
     'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'image-publish.tf', 'tests/image-publish.tftest.hcl', 'outputs.tf', 'variables.tf', 'versions.tf',
-    '.terraform.lock.hcl', 'user_data.sh.tftpl',
+    '.terraform.lock.hcl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',
-    'host/Caddyfile', 'host/compose.yaml', 'host/compose.tailscale.yaml',
-    'host/sync.sh', 'host/envs.yaml', 'host/apps.yaml',
+    'host/envs.yaml', 'host/apps.yaml',
 )
 
 

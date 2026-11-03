@@ -1,33 +1,9 @@
-output "api_url" {
-  description = "Platform API (charlie login --server ...)."
-  value       = "https://${local.api_host}"
-}
-
-output "app_url" {
-  description = "User traffic through the gateway."
-  value       = "https://${local.app_host}"
-}
-
 output "ecr_repository_url" {
   value = aws_ecr_repository.platform.repository_url
 }
 
-output "console_url" {
-  description = "The console, served from this host (push-console.sh builds it)."
-  value       = "https://${local.console_host}"
-}
-
 output "console_repository_url" {
   value = aws_ecr_repository.console.repository_url
-}
-
-output "instance_id" {
-  value = aws_instance.host.id
-}
-
-output "shell" {
-  description = "Open a shell on the host (needs the Session Manager plugin)."
-  value       = "aws ssm start-session --region ${var.region} --target ${aws_instance.host.id}"
 }
 
 output "operator_tokens" {
