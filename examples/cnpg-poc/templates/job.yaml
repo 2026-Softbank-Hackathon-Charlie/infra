@@ -1,0 +1,95 @@
+{{- $owner := or (eq .Values.mode "migrate") (eq .Values.mode "recover-a") -}}
+{{- $namespace := ternary "charlie-db" "charlie-apps" $owner -}}
+{{- $role := ternary "owner" "runtime" $owner -}}
+{{- $name := printf "cnpg-%s-%s-%s" .Values.service .Values.mode .Values.runId -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+data:
+{{ (.Files.Glob "files/*").AsConfig | indent 2 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  labels:
+    app.kubernetes.io/part-of: cnpg-poc-checks
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: cnpg-poc-checks
+        {{- if ne .Values.mode "network-denied" }}
+        charlie.dev/cnpg-client: "true"
+        {{- end }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 26
+        runAsGroup: 26
+        fsGroup: 26
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: check
+          image: {{ .Values.image | quote }}
+          command: [/bin/sh, /checks/run.sh]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi, ephemeral-storage: 512Mi}
+            limits: {cpu: 250m, memory: 256Mi, ephemeral-storage: 2Gi}
+          env:
+            - {name: POC_MODE, value: {{ .Values.mode | quote }}}
+            - {name: POC_SERVICE, value: {{ .Values.service | quote }}}
+            - {name: POC_MARKER_LABEL, value: {{ .Values.markerLabel | quote }}}
+            - {name: PGTZ, value: UTC}
+            - {name: PGHOST, value: {{ printf "%s-rw.charlie-db.svc.cluster.local" .Values.clusterName | quote }}}
+            - {name: PGPORT, value: "5432"}
+            - {name: PGDATABASE, value: {{ printf "db_%s" .Values.service | quote }}}
+            - {name: PGCONNECT_TIMEOUT, value: "5"}
+            - {name: PGSSLMODE, value: verify-full}
+            - {name: PGSSLROOTCERT, value: /ca/ca.crt}
+            - {name: LC_ALL, value: C}
+            {{- if eq .Values.mode "recover-a" }}
+            - {name: POC_RESTORE_HOST, value: postgres-poc-restore-rw.charlie-db.svc.cluster.local}
+            - {name: POC_RESTORE_CA, value: /restore-ca/ca.crt}
+            {{- end }}
+          volumeMounts:
+            - {name: checks, mountPath: /checks, readOnly: true}
+            - {name: credentials, mountPath: /credentials, readOnly: true}
+            - {name: ca, mountPath: /ca, readOnly: true}
+            - {name: temporary, mountPath: /tmp}
+            {{- if eq .Values.mode "recover-a" }}
+            - {name: restore-ca, mountPath: /restore-ca, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: checks
+          configMap: {name: {{ $name }}}
+        - name: credentials
+          secret:
+            secretName: {{ printf "svc-%s-%s" .Values.service $role }}
+            defaultMode: 0440
+            items:
+              - {key: username, path: username}
+              - {key: password, path: password}
+        - name: ca
+          secret:
+            secretName: {{ printf "%s-ca" .Values.clusterName }}
+            items: [{key: ca.crt, path: ca.crt}]
+        - name: temporary
+          emptyDir: {sizeLimit: 2Gi}
+        {{- if eq .Values.mode "recover-a" }}
+        - name: restore-ca
+          secret:
+            secretName: postgres-poc-restore-ca
+            items: [{key: ca.crt, path: ca.crt}]
+        {{- end }}

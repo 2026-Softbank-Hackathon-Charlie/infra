@@ -1,0 +1,112 @@
+{{- if ne .Release.Namespace "charlie-db" }}
+{{- fail "cnpg-restore may only be rendered in charlie-db" }}
+{{- end }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-poc-restore
+  namespace: charlie-db
+  annotations:
+    charlie.dev/restore-run: {{ .Values.runId | quote }}
+spec:
+  instances: 1
+  imageName: {{ .Values.imageName | quote }}
+  imagePullPolicy: IfNotPresent
+  enableSuperuserAccess: false
+  primaryUpdateStrategy: supervised
+  bootstrap:
+    recovery:
+      source: frozen-source
+      database: db_a
+      owner: svc_a_owner
+      secret:
+        name: svc-a-owner
+      {{- if .Values.targetTime }}
+      recoveryTarget:
+        targetTime: {{ .Values.targetTime | quote }}
+      {{- end }}
+  externalClusters:
+    - name: frozen-source
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: {{ printf "postgres-poc-restore-input-%s" .Values.runId | quote }}
+          serverName: postgres-poc
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ printf "postgres-poc-restore-output-%s" .Values.runId | quote }}
+        serverName: postgres-poc-restore
+  storage:
+    storageClass: cnpg-gp3-retain
+    size: 20Gi
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+  certificates:
+    serverAltDNSNames:
+      - postgres-poc-restore-rw.charlie-db.svc
+      - postgres-poc-restore-rw.charlie-db.svc.cluster.local
+  postgresql:
+    parameters:
+      max_connections: "50"
+      archive_timeout: 5min
+      password_encryption: scram-sha-256
+    pg_hba:
+      - hostssl db_a svc_a_owner,svc_a_runtime all scram-sha-256
+      - hostssl db_b svc_b_owner,svc_b_runtime all scram-sha-256
+      - host all all all reject
+{{- range $store := list "input" "output" }}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgres-poc-restore-{{ $store }}-{{ $.Values.runId }}
+  namespace: charlie-db
+spec:
+  configuration:
+    destinationPath: {{ printf "s3://%s/restore/%s/%s/" $.Values.backup.bucketName $.Values.runId $store | quote }}
+    s3Credentials:
+      inheritFromIAMRole: true
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+  {{- if eq $store "output" }}
+  retentionPolicy: 7d
+  {{- end }}
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_REGION
+        value: {{ $.Values.backup.region | quote }}
+      - name: AWS_DEFAULT_REGION
+        value: {{ $.Values.backup.region | quote }}
+    resources:
+      {{- toYaml $.Values.backupResources | nindent 6 }}
+{{- end }}
+{{- range $service := list "a" "b" }}
+{{- range $role := list "owner" "runtime" }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: postgres-poc-restore-svc-{{ $service }}-{{ $role }}
+  namespace: charlie-db
+spec:
+  cluster:
+    name: postgres-poc-restore
+  name: svc_{{ $service }}_{{ $role }}
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: false
+  inherit: false
+  inRoles: []
+  connectionLimit: {{ if eq $role "runtime" }}10{{ else }}3{{ end }}
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: svc-{{ $service }}-{{ $role }}
+{{- end }}
+{{- end }}

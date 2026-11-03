@@ -1,0 +1,32 @@
+# The namespace is created by the workload baseline, never by this chart.
+imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:64abc98a4387361afd6821a3a99f975763bbd87bbdde9449e75ad6002528a318
+backup:
+  # Supply the non-secret cnpg_bucket_name Terraform output at render time.
+  # An empty value deliberately prevents deployment to an invented bucket.
+  bucketName: ""
+  region: ap-northeast-2
+  retentionPolicy: 7d
+  # Six fields; UTC 18:00 is 03:00 KST. Create the initial backup explicitly.
+  schedule: "0 0 18 * * *"
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+backupResources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+quota:
+  requests.cpu: "3"
+  requests.memory: 6Gi
+  limits.cpu: "6"
+  limits.memory: 12Gi
+  pods: "12"
+  persistentvolumeclaims: "4"
+  requests.storage: 80Gi

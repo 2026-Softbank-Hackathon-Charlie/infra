@@ -24,6 +24,8 @@ override_data {
     ssm_bridge_security_group_id            = "sg-0123456789abcdef3"
     argocd_management_role_arn              = "arn:aws:iam::123456789012:role/argocd"
     argocd_deploy_role_arns                 = { management = "arn:aws:iam::123456789012:role/argocd-management-deploy", workload = "arn:aws:iam::123456789012:role/argocd-workload-deploy" }
+    cnpg_source_role_arn                    = "arn:aws:iam::123456789012:role/charlie-dev-cnpg-source"
+    cnpg_restore_role_arn                   = "arn:aws:iam::123456789012:role/charlie-dev-cnpg-restore"
   } }
 }
 variables {
@@ -36,5 +38,19 @@ run "foundation_contract" {
   assert {
     condition     = output.target.id == "aws-dev-workload" && output.target.subnet_ids_by_az == data.terraform_remote_state.foundation.outputs.workload_subnet_ids_by_az && output.target.argocd_role_arn == data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["workload"] && output.target.ssm_bridge_instance_id == "i-0123456789abcdef0" && output.target.additional_operator_principal_arns == var.additional_operator_principal_arns
     error_message = "Consume only the correct foundation target contract, without cross-root state."
+  }
+
+  assert {
+    condition = (
+      length(aws_eks_pod_identity_association.cnpg) == 2 &&
+      alltrue([for association in aws_eks_pod_identity_association.cnpg :
+        association.cluster_name == module.eks.name && association.namespace == "charlie-db" && !association.disable_session_tags
+      ]) &&
+      aws_eks_pod_identity_association.cnpg["source"].service_account == "postgres-poc" &&
+      aws_eks_pod_identity_association.cnpg["source"].role_arn == data.terraform_remote_state.foundation.outputs.cnpg_source_role_arn &&
+      aws_eks_pod_identity_association.cnpg["restore"].service_account == "postgres-poc-restore" &&
+      aws_eks_pod_identity_association.cnpg["restore"].role_arn == data.terraform_remote_state.foundation.outputs.cnpg_restore_role_arn
+    )
+    error_message = "Each CNPG service account must receive only its source/restore role on the workload cluster, with trust tags enabled."
   }
 }

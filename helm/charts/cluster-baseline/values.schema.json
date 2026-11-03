@@ -58,6 +58,14 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "cnpg": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {"type": "boolean"}
+          }
         }
       }
     },
@@ -126,5 +134,22 @@
         }
       }
     }
-  }
+  },
+  "allOf": [{
+    "if": {
+      "required": ["networkPolicy"],
+      "properties": {
+        "networkPolicy": {
+          "required": ["cnpg"],
+          "properties": {"cnpg": {"properties": {"enabled": {"const": true}}}}
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "applicationNamespace": {"const": "charlie-apps"},
+        "networkPolicy": {"properties": {"enabled": {"const": true}}}
+      }
+    }
+  }]
 }

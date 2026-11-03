@@ -514,3 +514,53 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/platform/aws/dns/backend.tf](terraform/platform/aws/dns/backend.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 | [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 | [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+
+## AWS CNPG PoC — 코드 준비, 실제 배포 전
+
+단일 PostgreSQL과 서비스 A/B DB·Role, 전용 S3 백업·수동 복구 구성을 제공합니다.
+[승인된 계획](docs/plans/cnpg-aws-poc.md)과 [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+새 Argo 앱은 수동 상태이며 root 전체 sync·관리 플랫폼 DB 변경은 하지 않습니다.
+실제 백업 버킷 입력이 없으면 DB 차트 렌더링은 실패합니다. 코드·로컬 검사 성공은 배포나 RPO/RTO 달성 증명이 아닙니다.
+
+| 파일 | 설명 |
+| --- | --- |
+| [clusters/aws-dev-workload/values/cert-manager.yaml](clusters/aws-dev-workload/values/cert-manager.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/cloudnative-pg.yaml](clusters/aws-dev-workload/values/cloudnative-pg.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/cnpg-poc.yaml](clusters/aws-dev-workload/values/cnpg-poc.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/plugin-barman-cloud.yaml](clusters/aws-dev-workload/values/plugin-barman-cloud.yaml) | CNPG 구현·검증·운영 기록 |
+| [docs/adr/0005-scope-aws-cnpg-poc.md](docs/adr/0005-scope-aws-cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/adr/0006-back-up-cnpg-poc-with-barman.md](docs/adr/0006-back-up-cnpg-poc-with-barman.md) | CNPG 구현·검증·운영 기록 |
+| [docs/plans/cnpg-aws-poc.md](docs/plans/cnpg-aws-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/runbooks/cnpg-poc.md](docs/runbooks/cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [examples/cnpg-initial-backup.yaml.example](examples/cnpg-initial-backup.yaml.example) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/Chart.yaml](examples/cnpg-poc/Chart.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/fingerprint.sql](examples/cnpg-poc/files/fingerprint.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/grants.sql](examples/cnpg-poc/files/grants.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/marker.sql](examples/cnpg-poc/files/marker.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/migrate.sql](examples/cnpg-poc/files/migrate.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/run.sh](examples/cnpg-poc/files/run.sh) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/verify.sql](examples/cnpg-poc/files/verify.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/templates/job.yaml](examples/cnpg-poc/templates/job.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/values.schema.json](examples/cnpg-poc/values.schema.json) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/values.yaml](examples/cnpg-poc/values.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/Chart.yaml](examples/cnpg-restore/Chart.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/templates/restore.yaml](examples/cnpg-restore/templates/restore.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/values.schema.json](examples/cnpg-restore/values.schema.json) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/values.yaml](examples/cnpg-restore/values.yaml) | CNPG 수동 검증·복원 fixture |
+| [helm/charts/cnpg-poc/Chart.yaml](helm/charts/cnpg-poc/Chart.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/_helpers.tpl](helm/charts/cnpg-poc/templates/_helpers.tpl) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/backups.yaml](helm/charts/cnpg-poc/templates/backups.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/cluster.yaml](helm/charts/cnpg-poc/templates/cluster.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/databases.yaml](helm/charts/cnpg-poc/templates/databases.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/network.yaml](helm/charts/cnpg-poc/templates/network.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/resources.yaml](helm/charts/cnpg-poc/templates/resources.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/values.schema.json](helm/charts/cnpg-poc/values.schema.json) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/values.yaml](helm/charts/cnpg-poc/values.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/cnpg-poc-applications.yaml.example](helm/cnpg-poc-applications.yaml.example) | CNPG 구현·검증·운영 기록 |
+| [scripts/check-cnpg.py](scripts/check-cnpg.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/cnpg-freeze-archive.py](scripts/cnpg-freeze-archive.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/tests/test-cnpg-freeze.py](scripts/tests/test-cnpg-freeze.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/tests/test-cnpg-jobs.py](scripts/tests/test-cnpg-jobs.py) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/foundation/cnpg.tf](terraform/environments/aws/dev/foundation/cnpg.tf) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl](terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/workload/identity.tf](terraform/environments/aws/dev/workload/identity.tf) | CNPG 구현·검증·운영 기록 |

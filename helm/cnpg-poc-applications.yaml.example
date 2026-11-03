@@ -1,0 +1,145 @@
+# Register ONLY after the reviewed workload baseline and Sealed Secrets prerequisites.
+# Replace every REPLACE_WITH_* value in a protected, local copy after execution approval.
+# This example never enables root/child automatic sync and never requests an operation.
+# Pin all Git sources to the same reviewed 40-character commit, never main.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: charlie-cnpg-poc-workload
+  namespace: argocd
+spec:
+  description: Manual AWS workload CNPG PoC; excludes the management platform database
+  sourceRepos:
+    - https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
+    - https://cloudnative-pg.github.io/charts
+    - https://charts.jetstack.io
+  destinations:
+    - server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+      namespace: cnpg-system
+    - server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+      namespace: cert-manager
+    - server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+      namespace: charlie-db
+  clusterResourceWhitelist:
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+    - {group: admissionregistration.k8s.io, kind: MutatingWebhookConfiguration}
+    - {group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration}
+    - {group: storage.k8s.io, kind: StorageClass}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Secret}
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: "", kind: Pod}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: cert-manager.io, kind: Issuer}
+    - {group: cert-manager.io, kind: Certificate}
+    - {group: postgresql.cnpg.io, kind: Cluster}
+    - {group: postgresql.cnpg.io, kind: Database}
+    - {group: postgresql.cnpg.io, kind: DatabaseRole}
+    - {group: postgresql.cnpg.io, kind: ScheduledBackup}
+    - {group: barmancloud.cnpg.io, kind: ObjectStore}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-workload-cnpg-cert-manager
+  namespace: argocd
+spec:
+  project: charlie-cnpg-poc-workload
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: v1.21.3
+      helm:
+        releaseName: cert-manager
+        valueFiles:
+          - $values/clusters/aws-dev-workload/values/cert-manager.yaml
+    - repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
+      targetRevision: "REPLACE_WITH_REVIEWED_COMMIT_SHA"
+      ref: values
+  destination:
+    server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+    namespace: cert-manager
+  syncPolicy:
+    syncOptions: [CreateNamespace=false, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-workload-cloudnative-pg
+  namespace: argocd
+spec:
+  project: charlie-cnpg-poc-workload
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.29.1
+      helm:
+        releaseName: cloudnative-pg
+        valueFiles:
+          - $values/clusters/aws-dev-workload/values/cloudnative-pg.yaml
+    - repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
+      targetRevision: "REPLACE_WITH_REVIEWED_COMMIT_SHA"
+      ref: values
+  destination:
+    server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+    namespace: cnpg-system
+  syncPolicy:
+    syncOptions: [CreateNamespace=false, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-workload-plugin-barman-cloud
+  namespace: argocd
+spec:
+  project: charlie-cnpg-poc-workload
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: plugin-barman-cloud
+      targetRevision: 0.8.1
+      helm:
+        releaseName: plugin-barman-cloud
+        valueFiles:
+          - $values/clusters/aws-dev-workload/values/plugin-barman-cloud.yaml
+    - repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
+      targetRevision: "REPLACE_WITH_REVIEWED_COMMIT_SHA"
+      ref: values
+  destination:
+    server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+    namespace: cnpg-system
+  syncPolicy:
+    syncOptions: [CreateNamespace=false, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-workload-cnpg-poc
+  namespace: argocd
+spec:
+  project: charlie-cnpg-poc-workload
+  source:
+    repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
+    targetRevision: "REPLACE_WITH_REVIEWED_COMMIT_SHA"
+    path: helm/charts/cnpg-poc
+    helm:
+      releaseName: cnpg-poc
+      valueFiles:
+        - ../../../clusters/aws-dev-workload/values/cnpg-poc.yaml
+      parameters:
+        - name: backup.bucketName
+          value: REPLACE_WITH_CNPG_BACKUP_BUCKET
+  destination:
+    server: https://REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT
+    namespace: charlie-db
+  syncPolicy:
+    syncOptions: [CreateNamespace=false, ServerSideApply=true]

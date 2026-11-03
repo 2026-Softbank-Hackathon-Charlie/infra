@@ -1,0 +1,111 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-poc-default-deny
+  namespace: charlie-db
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-poc-dns
+  namespace: charlie-db
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-poc-database
+  namespace: charlie-db
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: In
+        values: [postgres-poc, postgres-poc-restore]
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [charlie-apps, charlie-db]
+          podSelector:
+            matchLabels:
+              charlie.dev/cnpg-client: "true"
+      ports:
+        - {protocol: TCP, port: 5432}
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: In
+                values: [postgres-poc, postgres-poc-restore]
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+              app.kubernetes.io/instance: cloudnative-pg
+      ports:
+        - {protocol: TCP, port: 8000}
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: In
+                values: [postgres-poc, postgres-poc-restore]
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    # The EKS API and S3 use HTTPS. This is egress-only and does not publish DB.
+    - ports:
+        - {protocol: TCP, port: 443}
+    # EKS Pod Identity agent; EC2 IMDS (169.254.169.254) is not permitted.
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - {protocol: TCP, port: 80}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-poc-local-clients
+  namespace: charlie-db
+spec:
+  podSelector:
+    matchLabels:
+      charlie.dev/cnpg-client: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: In
+                values: [postgres-poc, postgres-poc-restore]
+      ports:
+        - {protocol: TCP, port: 5432}
