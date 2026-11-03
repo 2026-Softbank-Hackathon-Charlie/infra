@@ -31,7 +31,10 @@ the "settings" volume. Call with (dict "root" $ "fetch" "api|gateway|postgres").
     - {name: AWS_REGION, value: {{ .root.Values.awsRegion | quote }}}
     - {name: PREFIX, value: {{ .root.Values.parameterPrefix | quote }}}
     - {name: FETCH, value: {{ .fetch | quote }}}
+    {{- if eq .fetch "api" }}
+    # Only the API reads the GitHub App secrets; other pods keep their spec.
     - {name: GITHUB_APP_ID, value: {{ .root.Values.github.appId | quote }}}
+    {{- end }}
     - {name: HOME, value: /tmp}
   securityContext:
     {{- include "hopcharlie.containerSecurity" . | nindent 4 }}

@@ -1,7 +1,7 @@
 # 0024. 플랫폼과 콘솔 이미지는 각 저장소의 GitHub Actions가 게시하고 infra PR을 연다
 
 - 날짜: 2026-11-03
-- 상태: 제안
+- 상태: 제안. infra PR과 사람 머지 부분은 [ADR 0025](0025-pin-images-on-infra-main.md)가 대체한다
 - 관련 ADR: [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md), [ADR 0022](0022-platform-app-build.md)
 
 ## 배경과 제약

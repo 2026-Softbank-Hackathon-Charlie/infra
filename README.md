@@ -490,7 +490,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 관리 클러스터의 `charlie-platform` namespace에서 플랫폼 API, 트래픽 게이트웨이, 콘솔, PostgreSQL이 돕니다. Argo CD Application `charlie-management-hopcharlie-platform`이 배포합니다. 비밀값은 SSM `/hopcharlie/*`에만 있고, 각 pod의 init 컨테이너가 Pod Identity로 읽습니다. Pod Identity 역할과 연결, ECR, SSM 파라미터는 이 레포의 `terraform/platform/aws`가 관리하고, ACM 인증서와 Cloudflare 레코드는 별도 root인 `terraform/platform/aws/dns`가 관리합니다. 결정 이유와 적용 순서는 [ADR 0016](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md)에 있습니다.
 
-새 이미지를 배포할 때는 values의 이미지와 [helm/images.lock.json](helm/images.lock.json)의 digest를 함께 바꾸는 PR을 올립니다.
+플랫폼과 콘솔 이미지는 platform, frontend 저장소의 workflow가 main push마다 게시하고, values의 이미지와 [helm/images.lock.json](helm/images.lock.json)의 digest를 함께 바꾸는 커밋을 이 저장소 main에 바로 넣습니다([ADR 0025](docs/adr/0025-pin-images-on-infra-main.md)). 다른 이미지는 지금처럼 두 곳을 함께 바꾸는 PR을 올립니다.
 
 GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `deploy`)은 [ADR 0021](docs/adr/0021-configure-platform-github-app-deploy.md)을 따릅니다. GitHub App의 private key와 webhook secret은 SSM에 먼저 넣어야 합니다([절차](terraform/platform/aws/README.md#설정-바꾸기)).
 
@@ -551,6 +551,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/app-build.tf](terraform/platform/aws/app-build.tf) | 전용 CodeBuild 프로젝트와 최소 IAM 정책 |
 | [terraform/platform/aws/tests/app-build.tftest.hcl](terraform/platform/aws/tests/app-build.tftest.hcl) | 빌드 설정·IAM 범위 mock 계약 검사 |
 | [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
+| [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
 | [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform, frontend main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
