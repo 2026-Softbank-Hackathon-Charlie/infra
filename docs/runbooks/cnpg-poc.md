@@ -35,6 +35,10 @@ backend 없는 Terraform validate/mock, fake CI/프로브, Helm 렌더링·고�
 4. workload baseline/StorageClass·Sealed Secrets가 이미 설치됐다면 소유권과 diff를 먼저 확인한다. 준비되지 않았다면 승인한 해당 앱만 설치한다. EBS CSI·Pod Identity agent는 재설치하지 않는다.
 5. 기존 서비스 Pod/PVC 식별·Ready 상태와 제외 앱 spec/operation을 전후 비교할 수 있게 메타데이터를 기록한다. 다른 사용자의 터널·operation을 종료하지 않는다.
 
+기존 설치를 재사용하는 경우에는 전제를 다시 구분한다. 2026-11-03 후속 실행은 기존 `charlie-workload-cloudnative-pg` Operator 앱과 `charlie-cnpg-poc-workload` Project를 보존하고 관리 플랫폼 앱의 기존 자동 Sync를 유지하는 수정 계획을 리뷰·승인받았다. 이 예외가 새 root/대상 앱 자동화나 다른 환경의 실행 승인을 뜻하지 않는다. 자동 플랫폼의 정상 stateless Pod 교체는 이번 작업과 구분하며, 관리 DB/PVC·root 설정과 기존 Operator를 보호한다.
+
+기존 앱의 실제 Helm releaseName/valueFiles와 override 존재·키를 먼저 확인한다. 미검토 inline 값·fileParameter가 있으면 실행하지 않는다. 앱 변경은 UID·resourceVersion·예상 source/destination/syncPolicy/operation을 검사하는 조건부 갱신으로 수행하고 충돌 시 덮어쓰지 않는다. 신규 앱은 create-only이며 이미 있는 Operator·Project를 예제 전체 apply로 덮어쓰지 않는다.
+
 ## Terraform과 선행 addon
 
 기존 공유 입력/wrapper·선택 CI를 사용해 **foundation plan 검토/apply → workload plan 검토/apply** 순서로만 적용한다. account/bootstrap/management/all-runtime은 필요하지 않다. 기존 CI AdministratorAccess/OIDC 정책은 변경하지 않는다. 로컬 apply는 CI foundation 삭제 guard를 자동 실행하지 않으므로 같은 plan의 삭제·교체·guard 검토를 별도로 완료해야 한다.
@@ -48,6 +52,8 @@ foundation의 비밀 아닌 출력은 `cnpg_bucket_name`, `cnpg_source_role_arn`
 3. [수동 Application 예제](../../helm/cnpg-poc-applications.yaml.example)를 보호된 로컬 복사본에서 정확한 workload endpoint·검토 commit·전용 버킷 이름으로 치환한다. `REPLACE_WITH_*`가 남으면 등록하지 않는다. 새 AppProject/Application만 생성하고 **root를 sync하지 않는다**.
 4. `charlie-workload-cnpg-cert-manager` → `charlie-workload-cloudnative-pg` → `charlie-workload-plugin-barman-cloud`를 하나씩 수동 sync하고 각각 API/CRD/컨트롤러/인증서 준비를 기다린다. 고정 chart version·Git revision과 `prune=false`, Force/Replace 없음, 기본 Hook 전략을 확인한다. 새 앱의 `CreateNamespace=false`와 automation 없음은 유지한다.
 5. 아직 DB 앱은 sync하지 않는다. 다음의 자격 증명 준비를 먼저 끝낸다.
+
+이미 Operator·Project가 준비된 환경에서는 3번 예제에서 이 두 문서를 제외하고, 호환성을 확인한 기존 자원을 그대로 사용한다. 미존재하는 cert-manager/plugin/DB 앱 세 개만 등록하며 4번에서 기존 Operator Sync도 생략한다. baseline이 수동 생성한 Namespace/StorageClass를 인수해야 한다면 변경할 추적 annotation·관리 필드와 설정 불변 조건을 별도로 검토·승인받는다. Argo 추적 ID는 cluster-scoped 자원에도 Application destination namespace를 포함할 수 있으므로 실제 관리 주체·GVK·이름·UID로 확인한다.
 
 ## 자격 증명과 TLS
 

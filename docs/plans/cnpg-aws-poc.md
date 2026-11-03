@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-02
 - 재검토: 2026-11-03 — 저장소·운영 기록 업데이트 반영. 후속 승인한 읽기 전용 배포 확인 결과는 11절에 기록
-- 상태: 개발 계획 승인 — 사용자 “시작해줘”에 따라 코드·로컬 검증 진행. 실제 배포·Secret 생성은 미승인·미실행
+- 상태: 코드 병합·Terraform 기반·workload baseline 적용 완료. PoC DB·신규 자격 증명·나머지 addon 설치와 데이터 검증은 미실행
 - 작업 분류: 영향이 크거나 불확실한 작업. 데이터 영속성, IAM, 네트워크, GitOps 소유권 및 여러 구성 요소의 연계 변경을 포함한다.
 - 사용자 확정 조건: 해커톤 PoC, 실제 개인정보·운영 데이터가 아닌 현실적인 합성 서비스 데이터 사용, AWS 워크로드 클러스터 우선.
 - 브랜치 조건: 개발은 `codex` prefix 없는 `feat/aws-cnpg-poc`에서 진행. 기존 작업 파일은 원래 checkout에 보존하고 별도 worktree에서 로컬 `origin/main@82b6617`로 fast-forward해 구현한다. 원격 조회·merge·배포 실행과 구분한다.
@@ -253,6 +253,16 @@ Secret 값·DB 데이터·Pod 로그·SSM Parameter 값·state/plan은 읽지 �
 - 계획 대비 범위 변경 없음. 구현 세부사항으로 Barman HeadBucket에 필요한 **전용 버킷의 목록 메타데이터 권한**을 허용하되 객체 prefix 경계는 유지했다. 선택 복구 Job은 synthetic app schema에만 한정하고 2GiB 임시 disk와 사전 write fence를 요구한다. helper는 단일 timeline·완료 full backup·객체당5GiB 이하에 한정하며 자동 정리/기존 prefix 덮어쓰기를 거부한다.
 - ADR0005/0006은 개발 승인에 따른 채택으로 갱신했으며 실제 설치/백업/복구 완료로 표현하지 않는다. 기존 관리 플랫폼·계정 CI 권한·global Argo 자동화·노드·SG·VPC·state 주소는 변경하지 않았다.
 - 남은 검증: 현재 배포 commit/용량·승인 범위 재확인, 실제 admission/CEL, credentials/CA·Pod Identity 주입·S3 접근·네트워크·SQL 동작, 백업/새 PVC 복원 및 RPO/RTO. 이 실행은 별도 승인 후 수행한다.
+
+## 13. Terraform 및 workload baseline 적용 — 2026-11-03
+
+- PR #17은 CI 통과 후 `6e34e8916586961ad977dcf5ee44371111017588`로 병합했다. 별도 실행 승인으로 foundation의 CNPG 전용 S3 관련 4개·IAM Role 2개·Role Policy 2개를 생성하고, 후속 승인으로 workload의 source/restore Pod Identity 연결 2개를 생성했다. 두 stack 모두 적용 후 재plan은 변경 없음이었으며 기존 리소스 변경·삭제·교체 작업은 없었다. 관측 drift의 state 반영도 실행 승인에 포함했다. 원본 state/plan을 Git·문서·CI artifact에 저장하지 않았고 비공개 임시 plan은 제거했다.
+- 후속 읽기 점검에서 기존 Operator(`charlie-workload-cloudnative-pg`, chart0.29.1/operator1.30.1)와 `charlie-cnpg-poc-workload` Project를 확인했다. `86af29970d7d6ddde5150e5edc9f8c9a1856053f`에는 앱 namespace 전체 감시가 반영돼 있다. 기존 Operator·Project는 재설치·변경·재귀속하지 않는다. 관리 플랫폼 앱에 켜진 자동 Sync도 그대로 보존한다.
+- 이 전제 변경을 새 `plan-reviewer`가 검토했다. Helm override 확인, UID/resourceVersion 조건부 갱신, 자동 플랫폼의 정상 변화와 보호 대상 구분, 비밀 보관 게이트에 관한 MAJOR 4개를 반영한 뒤 최종 GREEN, 미해결 CRITICAL/MAJOR 0 판정을 받았다. 사용자는 수정 계획과 아래 baseline 실행을 승인했다. 이 승인은 신규 키·암호 생성이나 다음 addon·DB 설치를 포함하지 않는다.
+- baseline 앱만 `86af29970d7d6ddde5150e5edc9f8c9a1856053f`로 고정하고 조건부 수동 Sync했다. Namespace `observability`, `charlie-apps`, `charlie-db`, `cert-manager`와 NetworkPolicy 2개·ResourceQuota·LimitRange를 생성했다. 기존 `gp3`·`cnpg-system`에는 Argo 관리 추적 정보를 연결했고 기존 UID와 설정은 유지했다. prune/force/replace·root Sync·다른 앱 변경 명령은 실행하지 않았다.
+- 결과는 Succeeded/Synced/Healthy였으며 렌더된 10개 자원과 live 설정·추적 정보를 확인했다. 최초 검증에서 cluster-scoped 추적 ID의 namespace가 비어 있을 것으로 가정해 중단했지만, 실제 Argo가 Application destination namespace를 넣는 것을 읽기 전용으로 확인해 검증 기준만 수정했다. 추가 Sync/리소스 변경은 없었다. 기존 Operator·Project·Sealed Secrets 앱 설정도 이전 점검과 동일했다.
+- 상태/소유권/설정만 조회했으며 Secret 값·DB 데이터·Pod 로그를 읽지 않았다. 해당 점검의 임시 SSM 연결은 종료 확인했고 임시 kubeconfig를 제거했다. 문서 보완 브랜치는 `chore/cnpg-poc-deployment-status`이며 원래 checkout의 다른 변경은 보존했다.
+- 남은 단계: 봉인키·암호 보관/인수 방식 확정 및 실행 승인 → workload Sealed Secrets 준비 → 기존 Operator·Project를 보존하면서 미존재하는 cert-manager/plugin/DB 앱 등록·단계별 Sync → 신규 인증정보/CA 준비 → DB 설치·제어면 상태 확인. SQL·실제 백업·복원·RPO/RTO는 별도의 시험 승인·검증 대상이다. 기존 ADR0005/0006을 설명 보완했으며 새 ADR은 추가하지 않았다.
 
 ## 관련 자료
 
