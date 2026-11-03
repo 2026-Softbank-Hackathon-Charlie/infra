@@ -1,0 +1,18 @@
+image: ghcr.io/headlamp-k8s/headlamp:v0.46.0@sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75
+host: headlamp.hopcharlie.dev
+albGroup: charlie-management-external
+oidc:
+  issuerURL: ""
+  clientID: ""
+  existingSecret: headlamp-oidc
+  viewerGroup: headlamp:team-viewers
+# Populate with real EKS endpoints and CAs, never the local SSM tunnel addresses.
+clusters: []
+# Kubeconfig Secret created by scripts/prepare-headlamp.py --install-secret. Headlamp
+# exchanges tokens with each kubeconfig user's OIDC settings, which need the client secret.
+clustersSecret: headlamp-clusters
+# Workload installs only the same read-only RBAC; the web application runs on management.
+webEnabled: true
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}

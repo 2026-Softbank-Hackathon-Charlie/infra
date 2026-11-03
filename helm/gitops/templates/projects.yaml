@@ -17,6 +17,10 @@ spec:
     - https://bitnami.github.io/sealed-secrets
     - https://argoproj.github.io/argo-helm
   destinations:
+    {{- if $.Values.headlamp.enabled }}
+    - server: {{ $target.endpoint | quote }}
+      namespace: headlamp
+    {{- end }}
     - server: {{ $target.endpoint | quote }}
       namespace: kube-system
     - server: {{ $target.endpoint | quote }}

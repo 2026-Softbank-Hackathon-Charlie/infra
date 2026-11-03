@@ -1,6 +1,7 @@
 {
   "repoURL": "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git",
   "revision": "main",
+  "headlamp": {"enabled": false},
   "targets": {},
   "addons": {
     "management": [

@@ -1,0 +1,10 @@
+# Remains disabled in GitOps until Cognito, EKS OIDC, the Secret and real values exist.
+webEnabled: true
+host: headlamp.hopcharlie.dev
+albGroup: charlie-management-external
+oidc:
+  issuerURL: ""
+  clientID: ""
+  existingSecret: headlamp-oidc
+  viewerGroup: headlamp:team-viewers
+clusters: []

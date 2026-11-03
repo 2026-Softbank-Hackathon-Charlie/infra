@@ -76,7 +76,7 @@ def tunnel(p, aid, kind, number, profile, path):
     endpoint = urlsplit(cluster['endpoint'])
     host = endpoint.hostname
     require(cluster['arn'] == arn and endpoint.scheme == 'https' and host
-            and endpoint.netloc == host and endpoint.path in ('', '/')
+            and endpoint.netloc.lower() == host and endpoint.path in ('', '/')
             and not endpoint.query and not endpoint.fragment,
             'Unexpected EKS identity or endpoint.')
     ca = cluster['certificateAuthority']['data']
@@ -126,6 +126,9 @@ def tunnel(p, aid, kind, number, profile, path):
     parameters = json.dumps({'host': [host], 'portNumber': ['443'], 'localPortNumber': [str(number)]})
     command = aws('ssm', 'start-session', '--target', bridge, '--document-name',
                   'AWS-StartPortForwardingSessionToRemoteHost', '--parameters', parameters)
+    if os.name == 'nt':
+        # subprocess quotes JSON arguments correctly for Windows executables.
+        raise SystemExit(subprocess.call(command))
     os.execvpe(command[0], command, os.environ.copy())
 
 
@@ -160,6 +163,8 @@ def argo(p, aid, number, path):
     print(f'Argo CD: https://localhost:{number} (Ctrl+C to stop). Keep make aws-tunnel running.', flush=True)
     command = [*base, '-n', 'argocd', 'port-forward', '--address', '127.0.0.1',
                'svc/argocd-server', f'{number}:443']
+    if os.name == 'nt':
+        raise SystemExit(subprocess.call(command))
     os.execvpe(command[0], command, os.environ.copy())
 
 
