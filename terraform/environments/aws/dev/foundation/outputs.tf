@@ -38,3 +38,15 @@ output "loki_role_arn" {
   description = "Loki Pod Identity 연결에 쓸 역할"
   value       = aws_iam_role.loki.arn
 }
+output "cnpg_bucket_name" {
+  description = "CNPG PoC source/ 및 restore/ 백업용 전용 S3 버킷 이름"
+  value       = aws_s3_bucket.cnpg.bucket
+}
+output "cnpg_source_role_arn" {
+  description = "workload charlie-db/postgres-poc Pod Identity 역할"
+  value       = aws_iam_role.cnpg["source"].arn
+}
+output "cnpg_restore_role_arn" {
+  description = "source archive 읽기와 restore/ 작업만 허용한 복원 Pod Identity 역할"
+  value       = aws_iam_role.cnpg["restore"].arn
+}

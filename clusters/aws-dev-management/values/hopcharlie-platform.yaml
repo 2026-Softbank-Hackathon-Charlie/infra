@@ -1,8 +1,8 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:5cb1c2e@sha256:ba52b02ba4e113093b30b0e5459581b5b8fe93c49b618b3bb4404524a526834b",
-    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:5712152@sha256:9916fa9c53377233c486e02711597bbefe26f779a3c64aab6f7b19c6cbb102f8",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:b39d913@sha256:e61a30642946cc9775667c6f4f440e1b3adad7ad3285007293126445c59a9503",
+    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:ceeb50f@sha256:8e22208373af7fbfc42bdf9f0a36bda2d3693faeb14b59dee814491702f297bd",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   },
@@ -16,5 +16,15 @@
   "ingress": {
     "enabled": true,
     "domain": "hopcharlie.dev"
+  },
+  "appDomain": "hopcharlie.dev",
+  "github": {
+    "appId": "5589608",
+    "installationId": "178050051"
+  },
+  "deploy": {
+    "builder": "codebuild",
+    "codebuildProject": "hopcharlie-app-build",
+    "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com"
   }
 }

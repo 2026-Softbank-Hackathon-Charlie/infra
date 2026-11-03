@@ -5,9 +5,10 @@ metadata:
   labels:
     {{- include "hopcharlie.labels" "platform" | nindent 4 }}
 # The IAM role comes from an EKS Pod Identity association on this
-# ServiceAccount (platform repo, deploy/aws). It reads only the parameters
-# under parameterPrefix and what the security view needs. The pods do not call
-# this cluster's API, so no Kubernetes token is mounted.
+# ServiceAccount (terraform/platform/aws). It reads only the parameters under
+# parameterPrefix and what the security view needs. Only the API pod mounts a
+# Kubernetes token, and only with deploy.builder: the deploy executor asks
+# Argo CD to refresh Applications (the Role is in helm/charts/hopcharlie-apps).
 automountServiceAccountToken: false
 ---
 apiVersion: v1
@@ -24,7 +25,9 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
-    #                   apps.yaml, kube/<cluster> (one kubeconfig per cluster)
+    #                   apps.yaml, kube/<cluster> (one kubeconfig per cluster),
+    #                   and with GITHUB_APP_ID github-app.pem and the webhook
+    #                   secret in api.env
     set -euo pipefail
     umask 077
 
@@ -49,6 +52,10 @@ data:
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
         get host/apps.yaml > /config/apps.yaml
+        if [ -n "${GITHUB_APP_ID:-}" ]; then
+          get github-app-private-key > /config/github-app.pem
+          webhook="$(get github-webhook-secret)"
+        fi
         mkdir -p /config/kube
         files=""
         names="$(aws ssm get-parameters-by-path --path "$PREFIX/kube" \
@@ -70,6 +77,7 @@ data:
           printf 'GATEWAY_TOKEN=%s\n' "$gw"
           printf 'PLATFORM_TOKENS=%s\n' "$tokens"
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
+          if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
         } > /config/api.env
         ;;
       *)

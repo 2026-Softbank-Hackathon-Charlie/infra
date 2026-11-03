@@ -8,7 +8,7 @@ import json
 import sys
 
 PREFIXES = {'aws_subnet.public', 'aws_subnet.private', 'aws_nat_gateway.egress', 'aws_eip.nat'}
-EXACT = {'aws_vpc.shared', 'aws_s3_bucket.loki'}
+EXACT = {'aws_vpc.shared', 'aws_s3_bucket.loki', 'aws_s3_bucket.cnpg'}
 
 
 def protected(address):

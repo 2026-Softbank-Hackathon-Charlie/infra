@@ -52,3 +52,8 @@ output "platform_pod_role_arn" {
   description = "AWS role of the platform's pods on the management EKS cluster (Pod Identity)."
   value       = aws_iam_role.platform_pod.arn
 }
+
+output "image_publish_role_arns" {
+  description = "AWS_DEPLOY_ROLE_ARN of the image publish workflows, by repository (platform, frontend)."
+  value       = { for repo, role in aws_iam_role.image_publish : repo => role.arn }
+}

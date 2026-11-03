@@ -1,0 +1,4 @@
+# Supply backup.bucketName from foundation.cnpg_backup_bucket_name using an
+# approved private values file/Argo override. No Secret values belong here.
+backup:
+  bucketName: ""

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import yaml
@@ -170,7 +171,8 @@ def main():
                     # The gateway reaches every app's internal load balancer on port 80.
                     ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
                     assert ports == ([80] if public else []), ports
-        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform, app ApplicationSet and app chart; {len(seen)} pinned images.")
+        subprocess.check_call([sys.executable, str(ROOT / "scripts/check-cnpg.py")])
+        print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform, app ApplicationSet and app chart, and CNPG PoC; {len(seen)} baseline pinned images.")
 
 
 if __name__ == "__main__":

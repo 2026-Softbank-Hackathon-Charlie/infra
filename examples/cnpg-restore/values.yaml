@@ -1,0 +1,16 @@
+# Render only after an approved freeze completed and old restore resources were
+# explicitly cleaned up. Every trial needs fresh PVCs and a unique runId.
+runId: ""
+# Empty means recover to the end of the frozen archive. A PITR target must be at
+# or after the selected base backup's end time recorded in the freeze manifest.
+targetTime: ""
+imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:64abc98a4387361afd6821a3a99f975763bbd87bbdde9449e75ad6002528a318
+backup:
+  bucketName: ""
+  region: ap-northeast-2
+resources:
+  requests: {cpu: 500m, memory: 1Gi}
+  limits: {cpu: "1", memory: 2Gi}
+backupResources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}

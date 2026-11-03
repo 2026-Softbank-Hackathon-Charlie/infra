@@ -16,6 +16,16 @@
     "corsOrigins": "",
     "dsnHostSuffixes": ".ts.net"
   },
+  "appDomain": "",
+  "github": {
+    "appId": "",
+    "installationId": ""
+  },
+  "deploy": {
+    "builder": "",
+    "codebuildProject": "",
+    "imageRegistry": ""
+  },
   "egressPorts": [80, 5432],
   "storage": {
     "className": "gp3",

@@ -8,7 +8,7 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parents[1] / 'terraform/platform/aws'
 ASSETS = (
-    'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'outputs.tf', 'variables.tf', 'versions.tf',
+    'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'image-publish.tf', 'tests/image-publish.tftest.hcl', 'outputs.tf', 'variables.tf', 'versions.tf',
     '.terraform.lock.hcl', 'user_data.sh.tftpl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',

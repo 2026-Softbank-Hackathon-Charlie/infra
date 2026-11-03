@@ -27,7 +27,7 @@
 - Application은 helm parameter로 `environments.eks.cluster.server`에 root의 워크로드 endpoint를, `chart.repoURL`과 `chart.revision`에 root의 저장소와 revision을 넘긴다.
 - 환경 `eks`의 프로필은 [clusters/aws-dev-management/values/hopcharlie-apps.yaml](../../clusters/aws-dev-management/values/hopcharlie-apps.yaml)에 둔다. 공개 서비스는 LBC가 만드는 내부 NLB(ip 대상)의 80 포트, DB는 CNPG `gp3` 1Gi, S3는 버킷 접두사 `hopcharlie-eks-`와 Secret `app-s3`이다. 네임스페이스마다 ResourceQuota, LimitRange, NetworkPolicy를 두고, 게이트웨이는 VPC `10.40.0.0/16`에서 들어오는 것으로 허용한다.
 - 앱 차트에 `profile.publicService.port`를 추가하고 `eks`에서는 80으로 둔다. 그래서 게이트웨이의 egress는 지금처럼 80만 열면 된다. 기본값 0은 서비스의 포트를 그대로 쓰므로 platform E2E의 동작은 바뀌지 않는다.
-- 앱이 쓸 수 없는 네임스페이스에 워크로드 클러스터의 `charlie-apps`, `headlamp`를 더한다.
+- 앱이 쓸 수 없는 네임스페이스에 워크로드 클러스터의 `charlie-apps`, `charlie-db`, `cert-manager`, `headlamp`를 더한다.
 - 플랫폼 API의 ServiceAccount에 Role `hopcharlie-platform-deployer`를 준다. ApplicationSet `hopcharlie-apps`의 get, patch와 Application의 get, patch만 허용한다. ValidatingAdmissionPolicy가 이 ServiceAccount의 UPDATE를 ApplicationSet과 라벨 `hopcharlie.dev/app`이 있는 Application으로 제한하고, spec을 바꾸는 요청을 거부한다.
 
 ## 영향과 후속 작업
@@ -39,7 +39,7 @@
   - platform 저장소에 남은 복사본과 내용이 달라질 수 있다. platform E2E는 그 복사본을 쓴다.
 - 필요한 후속 작업 및 검증:
   - Argo CD에 gitops 저장소의 읽기 자격 증명을 등록한다. 없으면 ApplicationSet이 파일을 읽지 못한다.
-  - 워크로드 클러스터에 CNPG operator(`cnpg-system`)를 설치한다. 지금 애드온 목록에 없다.
+  - 워크로드 클러스터에 CNPG operator(`cnpg-system`)가 떠 있어야 한다. #17의 수동 Application(`helm/cnpg-poc-applications.yaml.example`)이 설치한다.
   - S3 버킷과 `app-s3` Secret을 누가 만들지 정한다. moimroom은 `photos` 버킷을 쓴다.
   - 플랫폼이 워크로드 클러스터의 Service를 읽을 kubeconfig(SSM `/hopcharlie/kube/<이름>`)를 넣는다. 배포 실행기가 NLB 주소를 읽어 게이트웨이에 등록한다.
   - `*.hopcharlie.dev` DNS와 ALB 규칙이 게이트웨이로 가야 `<app>.hopcharlie.dev`가 열린다.

@@ -1,0 +1,13 @@
+# Explicitly create only after Cluster/plugin/credentials and WAL archiving
+# readiness checks. This is not included in an Argo Application or automatic Hook.
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: postgres-poc-initial
+  namespace: charlie-db
+spec:
+  cluster:
+    name: postgres-poc
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

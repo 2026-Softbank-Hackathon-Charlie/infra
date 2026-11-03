@@ -31,7 +31,9 @@ chart:
 # allowed, so a new app needs no change here.
 deniedNamespaces:
   - argocd
+  - cert-manager
   - charlie-apps
+  - charlie-db
   - charlie-platform
   - charlie-system
   - cnpg-system

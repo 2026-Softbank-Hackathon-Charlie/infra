@@ -47,7 +47,8 @@ spec:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
       serviceAccountName: hopcharlie-platform
-      automountServiceAccountToken: false
+      # The deploy executor patches Argo CD Applications in this cluster.
+      automountServiceAccountToken: {{ not (empty .Values.deploy.builder) }}
       securityContext:
         {{- include "hopcharlie.podSecurity" 10001 | nindent 8 }}
       initContainers:
@@ -73,6 +74,27 @@ spec:
             - {name: PLATFORM_CORS_ORIGINS, value: {{ .Values.api.corsOrigins | quote }}}
             - {name: PLATFORM_DSN_HOST_SUFFIXES, value: {{ .Values.api.dsnHostSuffixes | quote }}}
             - {name: PLATFORM_AWS_REGION, value: {{ .Values.awsRegion | quote }}}
+            {{- with .Values.appDomain }}
+            - {name: PLATFORM_APP_DOMAIN, value: {{ . | quote }}}
+            {{- end }}
+            {{- with .Values.github.appId }}
+            # The private key and the webhook secret come from SSM (fetch-settings.sh).
+            - {name: PLATFORM_GITHUB_APP_ID, value: {{ . | quote }}}
+            - {name: PLATFORM_GITHUB_APP_PRIVATE_KEY_FILE, value: /config/github-app.pem}
+            {{- end }}
+            {{- with .Values.github.installationId }}
+            - {name: PLATFORM_GITHUB_INSTALLATION_ID, value: {{ . | quote }}}
+            {{- end }}
+            {{- with .Values.deploy.builder }}
+            {{- if not $.Values.github.appId }}
+            {{- fail "deploy.builder needs github.appId" }}
+            {{- end }}
+            - {name: PLATFORM_DEPLOY_BUILDER, value: {{ . | quote }}}
+            - {name: PLATFORM_IMAGE_REGISTRY, value: {{ required "deploy.imageRegistry is required with deploy.builder" $.Values.deploy.imageRegistry | quote }}}
+            {{- if eq . "codebuild" }}
+            - {name: PLATFORM_CODEBUILD_PROJECT, value: {{ required "deploy.codebuildProject is required with deploy.builder codebuild" $.Values.deploy.codebuildProject | quote }}}
+            {{- end }}
+            {{- end }}
           ports:
             - {name: http, containerPort: 8080}
           readinessProbe:
