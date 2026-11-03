@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-02
 - 재검토: 2026-11-03 — 저장소·운영 기록 업데이트 반영. 후속 승인한 읽기 전용 배포 확인 결과는 11절에 기록
-- 상태: 코드 병합·Terraform 기반·workload baseline 적용 완료. PoC DB·신규 자격 증명·나머지 addon 설치와 데이터 검증은 미실행
+- 상태: 기반·Sealed Secrets·cert-manager·Barman·인증정보 준비 완료. source Cluster는 admission 호환성 수정 배포 대기. SQL·실제 백업/복원 미검증
 - 작업 분류: 영향이 크거나 불확실한 작업. 데이터 영속성, IAM, 네트워크, GitOps 소유권 및 여러 구성 요소의 연계 변경을 포함한다.
 - 사용자 확정 조건: 해커톤 PoC, 실제 개인정보·운영 데이터가 아닌 현실적인 합성 서비스 데이터 사용, AWS 워크로드 클러스터 우선.
 - 브랜치 조건: 개발은 `codex` prefix 없는 `feat/aws-cnpg-poc`에서 진행. 기존 작업 파일은 원래 checkout에 보존하고 별도 worktree에서 로컬 `origin/main@82b6617`로 fast-forward해 구현한다. 원격 조회·merge·배포 실행과 구분한다.
@@ -263,6 +263,15 @@ Secret 값·DB 데이터·Pod 로그·SSM Parameter 값·state/plan은 읽지 �
 - 결과는 Succeeded/Synced/Healthy였으며 렌더된 10개 자원과 live 설정·추적 정보를 확인했다. 최초 검증에서 cluster-scoped 추적 ID의 namespace가 비어 있을 것으로 가정해 중단했지만, 실제 Argo가 Application destination namespace를 넣는 것을 읽기 전용으로 확인해 검증 기준만 수정했다. 추가 Sync/리소스 변경은 없었다. 기존 Operator·Project·Sealed Secrets 앱 설정도 이전 점검과 동일했다.
 - 상태/소유권/설정만 조회했으며 Secret 값·DB 데이터·Pod 로그를 읽지 않았다. 해당 점검의 임시 SSM 연결은 종료 확인했고 임시 kubeconfig를 제거했다. 문서 보완 브랜치는 `chore/cnpg-poc-deployment-status`이며 원래 checkout의 다른 변경은 보존했다.
 - 남은 단계: 봉인키·암호 보관/인수 방식 확정 및 실행 승인 → workload Sealed Secrets 준비 → 기존 Operator·Project를 보존하면서 미존재하는 cert-manager/plugin/DB 앱 등록·단계별 Sync → 신규 인증정보/CA 준비 → DB 설치·제어면 상태 확인. SQL·실제 백업·복원·RPO/RTO는 별도의 시험 승인·검증 대상이다. 기존 ADR0005/0006을 설명 보완했으며 새 ADR은 추가하지 않았다.
+
+## 14. 컨트롤러·인증정보 설치와 admission 오류 — 2026-11-03
+
+- 사용자는 로컬 키·암호 보관과 남은 CNPG 설치를 명시 승인했다. 기존 `charlie-admin`·임시 SSM으로 Sealed Secrets를 고정 revision에 수동 Sync하고 신규 봉인키1개의 이름/UID를 확인한 뒤 개인키·인증서를 승인한 Git 제외0700/0600 경로에 백업했다. 공개 인증서와 개인키의 일치 및 로컬 더미 값 봉인/복호화를 검증했다. 기존 운영 Secret/SSM 값은 읽지 않았다.
+- 새 수동 앱3개를 create-only로 등록하고 cert-manager → Barman을 순차 Sync했다. 두 앱과 Sealed Secrets는 Succeeded/Synced/Healthy였고 Barman 인증서2개도 Ready였다. 기존 Operator·Project·관리 PVC는 보존됐으며 root/관리 플랫폼 변경 명령은 없었다. 인증정보 준비 전에 source+restore·두 Job까지 계산한 자원 여유도 재확인했다.
+- 신규 비밀번호4개와 strict SealedSecret6개를 만들고 DB/apps namespace의 basic-auth Secret6개가 해당 SealedSecret UID의 소유이며 Synced인 것을 확인했다. 비밀값은 출력하지 않았고 비밀번호·새 키 백업 파일은 사용자 인수까지 보존한다.
+- DB 앱의 선언16개 중15개는 적용됐지만 `postgres-poc` Cluster만 `instances:1 + primaryUpdateStrategy:supervised` 조합으로 webhook에 거부됐다. source Cluster/PVC가 없는 것을 별도 상태 조회로 확인했다. 기존 생성 자원·키·암호를 보존하고 후속 설치를 중단했다. SQL/실제 백업/복원 시험과 DB CA 전달은 실행하지 않았다.
+- source와 복원 예제의 strategy 두 곳을 `unsupervised`로 고치는 수정 계획은 새 에이전트 리뷰 GREEN(미해결 CRITICAL/MAJOR/MINOR0) 후 사용자 개발 승인을 받았다. 스키마 외의 단일 인스턴스 조합 검사와 모든 source/full/PITR 렌더 검증, 최종 병합 SHA 동등성 검증 및 server dry-run을 추가한다. [ADR0029](../adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md)에 Primary 재시작 영향을 기록했다.
+- 수정 브랜치는 `fix/cnpg-single-instance-update-policy`이며 새 코드의 게시/PR/병합·실제 DB 앱 revision 적용은 구체적인 commit과 검사 결과를 제시한 뒤 별도 실행 승인을 받는다. 기존86af299의 설치 승인을 새 코드 배포로 확대하지 않는다. 실제 restore 실행은 포함하지 않는다.
 
 ## 관련 자료
 

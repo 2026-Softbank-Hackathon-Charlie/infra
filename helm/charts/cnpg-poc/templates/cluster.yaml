@@ -10,7 +10,7 @@ spec:
   imageName: {{ .Values.imageName | quote }}
   imagePullPolicy: IfNotPresent
   enableSuperuserAccess: false
-  primaryUpdateStrategy: supervised
+  primaryUpdateStrategy: unsupervised
   bootstrap:
     initdb:
       database: db_a

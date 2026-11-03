@@ -57,6 +57,10 @@ foundation의 비밀 아닌 출력은 `cnpg_bucket_name`, `cnpg_source_role_arn`
 
 ## 자격 증명과 TLS
 
+source와 restore는 단일 인스턴스이므로 `primaryUpdateStrategy: unsupervised`를 사용한다. `supervised`와의 조합은 실제 webhook이 거부한다. 이미지·자원·설정·Operator 변경으로 rollout이 시작되면 Primary 재시작이 자동 진행될 수 있으며 단일 DB 중단이 발생한다. [ADR0029](../adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md)를 따른다. 스키마 검사만으로 admission 성공을 단정하지 않고 승인한 최종 SHA의 source Cluster를 server dry-run한 뒤 실제 Sync한다.
+
+2026-11-03 실행에서는 새 봉인키 백업과 DB 비밀번호4개를 사용자가 승인한 `.generated/cnpg-poc-credentials/`에 디렉터리0700·파일0600으로 보관했다. 이 경로는 Git 제외이며 암호화된 보관소는 아니다. 사용자 인수·별도 삭제 지시 전까지 유지한다. 단계 중단 후에는 설치 기록의 정확한 UID와 소유권을 확인해 기존 키·암호·SealedSecret을 재사용하고 재생성·회전·덮어쓰지 않는다. 개인키 백업 확인에는 새 키와 로컬 더미 값의 봉인/복호화 검사를 사용했으며 실제 DB 복원 시험과 구분한다.
+
 실행 승인은 새 비밀번호·봉인 키·내부 TLS 키 생성과 각 Secret 등록을 명시해야 한다. 자동 데이터베이스 비밀번호 생성·회전은 사용하지 않는다. 운영자가 제공하는 암호 파일은 0600·UTF-8·개행 없는 값이어야 한다. 비밀번호를 CLI 인자·values·Terraform·Git에 넣지 않는다.
 
 | Secret | namespace | username |

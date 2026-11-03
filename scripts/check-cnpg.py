@@ -90,6 +90,13 @@ def structural(value, schema, path):
         assert isinstance(value, (int, float)) and not isinstance(value, bool), f"Expected number: {path}"
 
 
+def check_cluster_update_policy(doc):
+    """Match the pinned operator's single-instance admission constraint."""
+    if doc.get("kind") == "Cluster" and doc.get("apiVersion", "").startswith("postgresql.cnpg.io/"):
+        spec = doc["spec"]
+        assert not (spec.get("instances", 1) == 1 and spec.get("primaryUpdateStrategy", "unsupervised") == "supervised"), "CNPG rejects supervised updates for single-instance clusters"
+
+
 def manual_applications():
     raw = (ROOT / "helm/cnpg-poc-applications.yaml.example").read_text()
     assert "REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT" in raw
@@ -176,6 +183,7 @@ def main():
         check_project(docs, project, "charlie-db")
         seen.update(pinned_image(ref) for ref in operand_images(docs))
         for doc in docs:
+            check_cluster_update_policy(doc)
             schema = crds.get((doc["apiVersion"], doc["kind"]))
             if schema:
                 structural(doc["spec"], schema["properties"]["spec"], doc["kind"] + ".spec")
@@ -237,6 +245,7 @@ def main():
             check_project(restored, project, "charlie-db")
             seen.update(pinned_image(ref) for ref in operand_images(restored))
             for doc in restored:
+                check_cluster_update_policy(doc)
                 schema = crds[(doc["apiVersion"], doc["kind"])]
                 structural(doc["spec"], schema["properties"]["spec"], "restore." + doc["kind"] + ".spec")
             recovered = next(d for d in restored if d["kind"] == "Cluster")

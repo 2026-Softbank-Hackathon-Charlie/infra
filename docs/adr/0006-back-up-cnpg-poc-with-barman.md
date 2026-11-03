@@ -26,7 +26,7 @@ Barman Cloud Plugin, ObjectStore, 초기·일일 base backup, 연속 WAL 보관,
 
 foundation이 전용 비공개 SSE-S3 bucket과 IAM 역할을 만들고 workload가 source/restore ServiceAccount의 Pod Identity를 연결한다. source는 자기 prefix만 관리하고 restore는 source 읽기와 별도 출력 prefix 관리만 한다. 장기 access key는 생성하지 않는다. 선택한 이미지의 SDK·sidecar Pod Identity 지원을 확인하지 못하면 다른 인증 방식으로 자동 전환하지 않고 재검토한다.
 
-2026-11-03 별도 실행 승인으로 foundation의 CNPG 전용 S3·IAM 관련 8개와 workload의 source/restore Pod Identity 연결 2개를 생성했고, 두 stack 모두 적용 후 plan에서 변경 없음으로 확인했다. 이 클라우드 기반 준비는 Barman plugin·DB 설치나 실제 백업·복원 성공을 의미하지 않는다. 기존 Operator와 AppProject는 재사용하고, Sealed Secrets·cert-manager·plugin·DB 및 신규 키·암호 생성은 다음 실행 승인 대상으로 남아 있다.
+2026-11-03 별도 실행 승인으로 foundation의 CNPG 전용 S3·IAM 관련 8개와 workload의 source/restore Pod Identity 연결 2개를 생성했고, 두 stack 모두 적용 후 plan에서 변경 없음으로 확인했다. 후속 실행 승인으로 기존 Operator·AppProject를 보존하면서 Sealed Secrets·cert-manager·plugin과 Barman TLS 인증서, 봉인키 백업 및 A/B 인증정보를 준비했다. source Cluster는 단일 인스턴스 업데이트 정책의 admission 오류로 생성되지 않았으며 [ADR0029](0029-use-unsupervised-updates-for-single-instance-cnpg.md)의 수정 배포를 기다린다. 실제 WAL 보관·백업·복원 성공은 아직 확인하지 않았다.
 
 구현에서 Barman HeadBucket 검사를 위해 두 runtime 역할에 전용 CNPG 버킷의 ListBucket/GetBucketLocation을 허용한다. prefix 없는 HeadBucket 때문에 목록에도 prefix 조건을 강제하지 않으며 같은 전용 버킷의 키 메타데이터가 보일 수 있다. 객체 내용·쓰기·삭제 경계는 source/restore prefix로 제한한다. account CI 정책과 다른 버킷 권한은 바꾸지 않는다. [Barman S3 권한 요건](https://docs.pgbarman.org/release/3.20.0/user_guide/barman_cloud.html)을 따른 구현 세부사항이다.
 
