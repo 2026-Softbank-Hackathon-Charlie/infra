@@ -57,6 +57,7 @@
 | [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
 | [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC 실행을 위한 기존 GKE 노드 풀 증설 제안 |
 | [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
+| [docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md](docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md) | AWS CNPG 앱의 admission 기본값·Role 생략 값 비교 정책 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
 | [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |

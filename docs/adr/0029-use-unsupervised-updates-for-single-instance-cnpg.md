@@ -1,7 +1,7 @@
 # 0029. 단일 인스턴스 CNPG에는 unsupervised 업데이트 정책을 사용한다
 
 - 날짜: 2026-11-03
-- 상태: 채택 — 수정 개발 계획 승인. 새 revision의 실제 배포·검증 대기
+- 상태: 채택 — PR32 병합·source 배포 완료, 2026-11-04 Ready1/1 확인. 실제 restore 미실행
 - 관련 ADR: [0005 PoC 범위](0005-scope-aws-cnpg-poc.md), [0006 백업·복구](0006-back-up-cnpg-poc-with-barman.md)
 
 ## 배경과 제약
@@ -24,6 +24,8 @@ source와 full/PITR restore 템플릿의 단일 Cluster에 `primaryUpdateStrateg
 Argo 앱은 계속 수동 Sync와 검토한 Git SHA를 사용한다. 이 설정은 공유 Operator가 외부 작업으로 업그레이드되는 것까지 막지 않는다. 기존 ADR0005의 단일 인스턴스·수동 복구 범위는 그대로 유지한다.
 
 ## 영향과 후속 작업
+
+수정 PR32는 CI 통과 후 `87bd4e9ea04b8ba9112b69a5b13e8bca20f002ee`로 병합했고, 사용자 게시·병합·실행 승인으로 source server dry-run과 해당 revision의 수동 Sync를 수행했다. 2026-11-04 source Ready1/1, DB2개/Role4개의 최신 적용 상태, 20Gi PVC Bound/Retain, Barman Pod Identity 주입과 공개 CA 전달을 확인했다. ContinuousArchiving와 예약 LastBackupSucceeded 조건도 True였다. SQL·실제 복원·장애·RPO/RTO 시험 완료를 뜻하지 않는다. admission 기본값 때문에 남은 Argo 비교 차이는 [ADR0034](0034-compare-cnpg-admission-defaults-in-argocd.md)의 별도 비교 정책으로 처리하며 DB spec을 추가 변경하지 않는다.
 
 - 기대 효과: 지원되지 않는 조합을 제거해 source와 restore가 admission을 통과할 수 있다.
 - 단점과 위험: 향후 이미지·자원·설정·Operator 변경으로 rollout이 시작되면 Primary가 추가 수동 전환 대기 없이 재시작될 수 있다. 단일 DB는 그동안 중단되며 무중단을 보장하지 않는다.

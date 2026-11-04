@@ -91,6 +91,16 @@ DB 앱 `charlie-workload-cnpg-poc`를 수동 sync하고 source Cluster가 Ready,
 
 클라이언트는 `sslmode=verify-full`과 해당 Cluster CA를 사용한다. source의 `postgres-poc-ca`, restore의 `postgres-poc-restore-ca`에는 개인키가 있을 수 있으므로 **전체 Secret을 복사하지 않는다**. 승인된 CA의 `ca.crt` 키만 보호된 파일로 추출하고 charlie-apps에 같은 이름의 public-only trust Secret(ca.crt만)을 등록한다. ca.key는 읽거나 전송하지 않는다. 다른 namespace에 신뢰 번들을 전달하는 작업도 Secret 등록 승인 범위에 포함한다.
 
+## DB 앱의 Argo 비교 정책
+
+[ADR0034](../adr/0034-compare-cnpg-admission-defaults-in-argocd.md)에 따라 AWS `charlie-workload-cnpg-poc`만 server-side diff와 mutation webhook 결과를 반영한다. CNPG가 추가한 기본값은 API의 SSA dry-run 예상 결과로 비교한다. 정확히 지정한 Role 네 개에서 권한5개가 false이거나 inRoles가 []일 때만 생략과 동등하게 비교한다. true 권한·새 membership·connectionLimit/login/inherit 변경은 정규화 대상이 아니다. RespectIgnoreDifferences는 추가하지 않아 실제 Sync는 Git에 선언한 값을 사용한다. GKE·다른 앱·global Argo 설정에 자동 적용하지 않는다.
+
+같은 네 Role의 서버 파생 `/metadata/generation` 카운터만 비교에서 제외한다. SSA dry-run의 예상 카운터 차이는 DB 설정 변경이 아니다. 이 예외와 별개로 live Role의 applied=true와 metadata.generation/status.observedGeneration 일치를 확인한다. 전체 객체에서 generation 이외 차이가 없음을 먼저 확인하고, generation+실제 spec drift가 함께 있는 반례도 계속 차이로 감지되어야 한다.
+
+기존 DB가 Healthy지만 OutOfSync라면 먼저 실제 drift와 기본값 차이를 확인한다. Argo3.5.3의 비교 순서는 원 config로 SSA 예측 → predicted/live 조건부 정규화 → diff다. 실행 전 실제 버전과 CNPG CRD의 inRoles topology가 atomic/기본 atomic인지 확인하고, set/map 또는 기존 미검토 ignore/compare-options가 있으면 중단한다. 생성 전 자원은 server-side diff가 생략되므로 초기 admission dry-run 검사는 계속 필요하다. webhook 규칙 변경도 예측을 바꿀 수 있다.
+
+비교 설정 변경도 실행 승인이 필요하다. 승인된 앱 UID/resourceVersion·source/destination/project/수동 syncPolicy·operation 부재를 검사하고 해당 앱의 compare-options와 이름별 ignoreDifferences만 조건부 갱신한다. hard refresh는 비교 캐시 갱신이며 새 Sync를 요청하지 않는다. 앱 Synced/Healthy와 Cluster/Role/Pod/PVC UID/spec·revision/수동 정책 불변을 확인한다. 실패·동시 변경 시 덮어쓰기/Sync로 우회하지 않고, 승인된 경우 이번에 추가한 비교 설정만 조건부 원복한다.
+
 ## 수동 migration·기능·격리 시험
 
 [검증 Job chart](../../examples/cnpg-poc/Chart.yaml)는 Argo Hook이 아니다. `helm template`은 로컬 파일만 만들며 `helm install`로 실행하지 않는다. 다음은 렌더링 예제이며 실제 apply 전에 전체 manifest의 namespace·이미지·Secret 참조를 확인한다.

@@ -125,8 +125,63 @@ kind: Application
 metadata:
   name: charlie-workload-cnpg-poc
   namespace: argocd
+  annotations:
+    # Argo 3.5.3: predict admission defaults before comparing existing CRs.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
 spec:
   project: charlie-cnpg-poc-workload
+  # CNPG omits these zero values. Keep true privileges and memberships visible.
+  # Name-scoped rules intentionally exclude future DatabaseRoles.
+  # SSA dry-run may advance the server-derived generation without changing spec.
+  ignoreDifferences:
+    - group: postgresql.cnpg.io
+      kind: DatabaseRole
+      namespace: charlie-db
+      name: postgres-poc-svc-a-owner
+      jsonPointers: [/metadata/generation]
+      jqPathExpressions:
+        - .spec.superuser | select(. == false)
+        - .spec.createdb | select(. == false)
+        - .spec.createrole | select(. == false)
+        - .spec.replication | select(. == false)
+        - .spec.bypassrls | select(. == false)
+        - .spec.inRoles | select(. == [])
+    - group: postgresql.cnpg.io
+      kind: DatabaseRole
+      namespace: charlie-db
+      name: postgres-poc-svc-b-owner
+      jsonPointers: [/metadata/generation]
+      jqPathExpressions:
+        - .spec.superuser | select(. == false)
+        - .spec.createdb | select(. == false)
+        - .spec.createrole | select(. == false)
+        - .spec.replication | select(. == false)
+        - .spec.bypassrls | select(. == false)
+        - .spec.inRoles | select(. == [])
+    - group: postgresql.cnpg.io
+      kind: DatabaseRole
+      namespace: charlie-db
+      name: postgres-poc-svc-a-runtime
+      jsonPointers: [/metadata/generation]
+      jqPathExpressions:
+        - .spec.superuser | select(. == false)
+        - .spec.createdb | select(. == false)
+        - .spec.createrole | select(. == false)
+        - .spec.replication | select(. == false)
+        - .spec.bypassrls | select(. == false)
+        - .spec.inRoles | select(. == [])
+    - group: postgresql.cnpg.io
+      kind: DatabaseRole
+      namespace: charlie-db
+      name: postgres-poc-svc-b-runtime
+      jsonPointers: [/metadata/generation]
+      jqPathExpressions:
+        - .spec.superuser | select(. == false)
+        - .spec.createdb | select(. == false)
+        - .spec.createrole | select(. == false)
+        - .spec.replication | select(. == false)
+        - .spec.bypassrls | select(. == false)
+        - .spec.inRoles | select(. == [])
   source:
     repoURL: https://github.com/2026-Softbank-Hackathon-Charlie/infra.git
     targetRevision: "REPLACE_WITH_REVIEWED_COMMIT_SHA"

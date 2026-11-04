@@ -98,6 +98,26 @@ def check_cluster_update_policy(doc):
         assert not (spec.get("instances", 1) == 1 and spec.get("primaryUpdateStrategy", "unsupervised") == "supervised"), "CNPG rejects supervised updates for single-instance clusters"
 
 
+def check_comparison_policy(app):
+    """Keep admission/zero-value normalization limited to the AWS DB app."""
+    comparison = app["metadata"].get("annotations", {}).get("argocd.argoproj.io/compare-options")
+    rules = app["spec"].get("ignoreDifferences", [])
+    if app["metadata"]["name"] != "charlie-workload-cnpg-poc":
+        assert comparison is None and not rules, "CNPG comparison policy must not affect dependency apps"
+        return
+    assert comparison == "ServerSideDiff=true,IncludeMutationWebhook=true"
+    fields = ("superuser", "createdb", "createrole", "replication", "bypassrls")
+    expressions = [f".spec.{field} | select(. == false)" for field in fields]
+    expressions.append(".spec.inRoles | select(. == [])")
+    expected = [
+        {"group": "postgresql.cnpg.io", "kind": "DatabaseRole", "namespace": "charlie-db",
+         "name": f"postgres-poc-svc-{service}-{role}", "jsonPointers": ["/metadata/generation"], "jqPathExpressions": expressions}
+        for service in ("a", "b") for role in ("owner", "runtime")
+    ]
+    assert sorted(rules, key=lambda rule: rule.get("name", "")) == sorted(expected, key=lambda rule: rule["name"]), "Only four named Roles' generation and false/empty values may be normalized"
+    assert "RespectIgnoreDifferences=true" not in app["spec"]["syncPolicy"]["syncOptions"]
+
+
 def manual_applications():
     raw = (ROOT / "helm/cnpg-poc-applications.yaml.example").read_text()
     assert "REPLACE_WITH_WORKLOAD_EKS_API_ENDPOINT" in raw
@@ -114,6 +134,7 @@ def manual_applications():
     assert project["spec"]["destinations"] and all(d["server"] == "https://eks-workload.example.invalid" for d in project["spec"]["destinations"])
     assert not any(x["kind"] == "Namespace" for x in project["spec"]["clusterResourceWhitelist"])
     for app in apps:
+        check_comparison_policy(app)
         assert app["metadata"]["namespace"] == "argocd"
         assert app["spec"]["project"] == project["metadata"]["name"]
         assert not app["metadata"].get("finalizers"), "Deleting an Application must not cascade-delete DB data"
