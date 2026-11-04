@@ -65,6 +65,54 @@ def check_project(docs, project, namespace):
             assert doc["metadata"].get("namespace", namespace) in allowed_namespaces, doc["metadata"]
 
 
+def check_gke_image_settings(platform_values, work):
+    chart = ROOT / "helm/charts/hopcharlie-platform"
+    values = json.loads(platform_values.read_text())
+    registry = values["deploy"]["gkeImageRegistry"]
+    adc = values["deploy"]["gkeImageCredentialConfig"]
+    disabled = copy.deepcopy(values)
+    for key in ("gkeImageRegistry", "gkeImageCredentialConfig"):
+        disabled["deploy"].pop(key)
+    together = copy.deepcopy(values)
+    together["gcp"] = {
+        "credentialConfig": {"type": "external_account", "credential_source": {"file": "/var/run/secrets/gcp/token"}},
+        "tokenAudience": "https://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/storage/providers/eks",
+    }
+    for name, case, enabled in (("enabled", values, True), ("disabled", disabled, False), ("with-storage", together, True)):
+        path = work / ("platform-build-" + name + ".json")
+        path.write_text(json.dumps(case))
+        docs = render(chart, path, "hopcharlie-platform", "charlie-platform")
+        assert not any(d["kind"] == "Secret" for d in docs), "Build ADC has no key or token"
+        for doc in docs:
+            if doc["kind"] not in ("Deployment", "StatefulSet"):
+                continue
+            env = {e["name"]: e.get("value") for c in doc["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
+            expected = enabled and doc["metadata"]["name"] == "hopcharlie-api"
+            assert ("PLATFORM_GKE_IMAGE_REGISTRY" in env) == expected, doc["metadata"]["name"]
+            assert ("PLATFORM_GKE_IMAGE_CREDENTIAL_CONFIG" in env) == expected, doc["metadata"]["name"]
+            if expected:
+                assert env["PLATFORM_GKE_IMAGE_REGISTRY"] == registry
+                assert json.loads(env["PLATFORM_GKE_IMAGE_CREDENTIAL_CONFIG"]) == adc
+                if name == "with-storage":
+                    assert env["GOOGLE_APPLICATION_CREDENTIALS"] == "/etc/gcp/adc.json"
+        if name == "with-storage":
+            cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-gcp-adc")
+            assert json.loads(cm["data"]["adc.json"]) == together["gcp"]["credentialConfig"]
+    for i, (patch, message) in enumerate((
+        ({"gkeImageRegistry": None}, "go together"),
+        ({"gkeImageCredentialConfig": None}, "go together"),
+        ({"builder": "local"}, "deploy.builder codebuild"),
+        ({"gkeImageCredentialConfig": {"type": "service_account"}}, "aws1"),
+        ({"gkeImageCredentialConfig": {"type": "external_account", "credential_source": {"file": "/var/run/secrets/gcp/token"}}}, "aws1"),
+    )):
+        case = copy.deepcopy(values)
+        case["deploy"].update(patch)
+        path = work / f"platform-build-invalid-{i}.json"
+        path.write_text(json.dumps(case))
+        result = subprocess.run([HELM, "template", "hopcharlie-platform", str(chart), "-f", str(path)], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode != 0 and message in result.stderr, result.stderr
+
+
 def main():
     assert helm("version", "--short").startswith("v" + VERSIONS["helm"]), "Use the pinned Helm version"
     fixture = json.loads((ROOT / "helm/gitops/ci/targets-values.yaml").read_text())
@@ -167,6 +215,7 @@ def main():
             seen.update(check_images(docs))
             if not ingress:
                 assert not any(d["metadata"]["name"] == "hopcharlie-gcp-adc" for d in docs), "No Google ADC without gcp values"
+        check_gke_image_settings(platform_values, work)
         # Google ADC for the gcs storage driver (ADR 0041): only the API pod gets
         # the projected token; the gateway and Postgres share the service account.
         gcp_values = work / "platform-gcp.json"

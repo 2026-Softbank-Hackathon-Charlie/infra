@@ -34,6 +34,9 @@ Terraform 스택 [terraform/integrations/gcp/app-images](../../terraform/integra
 
 - buildspec이 ECR push 뒤 같은 이미지를 `<image_prefix>/<app>/<service>`에 push한다. GCP 토큰은 CodeBuild 역할의 AWS 자격 증명과 `federation_config`로 받는다.
 - gke 환경 배포 때 이미지 주소의 레지스트리 부분만 AR로 바꾼다. digest는 같다.
+- Helm의 `deploy.gkeImageRegistry`와 `deploy.gkeImageCredentialConfig`가 API의 `PLATFORM_GKE_IMAGE_REGISTRY`·`PLATFORM_GKE_IMAGE_CREDENTIAL_CONFIG`로 전달된다. 값은 이 스택의 `image_prefix`·`federation_config` 공개 출력이며 키·토큰을 포함하지 않는다.
+- 이 AWS용 빌드 ADC는 API의 GCS 드라이버용 `gcp.credentialConfig`·`GOOGLE_APPLICATION_CREDENTIALS`와 별개다. 두 빌드 값은 함께 설정하고, 둘 다 비우면 기존 ECR 전용 동작을 유지한다.
+- 플랫폼 구현은 [platform#61](https://github.com/2026-Softbank-Hackathon-Charlie/platform/issues/61)에서 담당한다. 설정 준비만으로 AR push가 활성화되는 것은 아니며, 해당 구현과 배포 반영 후 CodeBuild push·GKE pull을 확인한다.
 
 ## 영향과 후속 작업
 

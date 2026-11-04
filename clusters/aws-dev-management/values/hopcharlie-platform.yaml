@@ -25,6 +25,18 @@
   "deploy": {
     "builder": "codebuild",
     "codebuildProject": "hopcharlie-app-build",
-    "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com"
+    "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com",
+    "gkeImageRegistry": "asia-northeast3-docker.pkg.dev/project-b47cdba3-db5b-42a2-9a6/hopcharlie-apps",
+    "gkeImageCredentialConfig": {
+      "audience": "//iam.googleapis.com/projects/414068132732/locations/global/workloadIdentityPools/charlie-app-build/providers/aws-codebuild",
+      "credential_source": {
+        "environment_id": "aws1",
+        "regional_cred_verification_url": "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
+      },
+      "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/charlie-app-image-publisher@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com:generateAccessToken",
+      "subject_token_type": "urn:ietf:params:aws:token-type:aws4_request",
+      "token_url": "https://sts.googleapis.com/v1/token",
+      "type": "external_account"
+    }
   }
 }

@@ -24,7 +24,9 @@
   "deploy": {
     "builder": "",
     "codebuildProject": "",
-    "imageRegistry": ""
+    "imageRegistry": "",
+    "gkeImageRegistry": "",
+    "gkeImageCredentialConfig": {}
   },
   "gcp": {
     "credentialConfig": {},
