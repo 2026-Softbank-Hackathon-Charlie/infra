@@ -214,6 +214,7 @@ def main():
             ("ciphertext that is not base64", lambda v: v["values"]["sealedSecrets"]["s3"].update(accessKey="not base64")),
             ("unknown sealed key", lambda v: v["values"]["sealedSecrets"].update(db={})),
             ("profile reading another Secret", lambda v: v["profile"]["s3"].update(credentialsSecret="other")),
+            ("env name that is also a secret", lambda v: v["values"]["services"][0]["env"].update(HOST_CODE="plain")),
         ):
             values = copy.deepcopy(stateful)
             change(values)

@@ -19,7 +19,7 @@ HopCharlie 플랫폼이 GitHub에서 배포하는 앱 하나를 그리는 차트
 | SealedSecret | `app-secrets` | `values.sealedSecrets.app`. 앱 시크릿(platform ADR 0019) |
 | ResourceQuota, LimitRange, NetworkPolicy | `hopcharlie-app` | `profile.quota`, `limitRange`, `networkPolicy`의 `enabled` |
 
-SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict 범위로 봉인한 값이다. 이름과 네임스페이스가 다르면 열리지 않는다. sync-wave -1이라 Argo CD는 컨트롤러가 Secret을 만든 뒤에 Deployment를 바꾼다. Secret은 컨트롤러가 만들고 SealedSecret이 소유하므로 Argo CD가 지우지 않는다. 같은 이름이면 `env`가 `envFrom`보다 이기며, 플랫폼이 시크릿과 같은 이름을 `env`에서 빼고 gitops 파일을 쓴다.
+SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict 범위로 봉인한 값이다. 이름과 네임스페이스가 다르면 열리지 않는다. sync-wave -1이라 Argo CD는 컨트롤러가 Secret을 만든 뒤에 Deployment를 바꾼다. Secret은 컨트롤러가 만들고 SealedSecret이 소유하므로 Argo CD가 지우지 않는다. 같은 이름이면 `env`가 `envFrom`보다 이긴다. 플랫폼이 시크릿과 같은 이름을 `env`에서 빼고 gitops 파일을 쓰며, 남아 있으면 차트가 렌더링을 실패시킨다.
 
 새 버전이 준비되지 않아도 옛 파드가 계속 받는다. Deployment는 `maxUnavailable: 0`, `maxSurge: 1`이고, `progressDeadlineSeconds`가 지나면 Argo CD가 `Degraded`로 보여 준다.
 
@@ -29,4 +29,4 @@ SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict
 
 ## 테스트
 
-이 저장소의 `scripts/check-helm.py`가 `ci/`의 두 값으로 lint와 렌더링을 하고, 그린 객체가 모두 `hopcharlie-apps` AppProject에서 허용되는지 확인한다. SealedSecret, `envFrom`, checksum annotation, 버킷 이름을 확인하고, `appChecksum` 없는 `app`, 예약된 이름, base64가 아닌 암호문, 다른 Secret을 읽는 프로필은 거부되는지 확인한다. 전체 흐름(등록, 빌드, gitops 커밋, Argo CD sync)은 platform 저장소의 `test/e2e/deploy/run.sh`가 kind의 Argo CD로 검사한다. 이 차트는 platform 저장소 `deploy/charts/hopcharlie-app`(platform `2aea035`)에서 옮겨 왔다.
+이 저장소의 `scripts/check-helm.py`가 `ci/`의 두 값으로 lint와 렌더링을 하고, 그린 객체가 모두 `hopcharlie-apps` AppProject에서 허용되는지 확인한다. SealedSecret, `envFrom`, checksum annotation, 버킷 이름을 확인하고, `appChecksum` 없는 `app`, 예약된 이름, base64가 아닌 암호문, 다른 Secret을 읽는 프로필, 시크릿과 같은 이름의 `env`는 거부되는지 확인한다. 전체 흐름(등록, 빌드, gitops 커밋, Argo CD sync)은 platform 저장소의 `test/e2e/deploy/run.sh`가 kind의 Argo CD로 검사한다. 이 차트는 platform 저장소 `deploy/charts/hopcharlie-app`(platform `2aea035`)에서 옮겨 왔다.

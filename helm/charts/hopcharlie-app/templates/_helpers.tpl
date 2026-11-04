@@ -112,8 +112,8 @@ spec:
 {{- end -}}
 
 {{/*
-Fails on what the schema cannot say: unique service names and at most one
-public service.
+Fails on what the schema cannot say: unique service names, at most one
+public service, and no env name that is also a sealed app secret.
 */}}
 {{- define "hopcharlie-app.check" -}}
 {{- $names := dict -}}
@@ -125,6 +125,12 @@ public service.
 {{- $_ := set $names .name true -}}
 {{- if .public -}}
 {{- $public = append $public .name -}}
+{{- end -}}
+{{- $svc := .name -}}
+{{- range $k, $_ := .env -}}
+{{- if hasKey ($.Values.values.sealedSecrets.app | default dict) $k -}}
+{{- fail (printf "values.services[%s].env.%s is also in values.sealedSecrets.app; the secret must win, so env must not set it" $svc $k) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- if gt (len $public) 1 -}}

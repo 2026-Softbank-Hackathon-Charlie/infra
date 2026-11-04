@@ -60,6 +60,7 @@ data:
         # to the secrets endpoints and deploys apps without secrets as before.
         secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
