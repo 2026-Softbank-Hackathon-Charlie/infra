@@ -64,8 +64,9 @@ The variables the platform sets in every container (pkg/appspec Reserved).
 {{- end }}
 - name: S3_ENDPOINT
   value: {{ $s3.endpoint | quote }}
+# One bucket per instance, named after it (platform ADR 0016).
 - name: S3_BUCKET
-  value: {{ printf "%s%s-%s" ($s3.bucketPrefix | default "") $root.Release.Namespace . | quote }}
+  value: {{ printf "%s%s" ($s3.bucketPrefix | default "") $root.Release.Namespace | quote }}
 - name: S3_REGION
   value: {{ $s3.region | default "" | quote }}
 - name: S3_PATH_STYLE
@@ -81,6 +82,33 @@ The variables the platform sets in every container (pkg/appspec Reserved).
       name: {{ $s3.credentialsSecret }}
       key: {{ $s3.secretKeyKey | default "secretKey" }}
 {{- end }}
+{{- end -}}
+
+{{/*
+A SealedSecret in the release namespace. strict scope: the ciphertexts open
+only as this name in this namespace. Call with (dict "root" $ "name" <name>
+"data" <key: ciphertext>).
+*/}}
+{{- define "hopcharlie-app.sealedSecret" -}}
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "hopcharlie-app.namespaceLabels" .root | nindent 4 }}
+  annotations:
+    # With the namespace, before the Deployments: Argo CD waits until the
+    # controller has unsealed it, so new pods read the new values.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  encryptedData:
+    {{- toYaml .data | nindent 4 }}
+  template:
+    metadata:
+      name: {{ .name }}
+      namespace: {{ .root.Release.Namespace }}
+    type: Opaque
 {{- end -}}
 
 {{/*

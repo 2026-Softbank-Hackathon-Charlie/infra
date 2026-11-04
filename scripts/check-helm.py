@@ -181,10 +181,46 @@ def main():
                 docs = render(ROOT / "helm/charts/hopcharlie-app", ci, gitops_file["namespace"], gitops_file["namespace"], extra)
                 for doc in docs:
                     assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+                # Sealed values (platform ADR 0016, 0019): strict-scope SealedSecrets
+                # before the Deployments, envFrom and the checksum only with app secrets,
+                # and one bucket per instance.
+                sealed_values = gitops_file["values"].get("sealedSecrets", {})
+                sealed = {d["metadata"]["name"]: d for d in docs if d["kind"] == "SealedSecret"}
+                assert set(sealed) == {name for key, name in (("s3", "app-s3"), ("app", "app-secrets")) if key in sealed_values}, sorted(sealed)
+                for name, doc in sealed.items():
+                    assert doc["spec"]["template"] == {"metadata": {"name": name, "namespace": gitops_file["namespace"]}, "type": "Opaque"}, doc["spec"]["template"]
+                    assert doc["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}, doc["metadata"]["annotations"]
+                if "app-s3" in sealed:
+                    assert sealed["app-s3"]["spec"]["encryptedData"] == sealed_values["s3"]
+                if "app-secrets" in sealed:
+                    assert sealed["app-secrets"]["spec"]["encryptedData"] == sealed_values["app"]
+                for doc in (d for d in docs if d["kind"] == "Deployment"):
+                    pod = doc["spec"]["template"]
+                    expected = {"hopcharlie.dev/secrets-checksum": sealed_values["appChecksum"]} if "app" in sealed_values else None
+                    assert pod["metadata"].get("annotations") == expected, pod["metadata"]
+                    for container in pod["spec"]["containers"]:
+                        assert container.get("envFrom") == ([{"secretRef": {"name": "app-secrets"}}] if "app" in sealed_values else None), container.get("envFrom")
+                        buckets = [e["value"] for e in container["env"] if e["name"] == "S3_BUCKET"]
+                        assert buckets == (["hopcharlie-eks-" + gitops_file["namespace"]] if any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or []) else []), buckets
                 if extra:
                     # The gateway reaches every app's internal load balancer on port 80.
                     ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
                     assert ports == ([80] if public else []), ports
+        # The schema and the chart refuse sealed values the platform must not write.
+        stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
+        for name, change in (
+            ("app without appChecksum", lambda v: v["values"]["sealedSecrets"].pop("appChecksum")),
+            ("reserved secret name", lambda v: v["values"]["sealedSecrets"]["app"].update(S3_BUCKET="AgA=")),
+            ("ciphertext that is not base64", lambda v: v["values"]["sealedSecrets"]["s3"].update(accessKey="not base64")),
+            ("unknown sealed key", lambda v: v["values"]["sealedSecrets"].update(db={})),
+            ("profile reading another Secret", lambda v: v["profile"]["s3"].update(credentialsSecret="other")),
+        ):
+            values = copy.deepcopy(stateful)
+            change(values)
+            broken = work / "broken-values.json"
+            broken.write_text(json.dumps(values))
+            result = subprocess.run([HELM, "template", "broken", str(ROOT / "helm/charts/hopcharlie-app"), "-f", str(broken)], capture_output=True, text=True)
+            assert result.returncode != 0, f"hopcharlie-app accepts {name}"
         subprocess.check_call([sys.executable, str(ROOT / "scripts/check-cnpg.py")])
         print(f"Helm checks passed: bootstrap, GitOps staged/OTel, two baselines, all AWS addon values, HopCharlie platform, app ApplicationSet and app chart, and CNPG PoC; {len(seen)} baseline pinned images.")
 
