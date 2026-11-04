@@ -56,6 +56,7 @@
 | [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
 | [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
 | [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC 실행을 위한 기존 GKE 노드 풀 증설 제안 |
+| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
 | [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
@@ -520,10 +521,13 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `deploy`)은 [ADR 0021](docs/adr/0021-configure-platform-github-app-deploy.md)을 따릅니다. GitHub App의 private key와 webhook secret은 SSM에 먼저 넣어야 합니다([절차](terraform/platform/aws/README.md#설정-바꾸기)).
 
+콘솔 관리자 계정은 SSM `/hopcharlie/platform-admins`에 bcrypt 해시로 두고 API의 `PLATFORM_ADMINS`로 넘깁니다([ADR 0033](docs/adr/0033-platform-admin-accounts-from-ssm.md)). 이 파라미터도 차트보다 먼저 만들어야 합니다.
+
 | 파일 | 역할 |
 | --- | --- |
 | [docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md) | 플랫폼을 관리 클러스터에서 운영하는 결정 |
 | [docs/adr/0021-configure-platform-github-app-deploy.md](docs/adr/0021-configure-platform-github-app-deploy.md) | 플랫폼 차트에 GitHub 앱 배포 설정을 넣는 결정 |
+| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정을 SSM에서 플랫폼 API로 넘기는 결정 |
 | [clusters/aws-dev-management/values/hopcharlie-platform.yaml](clusters/aws-dev-management/values/hopcharlie-platform.yaml) | 이미지 digest, 게이트웨이 백엔드, CORS, 도메인, ALB 연결 여부 |
 | [helm/charts/hopcharlie-platform/Chart.yaml](helm/charts/hopcharlie-platform/Chart.yaml) | 플랫폼 chart 메타데이터 |
 | [helm/charts/hopcharlie-platform/values.yaml](helm/charts/hopcharlie-platform/values.yaml) | SSM 경로, 저장소 크기, egress 포트 기본값 |
