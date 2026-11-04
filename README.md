@@ -524,6 +524,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 
 콘솔 관리자 계정은 SSM `/hopcharlie/platform-admins`에 bcrypt 해시로 두고 API의 `PLATFORM_ADMINS`로 넘깁니다([ADR 0033](docs/adr/0033-platform-admin-accounts-from-ssm.md)). 이 파라미터도 차트보다 먼저 만들어야 합니다.
 
+앱 버킷과 앱 시크릿(platform ADR 0016, 0019)을 위해 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷과 `/hopcharlie-apps/` IAM 사용자를 관리하고, API가 SSM `/hopcharlie/app-secrets-key`와 클러스터마다의 Sealed Secrets 공개 인증서(`/hopcharlie/sealed-secrets/<환경>`)를 읽습니다([ADR 0035](docs/adr/0035-app-storage-and-secrets-infra.md)). 플랫폼 이미지, 인증서, merge, Terraform, API 재시작의 순서는 [절차](terraform/platform/aws/README.md#앱-버킷과-시크릿)를 따릅니다.
+
 | 파일 | 역할 |
 | --- | --- |
 | [docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md) | 플랫폼을 관리 클러스터에서 운영하는 결정 |
@@ -547,6 +549,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | 파일 | 역할 |
 | --- | --- |
 | [docs/adr/0023-deploy-github-apps-with-applicationset.md](docs/adr/0023-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
+| [docs/adr/0035-app-storage-and-secrets-infra.md](docs/adr/0035-app-storage-and-secrets-infra.md) | 앱 버킷과 앱 시크릿에 필요한 역할 권한, boundary, 시크릿 키, 인증서, 차트 변경 제안 |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
@@ -564,7 +567,9 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
 | [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
 | [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
+| [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
 | [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
+| [scripts/put-sealed-secrets-cert.sh](scripts/put-sealed-secrets-cert.sh) | 워크로드 클러스터의 Sealed Secrets 공개 인증서를 SSM `/hopcharlie/sealed-secrets/eks`에 넣는 스크립트 |
 
 
 ## 플랫폼 Terraform 이관
@@ -586,6 +591,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
 | [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend·moimroom 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
+| [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
+| [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
 | [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
 | [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |

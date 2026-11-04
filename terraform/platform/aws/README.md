@@ -246,3 +246,57 @@ ECR 이미지, Elastic IP, SSM 파라미터까지 모두 지웁니다. PostgreSQ
 ## 앱 이미지 빌드 준비
 
 `app-build.tf`는 전용 CodeBuild 프로젝트, 역할·정책과 3일 보존 로그 그룹을 추가한다. 플랫폼 Pod Identity에는 해당 프로젝트 시작·상태와 로그 조회 권한만 추가한다. 플랫폼이 빌드마다 buildspec과 GitHub token을 전달해야 하며 기본 buildspec은 실패한다. 권한 범위와 운영 전 확인 사항은 [ADR 0022](../../../docs/adr/0022-platform-app-build.md)를 참조한다. 실제 계정 및 state는 확인하지 않았고 plan/apply도 실행하지 않았다.
+
+## 앱 버킷과 시크릿
+
+platform ADR 0016(앱마다 버킷과 그 버킷 전용 키)과 ADR 0019(앱 시크릿)에 필요한 것을 이 root와 플랫폼 차트가 준비한다. 결정 이유와 위험은 [ADR 0035](../../../docs/adr/0035-app-storage-and-secrets-infra.md)에 있다.
+
+| 리소스 | 내용 |
+| --- | --- |
+| `app-storage.tf` `aws_iam_role_policy.platform_app_storage` | 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷을 만들고 지우며, `/hopcharlie-apps/` 경로의 IAM 사용자를 boundary를 붙일 때만 만들고 그 사용자의 인라인 정책과 액세스 키를 관리한다 |
+| `app-storage.tf` `aws_iam_policy.app_boundary` | 그 사용자의 permissions boundary `hopcharlie-app-boundary`. `hopcharlie-eks-*` 버킷의 객체 사용과 목록만 허용한다 |
+| `app-storage.tf` `aws_ssm_parameter.app_secrets_key` | 앱 시크릿 암호화 키. 아래 표 |
+| `host/envs.yaml`의 `eks` | `sealedSecretsCert`와 `storage`(버킷 접두사, 리전, IAM 경로, boundary ARN) |
+
+| 파라미터 | 내용 | 만드는 방법 |
+| --- | --- | --- |
+| `/hopcharlie/app-secrets-key` | SecureString. 32바이트를 base64로. API init 컨테이너가 있으면 `PLATFORM_SECRETS_KEY`로 넘기고, 없으면 넘기지 않는다(시크릿 API가 503) | Terraform(`random_bytes`). 값은 이 파라미터와 state에만 있다 |
+| `/hopcharlie/sealed-secrets/<환경>` | String. 그 환경 클러스터의 Sealed Secrets 공개 인증서. API init 컨테이너가 `/config/sealed-secrets/<환경>.pem`으로 복사한다 | `scripts/put-sealed-secrets-cert.sh`(지금은 `eks`만) |
+
+### 적용 순서
+
+플랫폼 API는 envs.yaml의 모르는 필드를 거부한다. 그래서 `sealedSecretsCert`와 `storage`를 읽는 플랫폼 이미지가 먼저 돌고 있어야 하고, envs.yaml은 마지막에 바꾼다. 각 단계는 실행 전에 승인을 받는다.
+
+1. 플랫폼 이미지를 확인한다. infra main의 [hopcharlie-platform values](../../../clusters/aws-dev-management/values/hopcharlie-platform.yaml)에 있는 `images.platform` 태그(platform 커밋)가 platform ADR 0016, 0019 구현이 들어간 커밋 이후여야 한다. 아니면 이 단계에서 멈춘다. 그때 다른 단계를 먼저 하려면 envs.yaml 변경을 이 PR에서 빼고 따로 올린다. main에 envs.yaml 변경이 있으면 누가 `./tf.sh apply`를 하든 SSM에 들어가고, 다음 API 재시작에서 옛 이미지가 뜨지 않는다.
+2. 워크로드 클러스터의 인증서를 SSM에 넣는다. 지금 차트는 이 파라미터를 읽지 않으므로 먼저 넣어도 영향이 없다. 터널은 [Private EKS 접근](../../../README.md#private-eks-접근과-argo-cd-설치)을 따른다.
+   ```bash
+   # 터미널 A, infra 저장소 루트. 세션이 시작되면 켜 둔다.
+   make aws-tunnel CLUSTER=workload
+   # 터미널 B, infra 저장소 루트. 해커톤 계정이 아닌 프로필은 거부한다.
+   AWS_PROFILE=hopcharlie bash scripts/put-sealed-secrets-cert.sh
+   ```
+   subject, 만료일, SHA-256 지문을 출력하고 `stored /hopcharlie/sealed-secrets/eks`로 끝나야 한다.
+3. infra PR을 merge한다. Argo CD가 AppProject `hopcharlie-apps`(SealedSecret 허용), 앱 차트, 플랫폼 차트의 `fetch-settings.sh`를 동기화한다. API pod는 다시 시작하지 않는다.
+4. main에서 Terraform을 적용한다.
+   ```bash
+   cd "$INFRA_DIR/terraform/platform/aws"
+   git switch main && git pull --ff-only
+   ./tf.sh init
+   ./tf.sh plan
+   ```
+   plan은 `aws_iam_policy.app_boundary`, `aws_iam_role_policy.platform_app_storage`, `random_bytes.app_secrets_key`, `aws_ssm_parameter.app_secrets_key`의 생성과 `aws_ssm_parameter.host_file["envs.yaml"]`의 변경만 보여야 한다. 삭제나 교체가 있으면 멈춘다. 확인했으면 적용하고 boundary ARN을 대조한다.
+   ```bash
+   ./tf.sh apply
+   ./tf.sh output -raw app_permissions_boundary_arn   # host/envs.yaml의 permissionsBoundary와 같아야 한다
+   ```
+5. API를 다시 시작해 키, 인증서, envs.yaml을 읽힌다.
+   ```bash
+   # 터미널 A: make aws-tunnel (관리 클러스터)
+   kubectl --kubeconfig .generated/access/management.kubeconfig --context charlie-dev-management \
+     -n charlie-platform rollout restart deployment/hopcharlie-api
+   kubectl --kubeconfig .generated/access/management.kubeconfig --context charlie-dev-management \
+     -n charlie-platform rollout status deployment/hopcharlie-api
+   ```
+6. 확인한다. init 컨테이너 로그가 `fetched settings for api`로 끝나고, `charlie env list`에 `eks`가 보이며, 시크릿 API(`charlie app secret list <앱>`)가 503 `secrets_not_configured`를 돌려주지 않아야 한다. s3 리소스가 있는 앱을 배포하면 워크로드 클러스터에 SealedSecret `app-s3`가 Healthy가 되고 버킷 `hopcharlie-eks-<인스턴스>`가 생긴다.
+
+되돌릴 때는 envs.yaml 변경을 되돌리는 커밋을 main에 넣고 `./tf.sh apply`, API 재시작 순서로 한다. 시크릿 키는 지우지 않는다. 지우면 저장된 시크릿을 되살릴 수 없다.
