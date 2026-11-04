@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('verify', ROOT / 'scripts/terraform-verify.py')
@@ -54,9 +55,9 @@ if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
                 result = subprocess.run(command, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 calls = [json.loads(line) for line in log.read_text().splitlines()]
-                self.assertEqual(sum(c[1] == 'init' for c in calls), 6)
-                self.assertEqual(sum(c[1] == 'validate' for c in calls), 6)
-                self.assertEqual(sum(c[1] == 'test' for c in calls), 5)
+                self.assertEqual(sum(c[1] == 'init' for c in calls), 7)
+                self.assertEqual(sum(c[1] == 'validate' for c in calls), 7)
+                self.assertEqual(sum(c[1] == 'test' for c in calls), 6)
                 self.assertTrue((work / 'cache/fake-provider').exists())
                 log.unlink()
             env['VERIFY_FAIL'] = 'validate'
@@ -65,14 +66,37 @@ if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
 
     def test_original_mock_runs_preserved(self):
         # Preserve the original AWS suite without counting independent cloud suites.
-        roots = [ROOT / 'terraform' / verify.relative(stack) for stack in verify.ROOTS]
+        roots = [ROOT / 'terraform' / verify.relative(stack) for stack in verify.ROOTS if not stack.startswith('integrations/')]
         tests = [p for root in roots for p in root.rglob('*.tftest.hcl')]
         cnpg = ROOT / 'terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl'
         runs = lambda path: __import__('re').findall(r'^run\s+"([^"]+)"', path.read_text(), __import__('re').M)
         self.assertEqual(sum(len(runs(p)) for p in tests if p != cnpg), 28)
         self.assertIn(cnpg, tests)
         self.assertEqual(runs(cnpg), ['cnpg_backup_and_restore_boundaries'])
-        self.assertEqual(len(verify.ROOTS), 6)
+        self.assertEqual(len(roots), 6)
+
+    def test_tailscale_registration_is_backend_free_and_preserves_templates(self):
+        stack = 'integrations/aws-gcp/tailscale'
+        self.assertIn(stack, verify.ROOTS)
+        self.assertEqual(verify.relative(stack), Path(stack))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'terraform' / stack
+            (source / 'tests').mkdir(parents=True)
+            for name in ('main.tf', 'router-bootstrap.sh.tftpl', 'policy.json.tftpl', 'tests/router.tftest.hcl', 'terraform.tfstate', 'secret.auto.tfvars.json'):
+                (source / name).write_text('fixture')
+            copied = root / 'copy'
+            verify.clean_copy(source, copied)
+            self.assertEqual({p.relative_to(copied).as_posix() for p in copied.rglob('*') if p.is_file()},
+                             {'main.tf', 'router-bootstrap.sh.tftpl', 'policy.json.tftpl', 'tests/router.tftest.hcl'})
+            with patch.object(verify, 'ROOT', root), patch.object(sys, 'argv', ['verify', '--stack', stack]), patch.object(verify.subprocess, 'run') as run:
+                verify.main()
+            commands = [call.args[0][2:] for call in run.call_args_list]
+            self.assertEqual(commands, [['init', '-backend=false', '-input=false', '-lockfile=readonly'], ['validate'], ['test']])
+        spec = importlib.util.spec_from_file_location('deployment_config', ROOT / 'scripts/project-config.py')
+        config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(config)
+        self.assertNotIn(stack, config.STACKS)
 
 
 if __name__ == '__main__':

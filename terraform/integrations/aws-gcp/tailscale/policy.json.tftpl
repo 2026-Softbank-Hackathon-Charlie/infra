@@ -1,0 +1,21 @@
+{
+  "tagOwners": {
+    "tag:charlie-aws-router": ["autogroup:admin"],
+    "tag:charlie-gcp-router": ["autogroup:admin"]
+  },
+  "autoApprovers": {
+    "routes": {
+      "${aws_gateway_cidr}": ["tag:charlie-aws-router"],
+      "${gcp_app_cidr}": ["tag:charlie-gcp-router"]
+    }
+  },
+  "grants": [
+    {
+      "src": ["${aws_gateway_cidr}"],
+      "dst": ["${gcp_app_cidr}"],
+      "ip": ["tcp:80"]
+    }
+  ],
+  "acls": [],
+  "ssh": []
+}

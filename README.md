@@ -553,6 +553,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0023-deploy-github-apps-with-applicationset.md](docs/adr/0023-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
 | [docs/adr/0035-app-storage-and-secrets-infra.md](docs/adr/0035-app-storage-and-secrets-infra.md) | 앱 버킷과 앱 시크릿에 필요한 역할 권한, boundary, 시크릿 키, 인증서, 차트 변경 제안 |
 | [docs/adr/0036-app-routing-and-argo-apps.md](docs/adr/0036-app-routing-and-argo-apps.md) | 앱 ApplicationSet 개별 등록, gitops 자격 증명, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거 제안 |
+| [docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md) | AWS 게이트웨이와 GKE 앱 사이 Tailscale 서브넷 라우터 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드 RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/eks` 저장 |
@@ -697,3 +698,19 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/argocd/variables.tf](terraform/integrations/gcp/argocd/variables.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [terraform/integrations/gcp/argocd/versions.tf](terraform/integrations/gcp/argocd/versions.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [terraform/integrations/gcp/argocd/tests/federation.tftest.hcl](terraform/integrations/gcp/argocd/tests/federation.tftest.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+
+## AWS↔GKE 앱 사설 경로 (Tailscale)
+
+관리 EKS 게이트웨이가 GKE 앱의 내부 로드밸런서로 가는 경로다([ADR 0037](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md)). 양쪽 라우터 VM, 라우트, 방화벽만 만들고 tailnet 정책은 바꾸지 않는다. CI는 backend 없는 validate와 mock test만 하며, 실제 apply와 tailnet 등록은 별도 승인 후 진행한다.
+
+| 파일 | 역할 |
+|---|---|
+| [terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl](terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/versions.tf](terraform/integrations/aws-gcp/tailscale/versions.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/variables.tf](terraform/integrations/aws-gcp/tailscale/variables.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/main.tf](terraform/integrations/aws-gcp/tailscale/main.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/outputs.tf](terraform/integrations/aws-gcp/tailscale/outputs.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl](terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/policy.json.tftpl](terraform/integrations/aws-gcp/tailscale/policy.json.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl](terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py](terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |

@@ -1,0 +1,170 @@
+#!/bin/sh
+set -eu
+umask 077
+
+# Official static archive and checksum: https://pkgs.tailscale.com/stable/
+VERSION='1.104.5'
+SHA256='720cbbccbfc03d8b55df72afc19e5a72e31b0f65934700aa6fa38074d4ad7bf7'
+[ "$(uname -m)" = x86_64 ] || { echo 'This bootstrap requires Linux amd64.' >&2; exit 1; }
+
+if ! command -v python3 >/dev/null || ! command -v iptables >/dev/null || ! command -v ip >/dev/null; then
+  if command -v dnf >/dev/null; then
+    dnf install -y python3 iptables-nft iproute ca-certificates
+  elif command -v apt-get >/dev/null; then
+    export DEBIAN_FRONTEND=noninteractive
+    # Vendor HTTP mirrors cannot bootstrap through this router's HTTPS-only egress.
+    for sources_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+      [ -f "$sources_file" ] || continue
+      sed -i \
+        -e 's#http://[^/ ]*archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+        -e 's#http://security\.ubuntu\.com/ubuntu#https://security.ubuntu.com/ubuntu#g' \
+        -e 's#http://deb\.debian\.org/#https://deb.debian.org/#g' \
+        -e 's#http://security\.debian\.org/#https://security.debian.org/#g' \
+        -e 's#http://packages\.cloud\.google\.com/#https://packages.cloud.google.com/#g' "$sources_file"
+    done
+    apt-get update
+    apt-get install -y --no-install-recommends python3 iptables iproute2 ca-certificates
+  else
+    echo 'python3 and iptables are required.' >&2
+    exit 1
+  fi
+fi
+
+if [ ! -x /usr/local/bin/tailscale ] || [ "$(/usr/local/bin/tailscale version | head -n 1)" != "$VERSION" ]; then
+  workdir=$(mktemp -d /tmp/charlie-tailscale.XXXXXXXX)
+  trap 'rm -rf -- "$workdir"' EXIT HUP INT TERM
+  python3 - "$VERSION" "$SHA256" "$workdir/tailscale.tgz" <<'DOWNLOAD'
+import hashlib
+import shutil
+import sys
+import urllib.request
+
+version, expected, destination = sys.argv[1:]
+url = f"https://pkgs.tailscale.com/stable/tailscale_{version}_amd64.tgz"
+with urllib.request.urlopen(url, timeout=30) as source, open(destination, "wb") as target:
+    shutil.copyfileobj(source, target)
+digest = hashlib.sha256()
+with open(destination, "rb") as archive:
+    for chunk in iter(lambda: archive.read(1024 * 1024), b""):
+        digest.update(chunk)
+if digest.hexdigest() != expected:
+    raise SystemExit("Tailscale archive SHA256 mismatch; installation stopped.")
+DOWNLOAD
+  prefix="tailscale_$VERSION"_amd64
+  tar -xzf "$workdir/tailscale.tgz" -C "$workdir" "$prefix/tailscale" "$prefix/tailscaled"
+  install -o root -g root -m 0755 "$workdir/$prefix/tailscale" /usr/local/bin/tailscale
+  install -o root -g root -m 0755 "$workdir/$prefix/tailscaled" /usr/local/bin/tailscaled
+fi
+
+cat > /etc/sysctl.d/90-charlie-tailscale.conf <<'SYSCTL'
+net.ipv4.ip_forward=1
+SYSCTL
+sysctl -p /etc/sysctl.d/90-charlie-tailscale.conf
+
+cat > /usr/local/sbin/charlie-tailscale-forwarding <<'FORWARDING'
+#!/bin/sh
+set -eu
+# Tailscale table 52 wins while connected; main must fail closed when it disappears.
+ip -4 route replace unreachable '${remote_cidr}' table main metric 42760
+iptables -w -t mangle -C FORWARD -o tailscale0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null ||
+  iptables -w -t mangle -A FORWARD -o tailscale0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+FORWARDING
+chmod 0700 /usr/local/sbin/charlie-tailscale-forwarding
+
+# Browser enrollment is expected to wait; all authentication output stays off cloud logs.
+cat > /usr/local/sbin/charlie-tailscale-join <<'JOIN'
+#!/bin/sh
+set -eu
+if /usr/local/bin/tailscale up \
+  --hostname='${hostname}' \
+  --advertise-routes='${advertise_cidr}' \
+  --advertise-tags='${advertise_tag}' \
+  --accept-routes \
+  --accept-dns=false \
+  --snat-subnet-routes=false \
+  --ssh=false \
+  --timeout=15s >/dev/null 2>&1; then
+  exit 0
+fi
+backend=$(/usr/local/bin/tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["BackendState"])')
+case "$backend" in
+  NeedsLogin|NeedsMachineAuth) exit 0 ;;
+  *) exit 1 ;;
+esac
+JOIN
+chmod 0700 /usr/local/sbin/charlie-tailscale-join
+
+cat > /etc/systemd/system/tailscaled.service <<'DAEMON'
+[Unit]
+Description=Tailscale subnet router
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+UMask=0077
+StateDirectory=tailscale
+StateDirectoryMode=0700
+RuntimeDirectory=tailscale
+RuntimeDirectoryMode=0700
+ExecStart=/usr/local/bin/tailscaled --state=/var/lib/tailscale/tailscaled.state --statedir=/var/lib/tailscale --socket=/run/tailscale/tailscaled.sock --port=41641 --no-logs-no-support
+ExecStartPre=/usr/local/sbin/charlie-tailscale-forwarding
+Restart=on-failure
+RestartSec=5
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
+DAEMON
+
+cat > /etc/systemd/system/charlie-tailscale-join.service <<'ENROLLMENT'
+[Unit]
+Description=Configure Tailscale routes and await browser enrollment
+Requires=tailscaled.service
+After=tailscaled.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/charlie-tailscale-join
+RemainAfterExit=true
+TimeoutStartSec=45
+Restart=on-failure
+RestartSec=30
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
+ENROLLMENT
+
+# This vendor login UI is admin-only; --readonly still permits enrollment via /api/up.
+cat > /etc/systemd/system/charlie-tailscale-web.service <<'WEB'
+[Unit]
+Description=Tailscale enrollment over the approved SSM or IAP tunnel
+Requires=tailscaled.service
+After=tailscaled.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/bin/tailscale web --readonly --listen=${web_listen}
+Restart=on-failure
+RestartSec=5
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
+WEB
+
+systemctl daemon-reload
+systemctl enable --now tailscaled.service
+systemctl enable --now charlie-tailscale-join.service charlie-tailscale-web.service

@@ -9,7 +9,7 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-ROOTS = ('bootstrap/aws', 'account/aws', 'aws/dev/foundation', 'modules/eks', 'aws/dev/management', 'aws/dev/workload')
+ROOTS = ('bootstrap/aws', 'account/aws', 'aws/dev/foundation', 'modules/eks', 'aws/dev/management', 'aws/dev/workload', 'integrations/aws-gcp/tailscale')
 
 
 def relative(stack):
@@ -23,7 +23,7 @@ def clean_copy(src, dest):
             continue
         if p.name in ('override.tf', 'override.tf.json') or p.name.endswith(('_override.tf', '_override.tf.json')):
             continue
-        if p.name == '.terraform.lock.hcl' or p.suffix == '.tf' or p.name.endswith('.tftest.hcl') or (rel.parts[0] == 'config' and p.suffix == '.json'):
+        if p.name == '.terraform.lock.hcl' or p.suffix in ('.tf', '.tftpl') or p.name.endswith('.tftest.hcl') or (rel.parts[0] == 'config' and p.suffix == '.json'):
             target = dest / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(p, target)
