@@ -78,9 +78,15 @@ def require(ok, message):
         raise Refused(message)
 
 
+# On Windows the AWS CLI writes non-ASCII text (e.g. the runner's check marks in
+# an SSM command's output) in the ANSI code page, not UTF-8. JSON syntax is ASCII,
+# so replacing undecodable bytes only touches text inside string values.
+TEXT = {'text': True, 'encoding': 'utf-8', 'errors': 'replace'}
+
+
 def run(args, check=True, stdin=None):
     # stdout is captured and never echoed; CLI errors stay visible on stderr.
-    return subprocess.run(args, input=stdin, check=check, text=True, encoding='utf-8', stdout=subprocess.PIPE)
+    return subprocess.run(args, input=stdin, check=check, stdout=subprocess.PIPE, **TEXT)
 
 
 def aws_args(*args):
@@ -94,7 +100,7 @@ def aws(*args):
 
 def aws_try(*args, missing):
     """Like aws(), but returns None when the error output contains `missing` (NoSuchEntity and the like)."""
-    result = subprocess.run(aws_args(*args), text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(aws_args(*args), stdout=subprocess.PIPE, stderr=subprocess.PIPE, **TEXT)
     if result.returncode == 0:
         return json.loads(result.stdout) if result.stdout.strip() else {}
     if missing in result.stderr:
@@ -244,7 +250,7 @@ def launch(spec, group_id):
     # A new instance profile takes a few seconds before EC2 accepts it.
     for attempt in range(1, 19):
         result = subprocess.run(aws_args('ec2', 'run-instances', '--cli-input-json', json.dumps(spec)),
-                                text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, **TEXT)
         if result.returncode == 0:
             instance_id = json.loads(result.stdout)['Instances'][0]['InstanceId']
             print(f'launched {instance_id}')
