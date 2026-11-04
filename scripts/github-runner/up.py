@@ -2,8 +2,10 @@
 """Bring up the org's self-hosted GitHub Actions runner host (ADR 0042).
 
 In the hackathon account (525091405886, ap-northeast-2) it reuses or creates
-the IAM role and instance profile hopcharlie-github-runner (EC2 trust, only
-AmazonSSMManagedInstanceCore), a security group without ingress in the default
+the IAM role and instance profile hopcharlie-github-runner (EC2 trust, one
+inline policy with what the SSM agent needs: AmazonSSMManagedInstanceCore
+without ssm:GetParameter(s), so job code that reaches the instance role
+cannot read SSM parameters), a security group without ingress in the default
 VPC, and one Ubuntu 24.04 t3.xlarge tagged Name=hopcharlie-github-runner (80 GiB
 encrypted gp3, public IP in a default subnet, IMDSv2 with hop limit 1). When SSM
 reports the instance Online, it runs bootstrap.sh there through SSM Run Command
@@ -43,7 +45,24 @@ INSTANCE_TYPE, DISK_GIB = 't3.xlarge', 80
 LABEL = 'hopcharlie'
 RUNNER_NAMES = [f'hopcharlie-runner-{n}' for n in (1, 2, 3)]
 AMI_PARAMETER = '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+# Attached by earlier versions of this script; detached when found.
 SSM_POLICY = 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+AGENT_POLICY_NAME = 'ssm-agent'
+# AmazonSSMManagedInstanceCore (2026-11-04) without ssm:GetParameter and
+# ssm:GetParameters.
+AGENT_POLICY = {'Version': '2012-10-17', 'Statement': [
+    {'Effect': 'Allow', 'Resource': '*', 'Action': [
+        'ssm:DescribeAssociation', 'ssm:GetDeployablePatchSnapshotForInstance', 'ssm:GetDocument',
+        'ssm:DescribeDocument', 'ssm:GetManifest', 'ssm:ListAssociations', 'ssm:ListInstanceAssociations',
+        'ssm:PutInventory', 'ssm:PutComplianceItems', 'ssm:PutConfigurePackageResult',
+        'ssm:UpdateAssociationStatus', 'ssm:UpdateInstanceAssociationStatus', 'ssm:UpdateInstanceInformation']},
+    {'Effect': 'Allow', 'Resource': '*', 'Action': [
+        'ssmmessages:CreateControlChannel', 'ssmmessages:CreateDataChannel',
+        'ssmmessages:OpenControlChannel', 'ssmmessages:OpenDataChannel']},
+    {'Effect': 'Allow', 'Resource': '*', 'Action': [
+        'ec2messages:AcknowledgeMessage', 'ec2messages:DeleteMessage', 'ec2messages:FailMessage',
+        'ec2messages:GetEndpoint', 'ec2messages:GetMessages', 'ec2messages:SendReply']},
+]}
 TRUST = {'Version': '2012-10-17', 'Statement': [
     {'Effect': 'Allow', 'Principal': {'Service': 'ec2.amazonaws.com'}, 'Action': 'sts:AssumeRole'}]}
 LIVE_STATES = 'pending,running,stopping,stopped'
@@ -195,9 +214,12 @@ def ensure_iam(state):
             '--description', 'GitHub Actions runner host (infra ADR 0042): SSM only',
             '--tags', *[f'Key={k},Value={v}' for k, v in TAGS.items()])
         print(f'created IAM role {NAME}')
-    if SSM_POLICY not in attached:
-        aws('iam', 'attach-role-policy', '--role-name', NAME, '--policy-arn', SSM_POLICY)
-        print('attached AmazonSSMManagedInstanceCore')
+    aws('iam', 'put-role-policy', '--role-name', NAME, '--policy-name', AGENT_POLICY_NAME,
+        '--policy-document', json.dumps(AGENT_POLICY))
+    print(f'set inline policy {AGENT_POLICY_NAME} (SSM agent, no parameter reads)')
+    if SSM_POLICY in attached:
+        aws('iam', 'detach-role-policy', '--role-name', NAME, '--policy-arn', SSM_POLICY)
+        print('detached AmazonSSMManagedInstanceCore')
     if not profile:
         aws('iam', 'create-instance-profile', '--instance-profile-name', NAME,
             '--tags', *[f'Key={k},Value={v}' for k, v in TAGS.items()])
@@ -286,14 +308,14 @@ def main(argv=None):
         found = instances()
         require(len(found) <= 1, f"more than one instance is tagged Name={NAME}: {', '.join(i['InstanceId'] for i in found)}")
         role, attached, inline, profile, _ = state
-        require(not inline and set(attached) <= {SSM_POLICY},
+        require(set(inline) <= {AGENT_POLICY_NAME} and set(attached) <= {SSM_POLICY},
                 f'role {NAME} has other policies ({", ".join(inline + attached)}); remove them first')
         require(not group or not group['IpPermissions'], f"security group {group and group['GroupId']} has ingress rules; remove them first")
         version, sha256 = runner_release()
 
         print(f'account {ACCOUNT}, region {REGION}')
-        print(f"IAM role {NAME}: {'exists' if role else 'create'} (EC2 trust, AmazonSSMManagedInstanceCore"
-              f"{'' if SSM_POLICY in attached or not role else ' to attach'})")
+        print(f"IAM role {NAME}: {'exists' if role else 'create'} (EC2 trust, inline policy {AGENT_POLICY_NAME}"
+              f" for the SSM agent without parameter reads{'; detach AmazonSSMManagedInstanceCore' if SSM_POLICY in attached else ''})")
         print(f"instance profile {NAME}: {'exists' if profile else 'create'}")
         print(f"security group {NAME} in {vpc}: {group['GroupId'] if group else 'create'} (no ingress)")
         spec = None

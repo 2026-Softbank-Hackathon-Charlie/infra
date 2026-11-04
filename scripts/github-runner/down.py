@@ -17,7 +17,7 @@ import subprocess
 import sys
 import time
 
-from up import (NAME, ORG, RUNNER_NAMES, SSM_POLICY, Refused, aws, aws_try, check_tools_and_account, default_vpc,
+from up import (AGENT_POLICY_NAME, NAME, ORG, RUNNER_NAMES, SSM_POLICY, Refused, aws, aws_try, check_tools_and_account, default_vpc,
                 gh_scope_problem, iam_state, instances, org_runners, require, run, run_on_instance, security_group,
                 show_runners)
 
@@ -43,7 +43,7 @@ def main(argv=None):
         found = instances()
         vpc = default_vpc()
         group = security_group(vpc)
-        role, attached, _, profile, roles = iam_state()
+        role, attached, inline, profile, roles = iam_state()
 
         print('org runners:')
         if runners is None:
@@ -107,6 +107,8 @@ def main(argv=None):
         if role:
             if SSM_POLICY in attached:
                 aws('iam', 'detach-role-policy', '--role-name', NAME, '--policy-arn', SSM_POLICY)
+            if AGENT_POLICY_NAME in inline:
+                aws('iam', 'delete-role-policy', '--role-name', NAME, '--policy-name', AGENT_POLICY_NAME)
             aws('iam', 'delete-role', '--role-name', NAME)
             print(f'deleted IAM role {NAME}')
         print('Done. Jobs with runs-on: [self-hosted, hopcharlie] now wait in the queue.')

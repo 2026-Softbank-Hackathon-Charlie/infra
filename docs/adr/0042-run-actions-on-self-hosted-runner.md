@@ -25,7 +25,7 @@
 ## 결정과 이유
 
 - 해커톤 AWS 계정(525091405886, ap-northeast-2)의 전용 EC2 한 대를 조직 단위 self-hosted runner 호스트로 쓴다. Ubuntu 24.04, t3.xlarge, 암호화한 80 GiB gp3다. runner 3개(`hopcharlie-runner-1`, `hopcharlie-runner-2`, `hopcharlie-runner-3`)가 job을 하나씩 동시에 실행하고, 모두 label `hopcharlie`와 Default runner group을 쓴다.
-- [scripts/github-runner/up.py](../../scripts/github-runner/up.py)가 자원을 이름과 태그(`Name=hopcharlie-github-runner`)로 찾고 없으면 만든다. IAM 역할과 instance profile `hopcharlie-github-runner`(EC2 신뢰, `AmazonSSMManagedInstanceCore`만), 기본 VPC의 ingress 없는 보안 그룹, 기본 서브넷의 public IP다. 기본 VPC에는 NAT가 없어서 public IP로 GitHub, apt, SSM에 나간다. 접속은 SSM만 쓴다.
+- [scripts/github-runner/up.py](../../scripts/github-runner/up.py)가 자원을 이름과 태그(`Name=hopcharlie-github-runner`)로 찾고 없으면 만든다. IAM 역할과 instance profile `hopcharlie-github-runner`(EC2 신뢰, SSM 에이전트용 인라인 정책 `ssm-agent`만. 아래 위험 항목 참고), 기본 VPC의 ingress 없는 보안 그룹, 기본 서브넷의 public IP다. 기본 VPC에는 NAT가 없어서 public IP로 GitHub, apt, SSM에 나간다. 접속은 SSM만 쓴다.
 - 인스턴스 메타데이터는 IMDSv2만 받고 hop limit을 1로 둬서 job의 컨테이너가 인스턴스 역할에 닿지 못하게 한다. job의 step은 호스트에서 `runner` 사용자로 돌기 때문에, bootstrap이 `runner` 사용자의 메타데이터 요청도 iptables로 거부한다. SSM 에이전트(root)는 그대로 쓴다.
 - `up.py`는 SSM이 인스턴스를 Online으로 보면 조직 registration token을 받아 [bootstrap.sh](../../scripts/github-runner/bootstrap.sh)를 SSM Run Command로 root로 실행한다. token은 출력하지 않고 명령줄에도 넣지 않는다. bootstrap은 다시 실행해도 안전하며 다음을 한다.
   - Ubuntu 패키지의 docker.io와 docker-buildx(2026-11-04 기준 29.1과 0.30, `--metadata-file`, `--provenance` 지원), AWS CLI v2(공식 zip), gh(공식 apt 저장소), git, curl, jq, unzip, zip, zstd, xz-utils, python3, python3-venv, python3-pip, build-essential을 설치한다.
@@ -49,7 +49,7 @@
 - 단점과 위험:
   - 호스트는 job 사이에 초기화되지 않는다. 작업 폴더(`_work`), Docker 이미지와 빌드 캐시, `runner` 사용자 홈(`~/go`, `~/.cache`, `~/.npm`)이 다음 job과 다른 runner에 남는다. 앞의 job이 남긴 파일이 다음 job에 영향을 줄 수 있다.
   - job끼리 격리되지 않는다. 세 runner가 같은 사용자로 돌고 docker 그룹은 사실상 root라서, 한 job이 동시에 도는 다른 job의 환경 변수(OIDC로 받은 AWS 자격 증명 등)를 읽을 수 있다. 저장소가 모두 private이고 팀원만 push한다는 전제로 받아들인다.
-  - `AmazonSSMManagedInstanceCore`에는 `ssm:GetParameter`가 있어서, 인스턴스 역할 자격 증명을 얻으면 `/hopcharlie/*` SSM 파라미터를 읽을 수 있다. hop limit과 iptables 규칙이 막지만, docker 그룹 권한으로 호스트 네트워크 컨테이너를 띄우면 우회된다. 더 줄이려면 SSM 에이전트에 필요한 권한(`ssm:UpdateInstanceInformation`, `ssmmessages:*`, `ec2messages:*`)만 담은 인라인 정책으로 바꾼다.
+  - 인스턴스 역할에는 `AmazonSSMManagedInstanceCore` 대신, 그 정책에서 `ssm:GetParameter`와 `ssm:GetParameters`를 뺀 인라인 정책 `ssm-agent`만 둔다. job 코드가 hop limit과 iptables 규칙을 우회해(docker 그룹 권한으로 호스트 네트워크 컨테이너를 띄우는 식) 인스턴스 역할 자격 증명을 얻어도 `/hopcharlie/*` SSM 파라미터는 읽지 못한다. 남는 권한은 SSM 에이전트의 메시지 채널과 상태 보고뿐이다.
   - registration token은 SSM 명령 파라미터(명령 기록, 30일 보관)와 인스턴스의 SSM 작업 폴더에 남는다. token은 1시간 뒤 만료된다.
   - 자동 보안 업데이트를 끄므로 해커톤 동안 호스트 패키지는 설치한 시점의 버전으로 남는다. ingress가 없고 며칠만 쓰는 호스트라 받아들인다.
   - 매일 정리에서 `until=24h`는 이미지의 생성 시각을 보므로, 쓰지 않는 기반 이미지(postgres, caddy, node)도 매일 지워지고 다음 job이 다시 받는다.
