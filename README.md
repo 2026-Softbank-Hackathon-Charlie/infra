@@ -554,6 +554,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0035-app-storage-and-secrets-infra.md](docs/adr/0035-app-storage-and-secrets-infra.md) | 앱 버킷과 앱 시크릿에 필요한 역할 권한, boundary, 시크릿 키, 인증서, 차트 변경 제안 |
 | [docs/adr/0036-app-routing-and-argo-apps.md](docs/adr/0036-app-routing-and-argo-apps.md) | 앱 ApplicationSet 개별 등록, gitops 자격 증명, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거 제안 |
 | [docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md) | AWS 게이트웨이와 GKE 앱 사이 Tailscale 서브넷 라우터 제안 |
+| [docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md](docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md) | GKE 동적 앱 namespace의 제한된 Argo 권한·소유권 보호 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드 RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/eks` 저장 |
@@ -686,6 +687,7 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [helm/charts/gcp-argocd-access/values.yaml](helm/charts/gcp-argocd-access/values.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [helm/charts/gcp-argocd-access/values.schema.json](helm/charts/gcp-argocd-access/values.schema.json) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [helm/charts/gcp-argocd-access/templates/rbac.yaml](helm/charts/gcp-argocd-access/templates/rbac.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml](helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml) | 소유 GKE 앱 namespace만 관리하는 Argo 권한·admission |
 | [scripts/prepare-argocd-gcp.py](scripts/prepare-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [scripts/tests/test-argocd-gcp.py](scripts/tests/test-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [docs/gcp-operational-access.md](docs/gcp-operational-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |

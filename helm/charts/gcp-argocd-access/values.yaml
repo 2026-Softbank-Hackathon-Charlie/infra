@@ -3,3 +3,23 @@ managedNamespaces:
   - charlie-apps
 # Existing baseline normally owns these namespaces.
 createNamespaces: false
+dynamicApps:
+  enabled: false
+  # Install and verify the policy first, then explicitly grant access.
+  # Retire in reverse: remove the grant and verify it before disabling the policy.
+  grantAccess: false
+  # Keep aligned with hopcharlie-apps; existing infrastructure cannot be adopted.
+  protectedNamespaces:
+    - argocd
+    - cert-manager
+    - charlie-apps
+    - charlie-db
+    - charlie-platform
+    - charlie-system
+    - cnpg-system
+    - default
+    - headlamp
+    - kube-node-lease
+    - kube-public
+    - kube-system
+    - observability

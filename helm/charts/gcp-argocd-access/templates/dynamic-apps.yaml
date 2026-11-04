@@ -1,0 +1,154 @@
+{{- if and .Values.dynamicApps.grantAccess (not .Values.dynamicApps.enabled) }}
+{{- fail "dynamicApps.grantAccess requires dynamicApps.enabled and a verified installed policy" }}
+{{- end }}
+{{- if .Values.dynamicApps.enabled }}
+{{- if .Values.createNamespaces }}
+{{- fail "dynamicApps must not create or adopt the baseline's namespaces" }}
+{{- end }}
+{{- $name := printf "%s-dynamic-apps" .Release.Name }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces, services, resourcequotas, limitranges]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Encrypted values only; the controller, not Argo CD, writes the Secret.
+  - apiGroups: [bitnami.com]
+    resources: [sealedsecrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- if .Values.dynamicApps.grantAccess }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ .Values.googleServiceAccountEmail | quote }}
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        resources: [namespaces]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Cluster
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        resources: [services, resourcequotas, limitranges]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Namespaced
+      - apiGroups: [apps]
+        apiVersions: ["*"]
+        resources: [deployments]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Namespaced
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: ["*"]
+        resources: [clusters]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Namespaced
+      - apiGroups: [networking.k8s.io]
+        apiVersions: ["*"]
+        resources: [networkpolicies]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Namespaced
+      - apiGroups: [bitnami.com]
+        apiVersions: ["*"]
+        resources: [sealedsecrets]
+        operations: [CREATE, UPDATE, DELETE]
+        scope: Namespaced
+  matchConditions:
+    - name: argocd-google-identity
+      expression: {{ printf "request.userInfo.username == '%s'" .Values.googleServiceAccountEmail | quote }}
+  variables:
+    - name: protectedNamespaces
+      expression: {{ .Values.dynamicApps.protectedNamespaces | toJson | quote }}
+    - name: namespaceRequest
+      expression: "request.resource.group == '' && request.resource.resource == 'namespaces'"
+    - name: target
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+    - name: ownedNamespace
+      expression: >-
+        has(variables.target.metadata.labels) &&
+        'hopcharlie.dev/app' in variables.target.metadata.labels &&
+        'hopcharlie.dev/instance' in variables.target.metadata.labels &&
+        variables.target.metadata.labels['hopcharlie.dev/instance'] == variables.target.metadata.name &&
+        variables.target.metadata.labels['hopcharlie.dev/app'].matches('^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$') &&
+        size(variables.target.metadata.name) <= 53 &&
+        variables.target.metadata.name.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') &&
+        (variables.target.metadata.name == variables.target.metadata.labels['hopcharlie.dev/app'] ||
+         variables.target.metadata.name.startsWith(variables.target.metadata.labels['hopcharlie.dev/app'] + '--'))
+  validations:
+    - expression: >-
+        variables.namespaceRequest ?
+          !(variables.target.metadata.name in variables.protectedNamespaces) && !variables.target.metadata.name.startsWith('kube-') :
+          !(request.namespace in variables.protectedNamespaces) && !request.namespace.startsWith('kube-')
+      message: Argo CD cannot change infrastructure or Kubernetes system namespaces
+    - expression: "!variables.namespaceRequest || variables.ownedNamespace"
+      message: The namespace must match the app and instance labels and the platform naming contract
+    - expression: >-
+        !variables.namespaceRequest || request.operation != 'UPDATE' ||
+        (has(oldObject.metadata.labels) && has(object.metadata.labels) &&
+         'hopcharlie.dev/app' in oldObject.metadata.labels &&
+         'hopcharlie.dev/instance' in oldObject.metadata.labels &&
+         'hopcharlie.dev/app' in object.metadata.labels &&
+         'hopcharlie.dev/instance' in object.metadata.labels &&
+         oldObject.metadata.labels['hopcharlie.dev/instance'] == oldObject.metadata.name &&
+         object.metadata.labels['hopcharlie.dev/app'] == oldObject.metadata.labels['hopcharlie.dev/app'] &&
+         object.metadata.labels['hopcharlie.dev/instance'] == oldObject.metadata.labels['hopcharlie.dev/instance'])
+      message: Argo CD cannot adopt an existing namespace or change its app ownership
+    - expression: >-
+        !variables.namespaceRequest || request.operation == 'DELETE' ||
+        (has(object.metadata.labels) && 'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+         object.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted' &&
+         (!('pod-security.kubernetes.io/enforce-version' in object.metadata.labels) ||
+          object.metadata.labels['pod-security.kubernetes.io/enforce-version'] == 'latest'))
+      message: Application namespaces must keep the current restricted Pod Security Standard
+    - expression: >-
+        variables.namespaceRequest ||
+        (namespaceObject != null && has(namespaceObject.metadata.labels) &&
+         'hopcharlie.dev/app' in namespaceObject.metadata.labels &&
+         'hopcharlie.dev/instance' in namespaceObject.metadata.labels &&
+         namespaceObject.metadata.labels['hopcharlie.dev/instance'] == request.namespace &&
+         namespaceObject.metadata.labels['hopcharlie.dev/app'].matches('^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$') &&
+         size(request.namespace) <= 53 &&
+         (request.namespace == namespaceObject.metadata.labels['hopcharlie.dev/app'] ||
+          request.namespace.startsWith(namespaceObject.metadata.labels['hopcharlie.dev/app'] + '--')) &&
+         'pod-security.kubernetes.io/enforce' in namespaceObject.metadata.labels &&
+         namespaceObject.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted' &&
+         (!('pod-security.kubernetes.io/enforce-version' in namespaceObject.metadata.labels) ||
+          namespaceObject.metadata.labels['pod-security.kubernetes.io/enforce-version'] == 'latest'))
+      message: Writes are restricted to namespaces already owned by a platform app
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: [Deny]
+{{- end }}

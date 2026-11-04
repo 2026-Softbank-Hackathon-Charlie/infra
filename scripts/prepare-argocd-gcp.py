@@ -29,9 +29,11 @@ def named_merge(existing, additions):
             result.append(copy.deepcopy(item))
     return result
 
-def prepare(outputs, metadata, bootstrap, namespace='argocd', managed_namespaces=None):
+def prepare(outputs, metadata, bootstrap, namespace='argocd', managed_namespaces=None, dynamic_apps=False, grant_access=False):
     if not all(isinstance(value, dict) for value in [outputs, metadata, bootstrap]):
         raise ValueError('Inputs must be JSON objects.')
+    if not isinstance(dynamic_apps, bool) or not isinstance(grant_access, bool) or (grant_access and not dynamic_apps):
+        raise ValueError('Dynamic access requires explicit booleans and an enabled, verified policy.')
     public = {}
     for key, value in outputs.items():
         if isinstance(value, dict) and 'value' in value and 'sensitive' in value:
@@ -104,9 +106,16 @@ def prepare(outputs, metadata, bootstrap, namespace='argocd', managed_namespaces
                 'apiVersion': 'client.authentication.k8s.io/v1beta1',
                 'env': {'GOOGLE_APPLICATION_CREDENTIALS': ADC_PATH}},
                 'tlsClientConfig': {'insecure': False, 'caData': ca}})}}
+    rbac_values = {'googleServiceAccountEmail': email, 'managedNamespaces': managed_namespaces, 'createNamespaces': False}
+    if dynamic_apps:
+        rbac_values['dynamicApps'] = {'enabled': True, 'grantAccess': grant_access}
+    if grant_access:
+        # Explicit empty values clear the existing namespace cache restriction on updates.
+        cluster['stringData'].update(namespaces='', clusterResources='true')
+        overlay['argo-cd']['configs'] = {'cm': {'resource.respectRBAC': 'normal'}}
     return {'bootstrap-overlay.json': overlay,
         'management-manifests.json': {'apiVersion': 'v1', 'kind': 'List', 'items': [config_map, cluster]},
-        'gke-rbac-values.json': {'googleServiceAccountEmail': email, 'managedNamespaces': managed_namespaces, 'createNamespaces': False}}
+        'gke-rbac-values.json': rbac_values}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -116,10 +125,12 @@ def main():
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--argocd-namespace', default='argocd')
     parser.add_argument('--managed-namespace', action='append')
+    parser.add_argument('--dynamic-apps', action='store_true', help='Prepare the separately approved bounded app-namespace access and dynamic cache.')
+    parser.add_argument('--grant-dynamic-app-access', dest='grant_access', action='store_true', help='Grant access and expand the cache only after the installed policy has been verified.')
     args = parser.parse_args()
     try:
         files = prepare(*[json.loads(p.read_text(encoding='utf-8-sig')) for p in [args.terraform_outputs, args.gke_metadata, args.bootstrap_values]],
-                        namespace=args.argocd_namespace, managed_namespaces=args.managed_namespace)
+                        namespace=args.argocd_namespace, managed_namespaces=args.managed_namespace, dynamic_apps=args.dynamic_apps, grant_access=args.grant_access)
         serialized = {name: json.dumps(value, indent=2) + '\n' for name, value in files.items()}
         if any((args.output_dir / name).exists() and (args.output_dir / name).read_text(encoding='utf-8') != text for name, text in serialized.items()):
             raise ValueError('Output files differ; review changes in a new output directory.')
