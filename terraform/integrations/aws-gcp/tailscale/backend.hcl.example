@@ -1,0 +1,2 @@
+# Reuse the existing GCP state bucket; the root fixes the aws-gcp/dev/tailscale prefix.
+bucket = "REPLACE_WITH_EXISTING_GCP_STATE_BUCKET"

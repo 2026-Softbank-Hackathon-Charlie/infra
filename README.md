@@ -706,9 +706,21 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 
 관리 EKS 게이트웨이가 GKE 앱의 내부 로드밸런서로 가는 경로다([ADR 0037](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md)). 양쪽 라우터 VM, 라우트, 방화벽만 만들고 tailnet 정책은 바꾸지 않는다. CI는 backend 없는 validate와 mock test만 하며, 실제 apply와 tailnet 등록은 별도 승인 후 진행한다.
 
+### 실행 순서
+
+state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 입력값과 적용 결과는 커밋하지 않는다(`.gitignore`). 팀 노션의 적용 기록을 본다.
+
+1. `backend.hcl.example`, `terraform.tfvars.example`을 복사해 기존 값으로 채운다. 이미지는 공식 이미지 ID로 고정한다.
+2. AWS 프로필과 GCP ADC로 `terraform init -backend-config=backend.hcl`, `terraform plan -out=router.tfplan`을 실행하고, 생성만 있는지 확인한 뒤 승인받아 `terraform apply router.tfplan`한다.
+3. 라우터 등록: AWS는 SSM 포트 포워딩, GCP는 IAP 터널로 라우터의 `5252` 포트에 접속해 tailnet 소유자 계정으로 로그인한다. 인증 키는 쓰지 않는다.
+4. tailnet 정책: `terraform output -raw tailscale_policy_candidate`를 기존 정책에 **합친다**. 통째로 덮어쓰지 않는다.
+5. 회수: 같은 설정으로 `terraform destroy` 후 tailnet에서 두 기기를 지운다.
+
 | 파일 | 역할 |
 |---|---|
 | [terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl](terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/backend.hcl.example](terraform/integrations/aws-gcp/tailscale/backend.hcl.example) | state 버킷 입력 예시(prefix는 코드에 고정) |
+| [terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example](terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example) | 기존 VPC·서브넷·고정 이미지 입력 예시 |
 | [terraform/integrations/aws-gcp/tailscale/versions.tf](terraform/integrations/aws-gcp/tailscale/versions.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 | [terraform/integrations/aws-gcp/tailscale/variables.tf](terraform/integrations/aws-gcp/tailscale/variables.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 | [terraform/integrations/aws-gcp/tailscale/main.tf](terraform/integrations/aws-gcp/tailscale/main.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
