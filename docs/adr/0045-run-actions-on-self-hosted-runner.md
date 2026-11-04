@@ -112,7 +112,7 @@
   - VM에는 클라우드 자격 증명이 없다. workflow가 AWS에 접근하는 길은 전과 같이 GitHub OIDC로 받는 자격 증명(`aws-actions/configure-aws-credentials`)뿐이고, GCP에는 전과 같이 GitHub WIF(`google-github-actions/auth`)로 접근한다. 이 자격 증명이 job 환경 변수와 파일에 있어서 동시에 도는 다른 job이 읽을 수 있는 위험은 그대로다.
   - iptables 규칙은 호스트에서 도는 `runner` 사용자만 막고 job의 컨테이너는 막지 않는다. GCP에는 IMDS hop limit 같은 설정이 없어서 컨테이너가 메타데이터 서버에 닿는다. 서비스 계정이 없으므로 컨테이너가 얻는 것은 인스턴스와 프로젝트 메타데이터뿐이고, token은 메타데이터에 넣지 않는다.
   - GCP 메타데이터 서버(169.254.169.254)는 VM의 DNS 서버도 겸한다. Ubuntu 이미지에서 `runner` 사용자는 systemd-resolved(127.0.0.53)를 거쳐 이름을 찾으므로 iptables 규칙에 걸리지 않는다고 가정한다. bootstrap 요약의 `runner resolves github.com` 줄로 확인하며, GCP VM에서는 아직 확인하지 않았다.
-  - VPC MTU가 1460인데 Docker 기본 bridge는 1500이다. 컨테이너 안에서 큰 응답을 받을 때 path MTU discovery가 막힌 상대와는 연결이 멈출 수 있다. docker build나 PostgreSQL 컨테이너를 쓰는 job이 내려받기에서 멈추면 `/etc/docker/daemon.json`에 `"mtu": 1460`을 넣고 dockerd를 재시작하는 방법을 쓴다. 아직 확인하지 않은 위험이다.
+  - VPC MTU가 1460인데 Docker bridge는 1500이다. 그대로 두면 컨테이너와 이미지 빌드(`npm ci`, `apt-get`) 안에서 내려받는 TCP 연결이 멈출 수 있다. 그래서 bootstrap.sh가 `github-runner-mss-clamp` 서비스로 전달되는 TCP 연결의 MSS를 경로 MTU에 맞게 줄인다(`iptables -t mangle ... TCPMSS --clamp-mss-to-pmtu`). docker run과 BuildKit 양쪽에 적용되고, MTU 9001인 EC2에서는 바뀌는 것이 없다. UDP는 이 규칙의 대상이 아니다.
   - bootstrap이 token 파일을 읽기 전에 실패하면 파일이 VM의 모드 700 폴더에 남는다. OS Login 사용자와 root만 읽을 수 있고 token은 1시간 뒤 만료된다.
   - 처음 `gcloud compute ssh`를 실행하면 gcloud가 로컬 SSH 키(`~/.ssh/google_compute_engine`)를 만들고 사용자의 OS Login 프로필에 공개 키를 등록한다. Windows에서는 호스트 키를 자동으로 받아들이므로, IAP가 연결해 준 상대를 VM으로 믿는다.
   - OS Login 사용자가 sudo를 쓰려면 `compute.instances.osAdminLogin` 권한이 필요하다. 사용자가 owner라서 있다고 가정하며 VM에서는 아직 확인하지 않았다.

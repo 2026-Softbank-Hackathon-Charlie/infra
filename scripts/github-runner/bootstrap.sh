@@ -116,6 +116,26 @@ ExecStart=/bin/sh -c 'iptables -C OUTPUT -d 169.254.169.254/32 -m owner --uid-ow
 WantedBy=multi-user.target
 UNIT
 
+# GCP's default network has MTU 1460 while Docker's bridges use 1500, so TCP
+# downloads inside containers and image builds (npm ci, apt-get) can stall.
+# Clamping the MSS of forwarded connections to the path MTU fixes every bridge
+# (docker run and BuildKit alike); on EC2 (MTU 9001) it changes nothing.
+step 'clamp TCP MSS of container traffic'
+cat > /etc/systemd/system/github-runner-mss-clamp.service <<'UNIT'
+[Unit]
+Description=Clamp the TCP MSS of forwarded (container) traffic to the path MTU
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -t mangle -C FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu'
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # Jobs leave images, build cache and volumes behind; prune them daily at 04:00 KST.
 # docker system prune cannot combine --volumes with an until filter.
 step 'daily docker prune'
@@ -142,7 +162,7 @@ Persistent=true
 WantedBy=timers.target
 UNIT
 systemctl daemon-reload
-systemctl enable --now github-runner-imds-block.service github-runner-docker-prune.timer
+systemctl enable --now github-runner-imds-block.service github-runner-mss-clamp.service github-runner-docker-prune.timer
 
 tarball="$base/actions-runner-linux-x64-$RUNNER_VERSION.tar.gz"
 deps_installed=no
