@@ -52,6 +52,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-headlamp-google-config.py
 	@$(PYTHON) scripts/tests/test-argocd-gcp.py
 	@$(PYTHON) scripts/tests/test-app-routing.py
+	@$(PYTHON) -m unittest terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 inventory-check:
 	@$(PYTHON) scripts/check-inventory.py
