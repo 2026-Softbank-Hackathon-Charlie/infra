@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-03
 - 상태: 제안
-- 관련 ADR: [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md), [ADR 0021](0021-configure-platform-github-app-deploy.md), platform 저장소 ADR 0011(GitHub 앱 배포), [ADR 0036](0036-app-routing-and-argo-apps.md)(아래 후속 작업 중 자격 증명, kubeconfig, DNS와 ALB, 등록 방법)
+- 관련 ADR: [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md), [ADR 0021](0021-configure-platform-github-app-deploy.md), platform 저장소 ADR 0011(GitHub 앱 배포), [ADR 0036](0036-app-routing-and-argo-apps.md)(아래 후속 작업 중 자격 증명, kubeconfig, DNS와 ALB, 등록 방법, ApplicationSet 삭제 보호)
 
 ## 배경과 제약
 

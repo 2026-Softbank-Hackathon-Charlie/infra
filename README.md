@@ -558,7 +558,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
-| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet |
+| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
 | [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
 | [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
 | [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |

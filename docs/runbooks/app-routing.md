@@ -52,14 +52,38 @@ aws elbv2 describe-rules --listener-arn "$listener" \
   --query 'Rules[].{priority: Priority, hosts: Conditions[?Field==`host-header`].HostHeaderConfig.Values[]}' --output json
 ```
 
-`api`, `app`, `console`(있으면 `headlamp`)의 우선순위 숫자가 `*.hopcharlie.dev`보다 작아야 한다. 그다음 응답을 다시 확인한다.
+`api`, `app`, `console`(있으면 `headlamp`)의 우선순위 숫자가 `*.hopcharlie.dev`보다 작아야 한다. Ingress 이벤트에 `FailedBuildModel`이나 `FailedDeployModel`이 있으면 LBC가 이 ALB 그룹의 변경을 반영하지 못한 상태이므로 아래처럼 되돌린다.
+
+```bash
+$MK -n charlie-platform describe ingress hopcharlie-apps | sed -n '/^Events:/,$p'
+```
+
+그다음 응답을 다시 확인한다.
 
 ```bash
 for h in api app console; do echo "$h $(curl -s -o /dev/null -w '%{http_code}' https://$h.hopcharlie.dev/)"; done   # merge 전과 같아야 한다
 curl -s https://api.hopcharlie.dev/ -H 'Host: routing-check.hopcharlie.dev'   # 게이트웨이의 404 unknown_app (전에는 ALB의 "not found")
 ```
 
-되돌리기: 플랫폼 앱은 `selfHeal: true`라서 커밋이 main에 있는 동안 Ingress를 지우면 Argo CD가 다시 만든다. 규칙 순서가 틀렸으면 되돌리는 커밋을 먼저 main에 넣고, 플랫폼 앱이 `Synced`가 된 뒤 남은 Ingress를 승인받아 `$MK -n charlie-platform delete ingress hopcharlie-apps`로 지운다(`prune: false`라서 저절로 지워지지 않는다).
+되돌리기: 플랫폼 앱은 `selfHeal: true`, `prune: false`다. 커밋이 main에 있는 동안 Ingress를 지우면 다시 만들어지고, 커밋을 되돌려도 Ingress는 저절로 지워지지 않는다. 규칙 순서가 틀렸으면 승인을 받고 둘 중 하나로 되돌린다.
+
+- 기본: 되돌리는 커밋을 main에 넣는다. 플랫폼 앱의 sync revision이 그 커밋이 되고, OutOfSync로 남은 리소스가 `Ingress/hopcharlie-apps`(requiresPruning true) 하나뿐이면 그것을 지운다. prune이 꺼져 있어 그 전까지 앱은 OutOfSync로 보인다.
+
+```bash
+$MK -n argocd get application charlie-management-hopcharlie-platform -o jsonpath='{.status.sync.revision}{"\n"}{range .status.resources[?(@.status=="OutOfSync")]}{.kind}/{.name} {.requiresPruning}{"\n"}{end}'
+$MK -n charlie-platform delete ingress hopcharlie-apps
+```
+
+- 빠른 길(api나 console이 가려졌을 때): selfHeal을 끄고 Ingress를 지운다. 되돌리는 커밋이 sync된 뒤 selfHeal을 다시 켠다. 그 전에 켜면 Ingress가 다시 생긴다. selfHeal이 꺼져 있어도 새 커밋의 자동 sync(이미지 고정 커밋 포함)는 그대로 돈다.
+
+```bash
+$MK -n argocd patch application charlie-management-hopcharlie-platform --type merge \
+  -p '{"spec":{"syncPolicy":{"automated":{"prune":false,"selfHeal":false}}}}'
+$MK -n charlie-platform delete ingress hopcharlie-apps
+# 되돌리는 커밋이 sync된 뒤
+$MK -n argocd patch application charlie-management-hopcharlie-platform --type merge \
+  -p '{"spec":{"syncPolicy":{"automated":{"prune":false,"selfHeal":true}}}}'
+```
 
 ## 2. 워크로드 Load Balancer Controller 확인
 
@@ -90,7 +114,7 @@ python scripts/put-platform-kubeconfig.py            # 바꾸지 않고 계정, 
 python scripts/put-platform-kubeconfig.py --apply    # 적용, 권한 확인(can-i), SSM 저장
 ```
 
-미리 보기는 `/hopcharlie/kube` 아래의 모든 파라미터 이름과 마지막 수정자를 보여 준다(값은 읽지 않는다). API는 이 파일들을 모두 합쳐 쓰고 컨텍스트 이름이 겹치면 먼저 읽은 파일이 이긴다. `--apply`는 저장 전에 터널로 그 토큰의 권한을 확인한다. 읽기 7개는 yes, Secret과 ConfigMap 읽기와 변경 7개는 no여야 저장한다. `/hopcharlie/kube/eks`가 이미 있으면 멈춘다. 그 값은 EC2 호스트 시절에 다른 클러스터를 가리키도록 넣었을 수 있으므로, 마지막 수정자에게 확인한 뒤에만 `--replace`를 붙인다.
+미리 보기는 `/hopcharlie/kube` 아래의 모든 파라미터 이름과 마지막 수정자를 보여 준다(값은 읽지 않는다). API는 이 파일들을 모두 합쳐 쓰고 컨텍스트 이름이 겹치면 먼저 읽은 파일이 이긴다. 워크로드에 `charlie-system`이 아직 없으면 미리 보기는 클러스터 범위 객체(ClusterRole, ClusterRoleBinding)만 diff한다. `--apply`는 namespace를 먼저 만들고, 그 안의 ServiceAccount와 토큰 Secret을 diff한 뒤 전체를 적용한다. `--apply`는 저장 전에 터널로 그 토큰의 권한을 확인한다. 읽기 7개는 yes, Secret과 ConfigMap 읽기와 변경 7개는 no여야 저장한다. `/hopcharlie/kube/eks`가 이미 있으면 멈춘다. 그 값은 EC2 호스트 시절에 다른 클러스터를 가리키도록 넣었을 수 있으므로, 마지막 수정자에게 확인한 뒤에만 `--replace`를 붙인다.
 
 API pod는 시작할 때만 SSM을 읽으므로 다시 시작한다. API는 Recreate라서 1분쯤 응답하지 않는다.
 
@@ -141,11 +165,34 @@ $MK -n argocd get applications -l hopcharlie.dev/app
 $WK get svc -A -l hopcharlie.dev/app -o wide | grep LoadBalancer
 ```
 
-첫 sync가 성공하고 결과를 확인한 뒤, 차트 변경이 사람 없이 반영되도록 root 템플릿과 같은 자동 sync를 켠다. 켜지 않으면 차트가 바뀔 때마다 `sync`를 다시 실행한다.
+첫 sync가 성공하고 결과를 확인한 뒤, 차트 변경이 사람 없이 반영되도록 root 템플릿과 같은 자동 sync를 켠다. 켜지 않으면 차트가 바뀔 때마다 `sync`를 다시 실행한다. 특히 AppProject가 SealedSecret을 허용하게 바꾸는 저장소 PR(feat/app-storage-infra)이 이 단계 뒤에 merge되면, 자동 sync가 꺼져 있는 동안에는 그 변경이 반영되지 않아 앱의 SealedSecret이 프로젝트에서 거부된다. 그때는 `sync`를 다시 실행하거나 자동 sync를 켠다.
 
 ```bash
 $MK -n argocd patch application charlie-management-hopcharlie-apps --type merge \
   -p '{"spec":{"syncPolicy":{"automated":{"prune":false,"selfHeal":true}}}}'
+```
+
+### 멈추기와 되돌리기
+
+ApplicationSet이 만든 Application에는 ApplicationSet을 가리키는 ownerReference와 `resources-finalizer.argocd.argoproj.io`가 있다. 그래서 ApplicationSet이 지워지면 Application이 모두 지워지고, finalizer 때문에 앱마다 네임스페이스와 CNPG DB까지 지워진다. 멈출 때는 아래 방법만 쓴다.
+
+- 차트 변경 반영을 멈춘다: `charlie-management-hopcharlie-apps`의 자동 sync를 끈다.
+
+```bash
+$MK -n argocd patch application charlie-management-hopcharlie-apps --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+```
+
+- 새 배포와 앱 삭제를 멈춘다: 원천은 플랫폼의 gitops 커밋이므로 플랫폼에서 배포와 삭제를 멈춘다. 앱 Application의 자동 sync는 ApplicationSet이 템플릿대로 되돌리므로 Application에서 끄지 않는다.
+- ApplicationSet을 없애야 하면 Application과 그 리소스를 남기는 orphan 삭제만 쓴다. 남은 Application에는 finalizer가 그대로 있으므로, 나중에 Application을 지우면 그 앱의 리소스도 지워진다.
+
+```bash
+$MK -n argocd delete applicationset hopcharlie-apps --cascade=orphan
+```
+
+- `charlie-management-hopcharlie-apps`와 root는 Argo CD 화면이나 CLI에서 cascade로 지우지 않는다. 차트는 ApplicationSet에 `argocd.argoproj.io/sync-options: Delete=false`를 붙여 상위 Application이 cascade로 지워져도 ApplicationSet을 남기지만, 이 annotation은 sync된 뒤에만 효과가 있다. 지우기 전에 annotation을 확인한다. 이 Application 자체에는 finalizer가 없으므로 `kubectl delete application`은 리소스를 지우지 않는다.
+
+```bash
+$MK -n argocd get applicationset hopcharlie-apps -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/sync-options}{"\n"}'   # Delete=false
 ```
 
 ## 6. 와일드카드 DNS
@@ -159,6 +206,8 @@ read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN   # Zone.DNS:Edit, 
 unset CLOUDFLARE_API_TOKEN; cd -
 ```
 
+plan이 그 추가 하나 외의 변경을 보이면 apply하지 않는다. Cloudflare 화면에서 누가 손으로 만든 `*` 레코드가 이미 있으면 apply가 같은 이름의 레코드 때문에 실패한다. 그때는 그 레코드를 지울지 import할지 팀과 정한 뒤 다시 실행한다.
+
 ```bash
 nslookup routing-check.hopcharlie.dev 1.1.1.1         # ALB 이름의 CNAME
 nslookup api.hopcharlie.dev 1.1.1.1                   # 그대로 기존 레코드
@@ -167,7 +216,7 @@ curl -s https://routing-check.hopcharlie.dev/         # 게이트웨이의 404 u
 
 ## 7. 앱 주소 확인
 
-플랫폼에서 배포가 `healthy`가 되면 게이트웨이에 앱이 등록된다.
+플랫폼에서 배포가 `healthy`가 되면 게이트웨이에 앱이 등록된다. 게이트웨이 등록은 플랫폼의 배포 안에서만 일어난다. 이 순서를 마치기 전에 실패한 배포(예: kubeconfig가 없어 Service를 찾지 못한 배포)의 앱은 게이트웨이에 없으므로, 플랫폼에서 다시 배포한다(콘솔의 배포 또는 `POST /v1/apps/<app>/deployments`).
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' https://<instance>.hopcharlie.dev/
