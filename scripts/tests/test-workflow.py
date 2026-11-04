@@ -62,8 +62,8 @@ class WorkflowGate(unittest.TestCase):
         self.assertFalse(job['strategy']['fail-fast'])
         self.assertEqual(job['strategy']['max-parallel'], 3)
         entries = job['strategy']['matrix']['include']
-        self.assertEqual({v['stack'] for v in entries}, {'bootstrap/aws', 'account/aws', 'aws/dev/foundation', 'modules/eks', 'aws/dev/management', 'aws/dev/workload'})
-        self.assertEqual(len(entries), 6)
+        self.assertEqual({v['stack'] for v in entries}, {'bootstrap/aws', 'account/aws', 'aws/dev/foundation', 'modules/eks', 'aws/dev/management', 'aws/dev/workload', 'integrations/aws-gcp/tailscale'})
+        self.assertEqual(len(entries), 7)
         for v in entries:
             path = 'terraform/environments/' if v['stack'].startswith('aws/dev/') else 'terraform/'
             self.assertEqual(v['lock'], path + v['stack'] + '/.terraform.lock.hcl')
@@ -83,6 +83,15 @@ class WorkflowGate(unittest.TestCase):
         for field in ('runner.os', 'runner.arch', 'tf-version.outputs.version', 'matrix.stack', 'hashFiles(matrix.lock)'):
             self.assertIn(field, cache['with']['key'])
         self.assertIn('scripts/terraform-verify.py', job['steps'][-1]['run'])
+
+    def test_tailscale_is_validation_only(self):
+        stack = 'integrations/aws-gcp/tailscale'
+        job = self.workflow['jobs']['terraform']
+        self.assertIn(stack, {entry['stack'] for entry in job['strategy']['matrix']['include']})
+        self.assertNotIn('id-token', job.get('permissions', {}))
+        self.assertFalse(any('configure-aws-credentials' in step.get('uses', '') or 'google-github-actions/auth' in step.get('uses', '') for step in job['steps']))
+        triggers = self.workflow.get('on', self.workflow.get(True))
+        self.assertNotIn(stack, triggers['workflow_dispatch']['inputs']['stack']['options'])
 
 
 if __name__ == '__main__':

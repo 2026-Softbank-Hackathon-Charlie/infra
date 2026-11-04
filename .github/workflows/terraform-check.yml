@@ -38,6 +38,8 @@ jobs:
             lock: terraform/environments/aws/dev/management/.terraform.lock.hcl
           - stack: aws/dev/workload
             lock: terraform/environments/aws/dev/workload/.terraform.lock.hcl
+          - stack: integrations/aws-gcp/tailscale
+            lock: terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl
     steps:
       - uses: actions/checkout@v4
         with:
