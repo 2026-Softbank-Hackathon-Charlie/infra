@@ -47,6 +47,47 @@
           ]
         }
       }
+    },
+    "gke": {
+      "cluster": {"name": "charlie-dev-gcp-workload"},
+      "profile": {
+        "publicService": {
+          "type": "LoadBalancer",
+          "port": 80,
+          "annotations": {
+            "networking.gke.io/load-balancer-type": "Internal"
+          },
+          "externalTrafficPolicy": "Local"
+        },
+        "progressDeadlineSeconds": 300,
+        "postgres": {
+          "storageClass": "charlie-gcp-balanced",
+          "storageSize": "1Gi"
+        },
+        "quota": {
+          "enabled": true,
+          "hard": {
+            "requests.cpu": "2",
+            "requests.memory": "4Gi",
+            "limits.memory": "8Gi",
+            "pods": "20",
+            "persistentvolumeclaims": "4",
+            "requests.storage": "20Gi",
+            "services.loadbalancers": "1"
+          }
+        },
+        "limitRange": {
+          "enabled": true,
+          "default": {"memory": "256Mi"},
+          "defaultRequest": {"cpu": "50m", "memory": "64Mi"}
+        },
+        "networkPolicy": {
+          "enabled": true,
+          "gatewayFrom": [
+            {"ipBlock": {"cidr": "10.40.0.0/19"}}
+          ]
+        }
+      }
     }
   }
 }

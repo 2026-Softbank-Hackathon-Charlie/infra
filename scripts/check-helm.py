@@ -241,6 +241,33 @@ def main():
                     # The gateway reaches every app's internal load balancer on port 80.
                     ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
                     assert ports == ([80] if public else []), ports
+        # GKE apps (ADR 0039): an internal passthrough load balancer that keeps the
+        # gateway's source address for the NetworkPolicy, reached over the Tailscale
+        # routers (ADR 0037). GKE has no app bucket yet, so an s3 app fails to render.
+        gke_profile = work / "gke-profile.json"
+        gke = json.loads(apps_values.read_text())["environments"]["gke"]
+        assert gke["cluster"] == {"name": "charlie-dev-gcp-workload"}, gke["cluster"]
+        gke_profile.write_text(json.dumps({"profile": gke["profile"]}))
+        for ci in sorted((ROOT / "helm/charts/hopcharlie-app/ci").glob("*.yaml")):
+            gitops_file = yaml.safe_load(ci.read_text())
+            gitops_file.pop("profile", None)
+            plain = work / ("gke-" + ci.name)
+            plain.write_text(json.dumps(gitops_file))
+            namespace = gitops_file["namespace"]
+            if any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or []):
+                result = subprocess.run([HELM, "template", namespace, str(ROOT / "helm/charts/hopcharlie-app"), "--namespace", namespace, "-f", str(plain), "-f", str(gke_profile)], capture_output=True, text=True, encoding="utf-8")
+                assert result.returncode != 0 and "profile.s3" in result.stderr, "GKE must refuse s3 apps until it has app buckets"
+                continue
+            docs = render(ROOT / "helm/charts/hopcharlie-app", plain, namespace, namespace, ("-f", gke_profile))
+            for doc in docs:
+                assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+            for svc in (d for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"):
+                assert svc["spec"]["externalTrafficPolicy"] == "Local", svc["spec"]
+                assert svc["metadata"]["annotations"] == {"networking.gke.io/load-balancer-type": "Internal"}, svc["metadata"]["annotations"]
+            ns = next(d for d in docs if d["kind"] == "Namespace")
+            assert ns["metadata"]["labels"]["pod-security.kubernetes.io/enforce"] == "restricted"
+            policies = [d for d in docs if d["kind"] == "NetworkPolicy"]
+            assert any({"ipBlock": {"cidr": "10.40.0.0/19"}} in (rule.get("from") or []) for d in policies for rule in d["spec"].get("ingress") or []), "GKE apps admit only the gateway subnets"
         # The schema and the chart refuse sealed values the platform must not write.
         stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
         for name, change in (
