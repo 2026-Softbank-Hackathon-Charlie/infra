@@ -139,6 +139,20 @@ def main():
             kinds = {d["kind"] for d in docs}
             assert {"StatefulSet", "Deployment", "Service", "NetworkPolicy", "ConfigMap", "ServiceAccount"} <= kinds
             assert ("Ingress" in kinds) == ingress
+            if ingress:
+                # Explicit hosts first (Headlamp's Ingresses use orders 19 and 20); the
+                # apps' wildcard to the gateway after them in the shared ALB group (ADR 0036).
+                ingresses = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Ingress"}
+                assert sorted(ingresses) == ["hopcharlie-apps", "hopcharlie-platform"], sorted(ingresses)
+                order = {n: int(d["metadata"]["annotations"]["alb.ingress.kubernetes.io/group.order"]) for n, d in ingresses.items()}
+                assert order["hopcharlie-platform"] < 19 and 20 < order["hopcharlie-apps"] < 1000, order
+                hosts = {r["host"]: r["http"]["paths"][0]["backend"]["service"] for d in ingresses.values() for r in d["spec"]["rules"]}
+                assert hosts == {
+                    "api.hopcharlie.dev": {"name": "hopcharlie-api", "port": {"number": 8080}},
+                    "app.hopcharlie.dev": {"name": "hopcharlie-gateway", "port": {"number": 8000}},
+                    "console.hopcharlie.dev": {"name": "hopcharlie-console", "port": {"number": 80}},
+                    "*.hopcharlie.dev": {"name": "hopcharlie-gateway", "port": {"number": 8000}},
+                }, hosts
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
