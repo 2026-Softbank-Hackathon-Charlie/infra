@@ -26,9 +26,12 @@ data:
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
     #                   apps.yaml, kube/<cluster> (one kubeconfig per cluster),
-    #                   and with GITHUB_APP_ID github-app.pem and the webhook
-    #                   secret in api.env. api.env also carries the console
-    #                   administrators (platform-admins: name:bcrypt-hash,...).
+    #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
+    #                   public certificate), and with GITHUB_APP_ID
+    #                   github-app.pem and the webhook secret in api.env.
+    #                   api.env also carries the console administrators
+    #                   (platform-admins: name:bcrypt-hash,...) and, once it
+    #                   exists, the app secrets key (app-secrets-key).
     set -euo pipefail
     umask 077
 
@@ -50,6 +53,14 @@ data:
         gw="$(get gateway-admin-token)"
         tokens="$(get platform-tokens)"
         admins="$(get platform-admins)"
+        # The key app secrets are encrypted with (platform ADR 0019), empty
+        # while the parameter does not exist: get-parameters lists a missing
+        # name under InvalidParameters instead of failing, so access and
+        # network errors still stop here. Without the key the API answers 503
+        # to the secrets endpoints and deploys apps without secrets as before.
+        secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
+          --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
@@ -74,11 +85,28 @@ data:
           get "kube/$base" > "/config/kube/$base"
           files="$files:/config/kube/$base"
         done
+        # Public certificates the platform seals app keys and secrets with,
+        # one String parameter per environment (scripts/put-sealed-secrets-cert.sh).
+        names="$(aws ssm get-parameters-by-path --path "$PREFIX/sealed-secrets" \
+          --query 'Parameters[].Name' --output text)"
+        for name in $names; do
+          [ "$name" = "None" ] && continue
+          base="${name##*/}"
+          case "$base" in
+            *[!a-z0-9-]*|-*)
+              echo "skipping $name: the last part must be lowercase letters, digits and '-'" >&2
+              continue
+              ;;
+          esac
+          mkdir -p /config/sealed-secrets
+          get "sealed-secrets/$base" > "/config/sealed-secrets/$base.pem"
+        done
         {
           printf 'PLATFORM_DATABASE_URL=postgres://charlie:%s@hopcharlie-postgres:5432/charlie?sslmode=disable\n' "$db"
           printf 'GATEWAY_TOKEN=%s\n' "$gw"
           printf 'PLATFORM_TOKENS=%s\n' "$tokens"
           printf 'PLATFORM_ADMINS=%s\n' "$admins"
+          if [ -n "$secrets_key" ]; then printf 'PLATFORM_SECRETS_KEY=%s\n' "$secrets_key"; fi
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
         } > /config/api.env

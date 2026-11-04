@@ -48,3 +48,8 @@ output "image_publish_role_arns" {
   description = "Image publishing role ARNs by repository (platform, frontend, moimroom)."
   value       = { for repo, role in aws_iam_role.image_publish : repo => role.arn }
 }
+
+output "app_permissions_boundary_arn" {
+  description = "Permissions boundary of the IAM users the platform makes for app buckets; host/envs.yaml storage.permissionsBoundary must equal it."
+  value       = aws_iam_policy.app_boundary.arn
+}
