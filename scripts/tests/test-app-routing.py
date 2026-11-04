@@ -66,6 +66,10 @@ class KubeconfigTests(unittest.TestCase):
         self.manifest = self.root / 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml'
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(ROOT / 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml', self.manifest)
+        gke = self.root / 'clusters/gcp-dev-workload/hopcharlie-platform-access.yaml'
+        gke.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / 'clusters/gcp-dev-workload/hopcharlie-platform-access.yaml', gke)
+        (self.root / '.generated/access/gke.kubeconfig').write_text('{}')
         self.account, self.parameter, self.whoami, self.stored = '525091405886', '', None, None
         self.secret_access, self.has_namespace = 'no', True
 
@@ -90,6 +94,10 @@ class KubeconfigTests(unittest.TestCase):
                 self.has_namespace = True
             return done(args, 'applied')
         if 'view' in args:
+            if 'charlie-dev-gcp-workload' in args:
+                return done(args, json.dumps({'clusters': [{'cluster': {
+                    'server': 'https://127.0.0.1:23443', 'tls-server-name': '34.64.99.246',
+                    'certificate-authority-data': 'R0tFQ0E='}}]}))
             return done(args, json.dumps({'clusters': [{'cluster': {
                 'server': 'https://127.0.0.1:11443', 'tls-server-name': ENDPOINT[8:].lower()}}]}))
         if 'jsonpath={.data.token}' in args:
@@ -163,6 +171,23 @@ class KubeconfigTests(unittest.TestCase):
         self.assertEqual(put[put.index('--type') + 1], 'SecureString')
         self.assertNotIn('--overwrite', put)
         self.assertFalse(list((self.root / '.generated/platform-kube').rglob('*.kubeconfig')))
+
+    def test_gke_stores_its_own_kubeconfig(self):
+        # /hopcharlie/kube/gke already exists in the fixture, so --replace is needed.
+        code, calls, out = self.invoke('--env', 'gke', '--apply')
+        self.assertEqual(code, 1)
+        self.assertFalse(calls.has('apply') or calls.has('put-parameter'))
+        code, calls, out = self.invoke('--env', 'gke', '--apply', '--replace')
+        self.assertEqual(code, 0, out)
+        self.assertFalse(calls.has('describe-cluster'))
+        self.assertTrue(all('charlie-dev-gcp-workload' in a for a in calls.has('kubectl', '--context')))
+        applied = next(i for a, i in calls.log if 'apply' in a)
+        self.assertIn('ClusterRole', applied)
+        stored = json.loads(self.stored)
+        self.assertEqual(stored['current-context'], 'gke-hopcharlie')
+        self.assertEqual(stored['clusters'][0]['cluster'], {'server': 'https://34.64.99.246', 'certificate-authority-data': 'R0tFQ0E='})
+        put = calls.has('put-parameter')[0]
+        self.assertEqual(put[put.index('--name') + 1], '/hopcharlie/kube/gke')
 
     def test_broader_token_is_not_stored(self):
         self.secret_access = 'yes'

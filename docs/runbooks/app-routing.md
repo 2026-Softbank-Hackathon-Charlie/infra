@@ -124,6 +124,13 @@ $MK -n charlie-platform rollout status deployment/hopcharlie-api --timeout=5m
 charlie env list   # eks가 reachable이고 노드 2대, Kubernetes 1.35로 보여야 한다
 ```
 
+GKE(환경 `gke`, [ADR 0044](../adr/0044-platform-reads-gke-with-token-kubeconfig.md))도 같은 방식이다. GKE 터널 kubeconfig(컨텍스트 `charlie-dev-gcp-workload`, 서버 `127.0.0.1`, TLS 이름 `34.64.99.246`)를 `.generated/access/gke.kubeconfig`에 두거나 `--kubeconfig`로 넘긴다. [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](../../clusters/gcp-dev-workload/hopcharlie-platform-access.yaml)을 적용하고 SSM `/hopcharlie/kube/gke`에 저장한다. 그 뒤 위처럼 API를 다시 시작한다.
+
+```bash
+python scripts/put-platform-kubeconfig.py --env gke            # 미리 보기
+python scripts/put-platform-kubeconfig.py --env gke --apply    # 적용, 권한 확인, SSM 저장
+```
+
 토큰을 끊을 때는 `$WK -n charlie-system delete secret hopcharlie-platform-token`을 실행한다. 새 토큰은 `--apply --replace`로 Secret을 다시 만들고 저장한 뒤 API를 다시 시작한다. Secret을 지우지 않고 `--replace`만 하면 같은 토큰이 다시 저장된다. 이 클러스터에는 platform 저장소의 `make-kubeconfig.sh`를 쓰지 않는다.
 
 ## 4. gitops 저장소 읽기 자격 증명
