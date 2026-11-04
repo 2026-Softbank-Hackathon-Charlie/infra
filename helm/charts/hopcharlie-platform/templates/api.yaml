@@ -26,6 +26,19 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.api | quote }}
+{{- $gkeRegistry := .Values.deploy.gkeImageRegistry | default "" }}
+{{- $gkeCredentials := .Values.deploy.gkeImageCredentialConfig | default (dict) }}
+{{- if or $gkeRegistry $gkeCredentials }}
+{{- if not (and $gkeRegistry $gkeCredentials) }}
+{{- fail "deploy.gkeImageRegistry and deploy.gkeImageCredentialConfig go together" }}
+{{- end }}
+{{- if ne .Values.deploy.builder "codebuild" }}
+{{- fail "GKE image publication needs deploy.builder codebuild" }}
+{{- end }}
+{{- if or (ne (get $gkeCredentials "type") "external_account") (ne (dig "credential_source" "environment_id" "" $gkeCredentials) "aws1") }}
+{{- fail "deploy.gkeImageCredentialConfig must be an AWS external_account (aws1) ADC config" }}
+{{- end }}
+{{- end }}
 {{- $gcp := .Values.gcp }}
 {{- if or $gcp.credentialConfig $gcp.tokenAudience }}
 {{- if not (and $gcp.credentialConfig $gcp.tokenAudience) }}
@@ -117,6 +130,11 @@ spec:
             - {name: PLATFORM_IMAGE_REGISTRY, value: {{ required "deploy.imageRegistry is required with deploy.builder" $.Values.deploy.imageRegistry | quote }}}
             {{- if eq . "codebuild" }}
             - {name: PLATFORM_CODEBUILD_PROJECT, value: {{ required "deploy.codebuildProject is required with deploy.builder codebuild" $.Values.deploy.codebuildProject | quote }}}
+            {{- if $gkeRegistry }}
+            # Public AWS federation config for the build; the API's GCS ADC stays separate.
+            - {name: PLATFORM_GKE_IMAGE_REGISTRY, value: {{ $gkeRegistry | quote }}}
+            - {name: PLATFORM_GKE_IMAGE_CREDENTIAL_CONFIG, value: {{ toJson $gkeCredentials | quote }}}
+            {{- end }}
             {{- end }}
             {{- end }}
           ports:
