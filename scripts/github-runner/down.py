@@ -26,7 +26,7 @@ for dir in /opt/actions-runner/*/; do
   [ -f "$dir.runner" ] || continue
   cd "$dir"
   if [ -f .service ]; then ./svc.sh stop; ./svc.sh uninstall; fi
-  runuser -u runner -- ./config.sh remove --token "$RUNNER_TOKEN" || echo "config.sh remove failed in $dir"
+  ACTIONS_RUNNER_INPUT_TOKEN="$RUNNER_TOKEN" runuser -u runner -- ./config.sh remove || echo "config.sh remove failed in $dir"
 done
 '''
 

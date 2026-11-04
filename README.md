@@ -235,7 +235,7 @@ make tf-apply STACK=account/aws
 
 ### Self-hosted runner
 
-조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0042](docs/adr/0042-run-actions-on-self-hosted-runner.md)). 호스트는 해커톤 AWS 계정의 EC2 한 대(`Name=hopcharlie-github-runner`, t3.xlarge)이고, runner 3개가 job을 하나씩 동시에 실행한다. 호스트가 없으면 job은 실패하지 않고 `queued`로 기다린다.
+조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0042](docs/adr/0042-run-actions-on-self-hosted-runner.md)). 호스트는 해커톤 AWS 계정의 EC2 한 대(`Name=hopcharlie-github-runner`, t3.xlarge)이고, runner 3개가 job을 하나씩 동시에 실행한다. 호스트가 없으면 job은 실패하지 않고 24시간까지 `queued`로 기다린다.
 
 저장소 루트에서 아래 명령으로 올리고 내린다. AWS 프로필 `hopcharlie`(또는 `AWS_PROFILE`)와 `admin:org` 권한이 있는 gh가 필요하다.
 

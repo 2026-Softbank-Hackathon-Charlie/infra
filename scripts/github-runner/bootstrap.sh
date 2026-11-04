@@ -28,10 +28,28 @@ on_exit() {
 }
 trap on_exit EXIT
 step() { echo "== $*" >&3; echo "== $(date -Is) $*"; }
-apt_install() { apt-get -o DPkg::Lock::Timeout=600 install -y -q "$@"; }
+# --no-upgrade: a re-run while jobs run must not upgrade docker.io and restart dockerd.
+apt_install() { apt-get install -y -q --no-upgrade "$@"; }
 
 step 'wait for cloud-init'
 cloud-init status --wait || true
+
+# apt (also in the runner's installdependencies.sh) waits for the lock instead of failing,
+# and no unattended upgrade restarts dockerd under a running job.
+echo 'DPkg::Lock::Timeout "600";' > /etc/apt/apt.conf.d/90github-runner
+systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
+
+# 16 GiB for three parallel jobs (go test -race, PostgreSQL, terraform): swap instead of the OOM killer.
+if [ -z "$(swapon --show=NAME --noheadings)" ]; then
+  step 'swap 8 GiB'
+  if [ ! -f /swapfile ]; then
+    fallocate -l 8G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+  fi
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
 
 # GitHub-hosted runners push plain image manifests (classic image store). Docker 29
 # would use the containerd store on a fresh install, so set this before it starts.
@@ -42,7 +60,7 @@ fi
 
 # Tools the workflows take from the GitHub-hosted image; setup-* actions do not install them.
 step 'apt packages'
-apt-get -o DPkg::Lock::Timeout=600 update -q
+apt-get update -q
 apt_install git curl ca-certificates jq unzip zip zstd xz-utils python3 python3-venv python3-pip \
   build-essential iptables docker.io docker-buildx
 
@@ -53,7 +71,7 @@ if [ ! -f /etc/apt/sources.list.d/github-cli.list ]; then
   chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
     > /etc/apt/sources.list.d/github-cli.list
-  apt-get -o DPkg::Lock::Timeout=600 update -q
+  apt-get update -q
 fi
 apt_install gh
 
@@ -78,6 +96,7 @@ cat > /etc/systemd/system/github-runner-imds-block.service <<'UNIT'
 [Unit]
 Description=Reject instance metadata requests from the runner user
 After=network-pre.target
+Before=network.target
 
 [Service]
 Type=oneshot
@@ -139,8 +158,9 @@ for n in $(seq 1 "$count"); do
       "$dir/bin/installdependencies.sh"
       deps_installed=yes
     fi
-    (cd "$dir" && runuser -u runner -- ./config.sh --unattended --url "$RUNNER_ORG_URL" --token "$RUNNER_TOKEN" \
-      --name "$name" --labels "$label" --runnergroup Default --work _work --replace)
+    # The runner reads the token from ACTIONS_RUNNER_INPUT_TOKEN: it stays off the process list.
+    (cd "$dir" && ACTIONS_RUNNER_INPUT_TOKEN="$RUNNER_TOKEN" runuser -u runner -- ./config.sh --unattended \
+      --url "$RUNNER_ORG_URL" --name "$name" --labels "$label" --runnergroup Default --work _work --replace)
   fi
   [ -f "$dir/.service" ] || (cd "$dir" && ./svc.sh install runner)
   (cd "$dir" && ./svc.sh start)

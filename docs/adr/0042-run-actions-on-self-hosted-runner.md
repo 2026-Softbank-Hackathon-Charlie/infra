@@ -9,7 +9,7 @@
 - 2026-11-04부터 조직 private 저장소의 GitHub-hosted job이 모두 "The job was not started because recent account payments have failed or your spending limit needs to be increased"로 시작되지 않는다. 조직은 Free 플랜이라 private 저장소에 한 달 2,000분이 포함되는데, 11월 사용량이 3,164분이다. 한도는 12월 1일에 초기화되고 해커톤은 11월 8일에 끝난다.
 - 3,164분 중 2,630분이 infra다. push 한 번에 job이 17개쯤 돌고, job마다 최소 1분으로 올려 과금한다.
 - 저장소는 private으로 유지한다(사용자 결정).
-- `runs-on: [self-hosted, <label>]` job은 실패하지 않고 runner를 기다리며 `queued`로 남는 것을 확인했다. self-hosted runner의 실행 시간은 GitHub가 과금하지 않는다.
+- `runs-on: [self-hosted, <label>]` job은 실패하지 않고 runner를 기다리며 `queued`로 남는 것을 확인했다. 24시간 안에 runner가 잡지 않으면 실패한다. self-hosted runner의 실행 시간은 2026-11-04 현재 GitHub가 과금하지 않는다. GitHub가 private 저장소의 self-hosted 실행에도 분당 요금을 매기는 안을 발표했다가 미뤘다는 이야기가 있으나 확인하지 않았다.
 - 조직 Default runner group은 모든 저장소에 열려 있고 공개 저장소는 허용하지 않는다(`allows_public_repositories: false`, 2026-11-04 확인). Free 플랜에는 runner group이 Default 하나뿐이다.
 - 계정의 온디맨드 표준 vCPU 할당량은 32개이고 14개를 쓰고 있다(2026-11-04 확인). t3.xlarge는 4개를 더 쓴다.
 - workflow는 GitHub-hosted 이미지에 있는 도구를 그대로 쓴다. setup 액션이 설치하지 않는 것은 docker와 buildx, aws, gh, jq, 시스템 python3, `-race`용 gcc, make, setup-terraform이 쓰는 unzip이고, infra `scripts` job의 `make ci-test`는 helm과 node도 쓴다. `sudo`를 쓰는 workflow는 없다.
@@ -31,13 +31,16 @@
   - Ubuntu 패키지의 docker.io와 docker-buildx(2026-11-04 기준 29.1과 0.30, `--metadata-file`, `--provenance` 지원), AWS CLI v2(공식 zip), gh(공식 apt 저장소), git, curl, jq, unzip, zip, zstd, xz-utils, python3, python3-venv, python3-pip, build-essential을 설치한다.
   - Docker를 classic image store로 둔다. Docker 29는 새로 설치하면 containerd image store를 쓰는데, 그러면 frontend가 게시하는 이미지에 attestation이 붙어 지금 GitHub-hosted에서 만드는 단일 manifest와 달라진다.
   - `runner` 사용자를 docker 그룹에 넣는다. sudo 권한은 주지 않는다.
-  - actions/runner 최신 release를 release 노트의 sha256으로 확인하고 `/opt/actions-runner/1`부터 `3`까지 설치해 systemd 서비스로 등록한다. 이미 설정한 runner는 건너뛴다.
+  - 8 GiB swap 파일을 만든다. 16 GiB 메모리를 job 3개가 나눠 쓰므로 OOM killer가 runner를 죽이지 않게 한다.
+  - apt가 잠금을 600초까지 기다리게 하고, `apt-daily`와 `apt-daily-upgrade` 타이머를 끈다. 자동 업그레이드가 job 도중 dockerd를 재시작하지 않게 하려는 것이다. 다시 실행할 때도 이미 설치한 패키지는 올리지 않는다.
+  - actions/runner 최신 release를 release 노트의 sha256으로 확인하고 `/opt/actions-runner/1`부터 `3`까지 설치해 systemd 서비스로 등록한다. token은 `ACTIONS_RUNNER_INPUT_TOKEN` 환경 변수로 넘겨 프로세스 목록에 나오지 않게 한다. 이미 설정한 runner는 건너뛴다.
   - 매일 04:00(KST)에 하루 지난 Docker 이미지와 빌드 캐시, 쓰지 않는 볼륨을 지운다.
 - infra, platform, frontend, cli, rin의 모든 job을 `runs-on: [self-hosted, hopcharlie]`로 바꾼다. 공개 저장소 moimroom은 GitHub-hosted에 그대로 둔다. 여러 job이 한 호스트를 함께 쓰므로 workflow는 다음을 지킨다. `$RUNNER_TEMP`는 job이 끝나면 비워진다.
   - 토큰을 넣는 git 설정은 `GIT_CONFIG_GLOBAL`을 job의 `$RUNNER_TEMP` 안 파일로 바꿔서 쓴다. runner 사용자의 `~/.gitconfig`에 남기지 않는다.
   - `docker login`은 `DOCKER_CONFIG`를 job의 `$RUNNER_TEMP` 아래로 바꿔서 한다. buildx 플러그인은 시스템 경로(`/usr/libexec/docker/cli-plugins`)에 있어서 그대로 찾는다.
   - 고정 이름과 포트를 쓰지 않는다. platform CI의 PostgreSQL은 run마다 다른 컨테이너 이름과 127.0.0.1의 임의 포트로 띄우고, job 끝에 `if: always()`로 지운다.
   - 호스트에 없는 도구는 workflow가 설치한다. infra `scripts` job에 helm(helm job과 같은 v3.19.1)과 node 22 setup 액션을 넣는다.
+  - platform과 cli의 Go 캐시 복원과 저장(`actions/cache`)은 GitHub-hosted runner에서만 한다(`runner.environment == 'github-hosted'`). 호스트의 `~/go`와 `~/.cache/go-build`가 job 사이에 남아 캐시 역할을 하고, 그 위에 tar로 복원하면 동시에 도는 다른 job의 go와 부딪친다. 이미 있는 모듈 폴더는 읽기 전용이라 tar가 "Cannot open: File exists"로 실패한다(로컬 tar로 확인).
 - [scripts/github-runner/down.py](../../scripts/github-runner/down.py)는 기본으로 지울 것만 출력하고, `--apply`를 주면 SSM으로 runner 등록을 해제하고(`config.sh remove`), GitHub에 남은 runner를 API로 지우고, 인스턴스, 보안 그룹, instance profile, 역할을 지운다.
 
 ## 영향과 후속 작업
@@ -48,9 +51,11 @@
   - job끼리 격리되지 않는다. 세 runner가 같은 사용자로 돌고 docker 그룹은 사실상 root라서, 한 job이 동시에 도는 다른 job의 환경 변수(OIDC로 받은 AWS 자격 증명 등)를 읽을 수 있다. 저장소가 모두 private이고 팀원만 push한다는 전제로 받아들인다.
   - `AmazonSSMManagedInstanceCore`에는 `ssm:GetParameter`가 있어서, 인스턴스 역할 자격 증명을 얻으면 `/hopcharlie/*` SSM 파라미터를 읽을 수 있다. hop limit과 iptables 규칙이 막지만, docker 그룹 권한으로 호스트 네트워크 컨테이너를 띄우면 우회된다. 더 줄이려면 SSM 에이전트에 필요한 권한(`ssm:UpdateInstanceInformation`, `ssmmessages:*`, `ec2messages:*`)만 담은 인라인 정책으로 바꾼다.
   - registration token은 SSM 명령 파라미터(명령 기록, 30일 보관)와 인스턴스의 SSM 작업 폴더에 남는다. token은 1시간 뒤 만료된다.
+  - 자동 보안 업데이트를 끄므로 해커톤 동안 호스트 패키지는 설치한 시점의 버전으로 남는다. ingress가 없고 며칠만 쓰는 호스트라 받아들인다.
+  - 매일 정리에서 `until=24h`는 이미지의 생성 시각을 보므로, 쓰지 않는 기반 이미지(postgres, caddy, node)도 매일 지워지고 다음 job이 다시 받는다.
   - 비용: t3.xlarge 온디맨드가 서울에서 시간당 0.208달러로 하루 약 5달러, 80 GiB gp3가 하루 약 0.24달러, public IPv4가 하루 약 0.12달러다. t3 unlimited 모드라 CPU 크레딧을 넘겨 쓰면 추가 요금이 붙는다. 11월 8일까지 약 25달러로 추정한다.
-  - 호스트 한 대가 단일 장애점이다. 인스턴스가 멈추면 job은 `queued`로 남는다. 동시에 3개를 넘는 job도 기다리고, infra push 하나가 job 17개쯤을 줄 세운다.
-  - 호스트에 이미 있는 Go 모듈 캐시는 읽기 전용이라 `actions/cache/restore`가 덮어쓰지 못하고 경고를 낼 수 있다(확인하지 않음). 캐시는 호스트에 남아 있으므로 job은 계속된다. platform CI는 PostgreSQL 포트가 run마다 달라서 DB를 쓰는 테스트 패키지는 go test 결과 캐시를 쓰지 못하고 매번 다시 돈다.
+  - 호스트 한 대가 단일 장애점이다. 인스턴스가 멈추면 job은 `queued`로 남고 24시간 뒤 실패한다. 동시에 3개를 넘는 job도 기다리고, infra push 하나가 job 17개쯤을 줄 세운다.
+  - platform CI는 PostgreSQL 포트가 run마다 달라서 DB를 쓰는 테스트 패키지는 go test 결과 캐시를 쓰지 못하고 매번 다시 돈다.
 - 필요한 후속 작업 및 검증:
   - 사용자가 `gh auth refresh -h github.com -s admin:org`, `python scripts/github-runner/up.py --dry-run`, `python scripts/github-runner/up.py` 순서로 실행하고, 조직 Settings의 Actions Runners에서 `hopcharlie-runner-1`부터 `3`까지 Idle인지 확인한다.
   - 저장소별 workflow PR을 merge하고, run의 "Set up job" 로그에서 Runner name이 `hopcharlie-runner-N`인지 확인한다.
