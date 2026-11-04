@@ -70,4 +70,39 @@ spec:
                 port:
                   number: {{ index $service 1 }}
     {{- end }}
+{{- with .Values.appDomain }}
+{{- if ne . $.Values.ingress.domain }}
+{{- fail "appDomain must equal ingress.domain: the ALB certificate covers *.<ingress.domain>" }}
+{{- end }}
+---
+# Apps the platform deploys from GitHub answer at https://<instance>.<appDomain>
+# through the traffic gateway (ADR 0036). The ALB evaluates the group's rules
+# by group.order, so this wildcard comes after every Ingress with an explicit
+# host (api, app and console above at 10, Headlamp at 19 and 20). Give a new
+# explicit host in the group an order below 900.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hopcharlie-apps
+  labels:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ $.Values.ingress.groupName | quote }}
+    alb.ingress.kubernetes.io/group.order: "900"
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ printf "*.%s" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hopcharlie-gateway
+                port:
+                  number: 8000
+{{- end }}
 {{- end }}

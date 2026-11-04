@@ -15,6 +15,13 @@ kind: ApplicationSet
 metadata:
   name: {{ .Values.name }}
   namespace: {{ .Values.argocdNamespace }}
+  annotations:
+    # Deleting the Application that draws this chart (or a cascade from a root)
+    # must not delete the ApplicationSet: that would delete every generated
+    # Application, and their finalizer deletes each app's namespace and database.
+    # preserveResourcesOnDeletion does not help here: the template below names
+    # the finalizer, and Argo CD only skips adding one when the template has none.
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]

@@ -11,7 +11,8 @@
 #      Put the certificate_arn output into the infra repo
 #      (clusters/aws-dev-management/values/baseline.yaml, externalAlb).
 #   2. When the ALB exists, set alb_name and apply again: api, app and console
-#      records point at it.
+#      records point at it, and the wildcard record sends every other name to
+#      it for the apps the platform deploys (infra ADR 0036).
 #
 # Cost: none (ACM public certificates and Cloudflare DNS are free).
 # Cleanup: ./tf.sh -chdir=dns destroy (detach the certificate from the ALB first).
@@ -112,6 +113,21 @@ resource "cloudflare_dns_record" "platform" {
   ttl      = 300
   proxied  = false
   comment  = "HopCharlie platform on the management EKS cluster"
+}
+
+# Apps the platform deploys from GitHub answer at https://<instance>.<domain>
+# (infra ADR 0036): the ALB's wildcard rule sends them to the traffic gateway.
+# Explicit records (api, app, console, ACM validation, headlamp) take
+# precedence over the wildcard, so their names keep their own targets.
+resource "cloudflare_dns_record" "apps" {
+  count   = var.alb_name == "" ? 0 : 1
+  zone_id = var.cloudflare_zone_id
+  name    = "*.${var.domain}"
+  type    = "CNAME"
+  content = data.aws_lb.management[0].dns_name
+  ttl     = 300
+  proxied = false
+  comment = "Apps of the HopCharlie platform, through the traffic gateway"
 }
 
 output "certificate_arn" {
