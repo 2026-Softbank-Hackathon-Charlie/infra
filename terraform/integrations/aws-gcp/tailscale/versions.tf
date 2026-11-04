@@ -1,6 +1,8 @@
 terraform {
   required_version = ">= 1.10, < 2.0"
-  backend "gcs" {}
+  backend "gcs" {
+    prefix = "aws-gcp/dev/tailscale"
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"

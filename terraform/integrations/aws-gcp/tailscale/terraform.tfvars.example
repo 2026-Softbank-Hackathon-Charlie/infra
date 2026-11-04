@@ -1,0 +1,7 @@
+# Existing network and pinned official images only; no secrets belong here.
+aws_account_id            = "REPLACE_WITH_AWS_ACCOUNT_ID"
+aws_vpc_id                = "REPLACE_WITH_SHARED_VPC_ID"                 # 10.40.0.0/16
+aws_management_subnet_ids = ["REPLACE_WITH_MANAGEMENT_SUBNET_0", "REPLACE_WITH_MANAGEMENT_SUBNET_1"] # 10.40.0.0/20, 10.40.16.0/20
+aws_router_ami_id         = "REPLACE_WITH_PINNED_AL2023_X86_64_AMI"
+project_id                = "REPLACE_WITH_GCP_PROJECT_ID"
+gcp_router_image          = "projects/debian-cloud/global/images/REPLACE_WITH_PINNED_DEBIAN_12_IMAGE"
