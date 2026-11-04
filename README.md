@@ -524,7 +524,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 
 콘솔 관리자 계정은 SSM `/hopcharlie/platform-admins`에 bcrypt 해시로 두고 API의 `PLATFORM_ADMINS`로 넘깁니다([ADR 0033](docs/adr/0033-platform-admin-accounts-from-ssm.md)). 이 파라미터도 차트보다 먼저 만들어야 합니다.
 
-앱 버킷과 앱 시크릿(platform ADR 0016, 0019)을 위해 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷과 `/hopcharlie-apps/` IAM 사용자를 관리하고, API가 SSM `/hopcharlie/app-secrets-key`와 클러스터마다의 Sealed Secrets 공개 인증서(`/hopcharlie/sealed-secrets/<환경>`)를 읽습니다([ADR 0035](docs/adr/0035-app-storage-and-secrets-infra.md)). 플랫폼 이미지, 인증서, merge, Terraform, API 재시작의 순서는 [절차](terraform/platform/aws/README.md#앱-버킷과-시크릿)를 따릅니다.
+앱 버킷과 앱 시크릿(platform ADR 0016, 0019)을 위해 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷과 `/hopcharlie-apps/` IAM 사용자를 관리하고, API가 SSM `/hopcharlie/app-secrets-key`와 클러스터마다의 Sealed Secrets 공개 인증서(`/hopcharlie/sealed-secrets/<환경>`)를 읽습니다([ADR 0035](docs/adr/0035-app-storage-and-secrets-infra.md)). 이 변경, 플랫폼 이미지, envs.yaml 변경(별도 PR) 순서로 적용하며 자세한 단계는 [절차](terraform/platform/aws/README.md#앱-버킷과-시크릿)를 따릅니다.
 
 | 파일 | 역할 |
 | --- | --- |
