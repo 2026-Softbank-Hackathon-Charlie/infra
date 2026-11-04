@@ -139,6 +139,19 @@ def main():
             kinds = {d["kind"] for d in docs}
             assert {"StatefulSet", "Deployment", "Service", "NetworkPolicy", "ConfigMap", "ServiceAccount"} <= kinds
             assert ("Ingress" in kinds) == ingress
+            if ingress:
+                # The apps' wildcard to the gateway (ADR 0036); its order is checked against
+                # every explicit host of the shared ALB group after Headlamp is rendered.
+                ingresses = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Ingress"}
+                assert sorted(ingresses) == ["hopcharlie-apps", "hopcharlie-platform"], sorted(ingresses)
+                alb_ingresses = list(ingresses.values())
+                hosts = {r["host"]: r["http"]["paths"][0]["backend"]["service"] for d in ingresses.values() for r in d["spec"]["rules"]}
+                assert hosts == {
+                    "api.hopcharlie.dev": {"name": "hopcharlie-api", "port": {"number": 8080}},
+                    "app.hopcharlie.dev": {"name": "hopcharlie-gateway", "port": {"number": 8000}},
+                    "console.hopcharlie.dev": {"name": "hopcharlie-console", "port": {"number": 80}},
+                    "*.hopcharlie.dev": {"name": "hopcharlie-gateway", "port": {"number": 8000}},
+                }, hosts
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
@@ -152,6 +165,23 @@ def main():
                              "headlamp-gke-google", "headlamp")
         assert {"Deployment", "Service", "Ingress", "NetworkPolicy"} <= {d["kind"] for d in google_docs}
         seen.update(check_images(google_docs))
+        # The ALB evaluates the shared group by group.order: every Ingress with an explicit
+        # host (platform, both Headlamp charts) must come before the apps' wildcard.
+        headlamp_values = work / "headlamp-team.json"
+        headlamp_values.write_text(json.dumps({
+            "oidc": {"issuerURL": "https://issuer.example.com", "clientID": "fixture"},
+            "clusters": [{"name": "management", "endpoint": "https://management.eks.amazonaws.com", "ca": "dGVzdA=="}],
+        }))
+        headlamp_docs = render(ROOT / "helm/charts/headlamp-team", ROOT / "clusters/aws-dev-management/values/headlamp-team.yaml",
+                               "headlamp", "headlamp", ("-f", headlamp_values))
+        alb_group = json.loads((ROOT / "clusters/aws-dev-management/values/baseline.yaml").read_text())["externalAlb"]["groupName"]
+        orders = {}
+        for d in alb_ingresses + [d for d in headlamp_docs + google_docs if d["kind"] == "Ingress"]:
+            annotations = d["metadata"]["annotations"]
+            assert annotations["alb.ingress.kubernetes.io/group.name"] == alb_group, d["metadata"]["name"]
+            orders[d["metadata"]["name"]] = int(annotations["alb.ingress.kubernetes.io/group.order"])
+        wildcard = orders.pop("hopcharlie-apps")
+        assert len(orders) == 3 and max(orders.values()) < wildcard < 1000, (orders, wildcard)
         # Apps the platform deploys from GitHub (ADR 0023): the root's Application
         # and AppProject, the ApplicationSet chart with the values the root passes,
         # and the app chart, whose every object its AppProject must allow.
@@ -165,6 +195,11 @@ def main():
         apps_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-apps.yaml"
         docs = render(ROOT / "helm/charts/hopcharlie-apps", apps_values, "hopcharlie-apps", "argocd", extra)
         assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]
+        # Deleting the parent Application must leave the ApplicationSet (ADR 0036): its
+        # Applications carry the resources finalizer, which deletes the apps' namespaces.
+        appset = next(d for d in docs if d["kind"] == "ApplicationSet")
+        assert appset["metadata"]["annotations"]["argocd.argoproj.io/sync-options"] == "Delete=false"
+        assert appset["spec"]["template"]["metadata"]["finalizers"] == ["resources-finalizer.argocd.argoproj.io"]
         check_project(docs, apps_project, "argocd")
         allowed = {(d["group"], d["kind"]) for d in apps_project["spec"]["namespaceResourceWhitelist"]}
         for doc in docs:

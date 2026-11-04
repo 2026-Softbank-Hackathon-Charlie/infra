@@ -1,0 +1,82 @@
+# Identity of the HopCharlie platform API in the workload cluster, which is the
+# platform's environment eks (ADR 0036). scripts/put-platform-kubeconfig.py
+# applies this file and stores a kubeconfig with the token below in SSM
+# /hopcharlie/kube/eks; Argo CD does not manage it.
+#
+# Based on deploy/k8s/hopcharlie-platform.yaml of the platform repository, cut
+# down to the calls the platform makes today. Every rule only reads, and no
+# rule reads Secrets or ConfigMaps:
+#   services get                 deploy executor: the internal NLB address of
+#                                <app>-<service> in namespace <instance>, which
+#                                it registers in the traffic gateway
+#   nodes list                   environment view: node count and architecture
+#   postgresql.cnpg.io clusters
+#   list                         environment view: the CNPG databases
+#   pods, services,
+#   networkpolicies,
+#   clusterrolebindings list     security view
+# The server version (environment view) needs no rule. The platform's
+# hopcharlie-migrator role (changes in app namespaces for migrations) is not
+# granted here; see ADR 0036.
+#
+# The namespace is charlie-system because the app ApplicationSet denies it
+# (helm/charts/hopcharlie-apps deniedNamespaces): no app can be deployed into
+# it and mount the token. Delete the Secret to revoke the token. The cluster
+# role names differ from the platform repository's hopcharlie-observer, so
+# running its make-kubeconfig.sh here does not replace these subjects.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: charlie-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hopcharlie-platform
+  namespace: charlie-system
+automountServiceAccountToken: false
+---
+# A long-lived token: the API reads its kubeconfig only when it starts, and the
+# EKS API is private, so no cloud CLI or credential plugin runs in the pod.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hopcharlie-platform-token
+  namespace: charlie-system
+  annotations:
+    kubernetes.io/service-account.name: hopcharlie-platform
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hopcharlie-platform-observer
+rules:
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [list]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [list]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterrolebindings]
+    verbs: [list]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hopcharlie-platform-observer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hopcharlie-platform-observer
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: charlie-system

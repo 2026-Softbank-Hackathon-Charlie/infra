@@ -538,19 +538,27 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
-| [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress |
+| [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
 
 ### GitHub에서 배포하는 앱
 
 플랫폼은 GitHub 저장소로 등록한 앱을 빌드하고 gitops 저장소에 `apps/<app>/<env>.yaml`을 커밋합니다. Argo CD Application `charlie-management-hopcharlie-apps`가 그리는 ApplicationSet이 파일마다 Application `<app>-<env>`를 만들고, `hopcharlie-app` 차트로 워크로드 클러스터의 `<app>` 네임스페이스에 배포합니다. 결정 이유와 남은 작업은 [ADR 0023](docs/adr/0023-deploy-github-apps-with-applicationset.md)에 있습니다.
 
+앱 주소 `https://<instance>.hopcharlie.dev`는 와일드카드 DNS와 ALB 규칙이 게이트웨이로 보내고, 게이트웨이는 플랫폼이 워크로드 kubeconfig로 찾은 내부 NLB로 보냅니다. root를 sync하지 않고 앱 ApplicationSet만 등록하는 방법, gitops 저장소 자격 증명, kubeconfig 권한, 네트워크 근거는 [ADR 0036](docs/adr/0036-app-routing-and-argo-apps.md), 단계별 명령은 [실행 순서](docs/runbooks/app-routing.md)에 있습니다.
+
 | 파일 | 역할 |
 | --- | --- |
 | [docs/adr/0023-deploy-github-apps-with-applicationset.md](docs/adr/0023-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
+| [docs/adr/0036-app-routing-and-argo-apps.md](docs/adr/0036-app-routing-and-argo-apps.md) | 앱 ApplicationSet 개별 등록, gitops 자격 증명, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거 제안 |
+| [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
+| [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
+| [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드 RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/eks` 저장 |
+| [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
+| [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
-| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet |
+| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
 | [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
 | [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
 | [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
