@@ -33,6 +33,6 @@
     "quay.io/jetstack/cert-manager-startupapicheck:v1.21.3": "sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1",
     "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:6c2229f": "sha256:4b6dc617ff2cecfa1352f00897b2db6a1a62289de3b1d614228bf5209b77ed9d",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:51e02f9": "sha256:95de015571b4eee2ab1b08ddc00b66780d4d7fb879c7ec2e3bc6a1bb65e0727f"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:e4ea108": "sha256:faa0768670eb884567f3c79a0f5505df3ffd9140f791935e303c06a9ed99e3ea"
   }
 }
