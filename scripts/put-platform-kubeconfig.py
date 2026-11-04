@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Give the HopCharlie platform API read access to the workload EKS cluster
-(its environment eks) and store the kubeconfig in SSM /hopcharlie/kube/eks.
+"""Give the HopCharlie platform API read access to a workload cluster and store
+the kubeconfig in SSM: --env eks (default) is the workload EKS cluster and
+/hopcharlie/kube/eks (ADR 0036), --env gke the GKE cluster and
+/hopcharlie/kube/gke (ADR 0044).
 
 Without --apply it changes nothing: it checks the AWS account, the workload
 tunnel and the parameter, and shows the RBAC diff. With --apply it applies
-clusters/aws-dev-workload/hopcharlie-platform-access.yaml, builds a kubeconfig
-(context eks-hopcharlie, the private EKS endpoint, the ServiceAccount token),
+the environment's hopcharlie-platform-access.yaml, builds a kubeconfig
+(context <env>-hopcharlie, the cluster endpoint, the ServiceAccount token),
 checks what that token may do through the tunnel and stores the kubeconfig as
 a SecureString. The token is never printed or put on a command line, and the
 temporary kubeconfig is deleted on exit. See docs/runbooks/app-routing.md.
@@ -25,9 +27,18 @@ from urllib.parse import urlsplit
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml'
+# Per environment: the manifest, the SSM parameter, the context the API looks
+# up (terraform/platform/aws/host/envs.yaml), and the operator's tunnel.
+ENVS = {
+    'eks': {'manifest': 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml',
+            'kubeconfig': '.generated/access/workload.kubeconfig', 'tunnel': 'make aws-tunnel CLUSTER=workload'},
+    'gke': {'manifest': 'clusters/gcp-dev-workload/hopcharlie-platform-access.yaml',
+            'kubeconfig': '.generated/access/gke.kubeconfig', 'tunnel': 'the GKE access tunnel (ADR 0021)',
+            'context': 'charlie-dev-gcp-workload'},
+}
+MANIFEST = ROOT / ENVS['eks']['manifest']
 PARAMETER = '/hopcharlie/kube/eks'
-CONTEXT = 'eks-hopcharlie'  # terraform/platform/aws/host/envs.yaml, environment eks
+CONTEXT = 'eks-hopcharlie'
 NAMESPACE, ACCOUNT, TOKEN_SECRET = 'charlie-system', 'hopcharlie-platform', 'hopcharlie-platform-token'
 FIELD_MANAGER = 'put-platform-kubeconfig'
 # What the platform's token must and must not be allowed to do (ADR 0036).
@@ -60,11 +71,16 @@ def project():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--env', choices=sorted(ENVS), default='eks', help='platform environment (default eks)')
     parser.add_argument('--apply', action='store_true', help='apply the RBAC and store the kubeconfig')
-    parser.add_argument('--replace', action='store_true', help=f'overwrite an existing {PARAMETER}')
-    parser.add_argument('--kubeconfig', type=Path, default=ROOT / '.generated/access/workload.kubeconfig',
-                        help='kubeconfig of make aws-tunnel CLUSTER=workload')
+    parser.add_argument('--replace', action='store_true', help='overwrite an existing /hopcharlie/kube/<env>')
+    parser.add_argument('--kubeconfig', type=Path, help='operator kubeconfig of the tunnel to the cluster')
     args = parser.parse_args(argv)
+    env = ENVS[args.env]
+    manifest, parameter, context = MANIFEST, PARAMETER, CONTEXT
+    if args.env != 'eks':
+        manifest, parameter, context = ROOT / env['manifest'], f'/hopcharlie/kube/{args.env}', f'{args.env}-hopcharlie'
+    args.kubeconfig = args.kubeconfig or ROOT / env['kubeconfig']
     p = project()
     profile = os.environ.get('AWS_PROFILE') or 'hopcharlie'
     account = os.environ.get('HOPCHARLIE_AWS_ACCOUNT') or '525091405886'
@@ -72,7 +88,8 @@ def main(argv=None):
     try:
         for tool in ('aws', 'kubectl'):
             require(shutil.which(tool), f'{tool} is not on PATH')
-        require(args.kubeconfig.is_file(), f'{args.kubeconfig} is missing; run make aws-tunnel CLUSTER=workload first')
+        require(args.kubeconfig.is_file(), f"{args.kubeconfig} is missing; open {env['tunnel']} first")
+        cluster = env.get('context', cluster)
 
         def aws(*a):
             return ['aws', '--profile', profile, '--region', region, *a]
@@ -82,31 +99,35 @@ def main(argv=None):
 
         got = run(aws('sts', 'get-caller-identity', '--query', 'Account', '--output', 'text')).stdout.strip()
         require(got == account, f"profile '{profile}' is account {got}, not the hackathon account {account}")
-        described = json.loads(run(aws('eks', 'describe-cluster', '--name', cluster, '--output', 'json')).stdout)['cluster']
-        endpoint, ca = described['endpoint'], described['certificateAuthority']['data']
-        host = urlsplit(endpoint).hostname
-        require(urlsplit(endpoint).scheme == 'https' and host and ca, 'unexpected EKS endpoint or CA')
-
-        # The tunnel kubeconfig must point at this cluster: loopback server, real TLS name.
         tunnel = json.loads(run(operator('config', 'view', '--raw', '--minify', '-o', 'json')).stdout)
         local = tunnel['clusters'][0]['cluster']
+        if args.env == 'eks':
+            described = json.loads(run(aws('eks', 'describe-cluster', '--name', cluster, '--output', 'json')).stdout)['cluster']
+            endpoint, ca = described['endpoint'], described['certificateAuthority']['data']
+        else:
+            # The GKE tunnel keeps the real public endpoint as its TLS name and the cluster CA.
+            endpoint, ca = f"https://{local.get('tls-server-name', '')}", local.get('certificate-authority-data')
+        host = urlsplit(endpoint).hostname
+        require(urlsplit(endpoint).scheme == 'https' and host and ca, f'unexpected {args.env} endpoint or CA')
+
+        # The tunnel kubeconfig must point at this cluster: loopback server, real TLS name.
         require(urlsplit(local['server']).hostname == '127.0.0.1'
                 and (local.get('tls-server-name') or '').lower() == host.lower(),
-                f'{args.kubeconfig} is not the tunnel to {cluster}; run make aws-tunnel CLUSTER=workload again')
+                f"{args.kubeconfig} is not the tunnel to {cluster}; open {env['tunnel']} again")
         run(operator('--request-timeout=5s', 'get', '--raw=/readyz'))
         # Every kubeconfig the API merges (names and who wrote them, no values): the first
         # file wins on a context name clash, and an existing eks may point elsewhere.
         kube = json.loads(run(aws('ssm', 'describe-parameters', '--parameter-filters',
-                                  f'Key=Path,Values={PARAMETER.rsplit("/", 1)[0]}', '--output', 'json')).stdout)['Parameters']
-        exists = any(k['Name'] == PARAMETER for k in kube)
+                                  f'Key=Path,Values={parameter.rsplit("/", 1)[0]}', '--output', 'json')).stdout)['Parameters']
+        exists = any(k['Name'] == parameter for k in kube)
         print(f'account {account}, cluster {cluster}, endpoint {endpoint}')
         for k in kube:
             print(f"  {k['Name']}: modified {k.get('LastModifiedDate')} by {k.get('LastModifiedUser')}")
-        print(f'{PARAMETER}: {"exists" if exists else "missing"}')
+        print(f'{parameter}: {"exists" if exists else "missing"}')
 
         # A server-side diff of an object in a missing namespace fails with NotFound, so
         # before the namespace exists only the cluster-scoped objects can be diffed.
-        docs = [d for d in yaml.safe_load_all(MANIFEST.read_text(encoding='utf-8')) if d]
+        docs = [d for d in yaml.safe_load_all(manifest.read_text(encoding='utf-8')) if d]
         namespace = [d for d in docs if d['kind'] == 'Namespace']
         namespaced = [d for d in docs if d['metadata'].get('namespace')]
         cluster_scoped = [d for d in docs if d not in namespace and d not in namespaced]
@@ -123,14 +144,14 @@ def main(argv=None):
 
         has_namespace = bool(run(operator('get', 'namespace', NAMESPACE, '-o', 'name', '--ignore-not-found')).stdout.strip())
         if has_namespace:
-            diff(docs, MANIFEST.relative_to(ROOT).as_posix())
+            diff(docs, manifest.relative_to(ROOT).as_posix())
         else:
             print(f'namespace {NAMESPACE} is missing: --apply creates it and the ServiceAccount and token Secret in it')
             diff(cluster_scoped, 'the cluster-scoped objects')
         if not args.apply:
             print('Nothing changed. Re-run with --apply to apply the RBAC and store the kubeconfig.')
             return 0
-        require(not exists or args.replace, f'{PARAMETER} exists; add --replace to overwrite it')
+        require(not exists or args.replace, f'{parameter} exists; add --replace to overwrite it')
 
         if not has_namespace:
             apply(namespace)
@@ -146,20 +167,20 @@ def main(argv=None):
             time.sleep(1)
         require(token, f'{NAMESPACE}/{TOKEN_SECRET} has no token yet')
         kubeconfig = {
-            'apiVersion': 'v1', 'kind': 'Config', 'current-context': CONTEXT,
-            'clusters': [{'name': CONTEXT, 'cluster': {'server': endpoint, 'certificate-authority-data': ca}}],
-            'users': [{'name': f'{ACCOUNT}@{CONTEXT}', 'user': {'token': token}}],
-            'contexts': [{'name': CONTEXT, 'context': {'cluster': CONTEXT, 'user': f'{ACCOUNT}@{CONTEXT}'}}],
+            'apiVersion': 'v1', 'kind': 'Config', 'current-context': context,
+            'clusters': [{'name': context, 'cluster': {'server': endpoint, 'certificate-authority-data': ca}}],
+            'users': [{'name': f'{ACCOUNT}@{context}', 'user': {'token': token}}],
+            'contexts': [{'name': context, 'context': {'cluster': context, 'user': f'{ACCOUNT}@{context}'}}],
         }
         work = ROOT / '.generated/platform-kube'
         work.mkdir(parents=True, exist_ok=True, mode=0o700)
         with tempfile.TemporaryDirectory(dir=work) as directory:
-            path = Path(directory) / 'eks.kubeconfig'
+            path = Path(directory) / f'{args.env}.kubeconfig'
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(kubeconfig, f, indent=2)
 
-            # Same token and CA, through the tunnel: the private endpoint is not reachable from here.
+            # Same token and CA, through the tunnel: the endpoint is not reachable from here.
             def platform(*a):
                 return ['kubectl', '--kubeconfig', str(path), '--server', local['server'],
                         '--tls-server-name', host, *a]
@@ -171,11 +192,11 @@ def main(argv=None):
                 print(f'  can-i {" ".join(rule)}: {answer}')
                 # "no" may carry a reason ("no - ..."); an error leaves it empty.
                 require((answer.split() or [''])[0] == want, f'expected {want} for {" ".join(rule)}')
-            command = aws('ssm', 'put-parameter', '--name', PARAMETER, '--type', 'SecureString',
+            command = aws('ssm', 'put-parameter', '--name', parameter, '--type', 'SecureString',
                           '--tier', 'Intelligent-Tiering', '--value', f'file://{path}',
                           '--query', 'Version', '--output', 'text')
             version = run(command + (['--overwrite'] if exists else [])).stdout.strip()
-        print(f'stored {PARAMETER} version {version} (context {CONTEXT}, server {endpoint})')
+        print(f'stored {parameter} version {version} (context {context}, server {endpoint})')
         print('Next: restart hopcharlie-api on the management cluster so its init container reads it.')
     except Refused as error:
         print(f'put-platform-kubeconfig: {error}', file=sys.stderr)
