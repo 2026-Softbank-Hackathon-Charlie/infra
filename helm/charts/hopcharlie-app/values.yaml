@@ -52,6 +52,8 @@ profile:
   # ClusterIP.
   publicService:
     type: ClusterIP
+    # Local preserves the source IP for passthrough load balancers; empty keeps the cluster default.
+    externalTrafficPolicy: ""
     # Port of that Service; 0 uses the service's own port. A fixed port keeps
     # the platform's egress NetworkPolicy from opening every app's port.
     port: 0

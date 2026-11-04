@@ -14,6 +14,9 @@ metadata:
   {{- end }}
 spec:
   type: {{ ternary ($public.type | default "ClusterIP") "ClusterIP" ($svc.public | default false) }}
+  {{- if and $svc.public $public.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ $public.externalTrafficPolicy }}
+  {{- end }}
   selector:
     {{- include "hopcharlie-app.selectorLabels" $ctx | nindent 4 }}
   ports:
