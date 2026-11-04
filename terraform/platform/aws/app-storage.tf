@@ -11,18 +11,27 @@
 #
 # Cost: none for IAM and the parameter; each bucket is billed for what it stores.
 # Cleanup: the platform deletes an instance's key, user and bucket with the
-# instance. ./tf.sh destroy fails on the boundary while a user still has it.
+# instance. ./tf.sh destroy fails on the boundary while a user still has it,
+# and it deletes /hopcharlie/app-secrets-key with every stored secret's key.
 
 locals {
-  app_bucket_arn    = "arn:aws:s3:::hopcharlie-eks-*" # bucketPrefix of environment eks (host/envs.yaml)
-  app_user_arn      = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:user/hopcharlie-apps/*"
+  # The bucket prefix and IAM path of environment eks. host/envs.yaml must name
+  # the same ones and the boundary below.
+  app_bucket_prefix = "hopcharlie-eks-"
+  app_iam_path      = "/hopcharlie-apps/"
+  app_bucket_arn    = "arn:aws:s3:::${local.app_bucket_prefix}*"
+  app_user_arn      = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:user${local.app_iam_path}*"
   app_boundary_name = "hopcharlie-app-boundary"
   app_boundary_arn  = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:policy/${local.app_boundary_name}"
+  # Only buckets of this account: a bucket another account named
+  # hopcharlie-eks-* is never touched.
+  app_own_buckets = { StringEquals = { "s3:ResourceAccount" = data.aws_caller_identity.me.account_id } }
 }
 
-# The most an app user can do. The platform's inline policy narrows it to the
-# instance's own bucket. Bucket settings (policy, ACL, public access block,
-# deletion) are left out, so even a wrong inline policy cannot open a bucket.
+# The most an app user can do. The platform's inline policy
+# (internal/storage bucketPolicy) narrows it to the instance's own bucket.
+# Bucket settings (policy, ACL, public access block, deletion) are left out, so
+# even a wrong inline policy cannot open a bucket.
 resource "aws_iam_policy" "app_boundary" {
   name        = local.app_boundary_name
   description = "Permissions boundary of the IAM users the HopCharlie platform makes for app buckets"
@@ -30,38 +39,54 @@ resource "aws_iam_policy" "app_boundary" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket", "s3:ListBucketMultipartUploads", "s3:GetBucketLocation"]
-        Resource = local.app_bucket_arn
+        Effect    = "Allow"
+        Action    = ["s3:ListBucket", "s3:ListBucketMultipartUploads", "s3:GetBucketLocation"]
+        Resource  = local.app_bucket_arn
+        Condition = local.app_own_buckets
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GetObjectTagging", "s3:PutObjectTagging", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
-        Resource = "${local.app_bucket_arn}/*"
+        Effect    = "Allow"
+        Action    = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GetObjectTagging", "s3:PutObjectTagging", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
+        Resource  = "${local.app_bucket_arn}/*"
+        Condition = local.app_own_buckets
       },
     ]
   })
 }
 
+# Exactly the calls of the platform's aws storage driver (internal/storage/aws.go).
 resource "aws_iam_role_policy" "platform_app_storage" {
   name = "app-storage"
   role = aws_iam_role.platform_pod.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Create, tag, close to the public and delete the instances' buckets.
+      # Create a bucket in this region. No ACL or object ownership: new
+      # buckets keep ACLs off.
       {
-        Effect   = "Allow"
-        Action   = ["s3:CreateBucket", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:GetBucketLocation", "s3:ListBucket", "s3:DeleteBucket"]
-        Resource = local.app_bucket_arn
+        Effect    = "Allow"
+        Action    = "s3:CreateBucket"
+        Resource  = local.app_bucket_arn
+        Condition = { StringEquals = { "s3:LocationConstraint" = var.region } }
       },
-      # Empty a bucket before deleting it.
+      # Check the app tag, tag, close to the public, list what is left and
+      # delete the instances' buckets.
       {
-        Effect   = "Allow"
-        Action   = "s3:DeleteObject"
-        Resource = "${local.app_bucket_arn}/*"
+        Effect    = "Allow"
+        Action    = ["s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:DeleteBucket"]
+        Resource  = local.app_bucket_arn
+        Condition = local.app_own_buckets
+      },
+      # Empty a bucket before deleting it: every version and delete marker
+      # (DeleteObjects with VersionId) and unfinished multipart uploads.
+      {
+        Effect    = "Allow"
+        Action    = ["s3:DeleteObject", "s3:DeleteObjectVersion", "s3:AbortMultipartUpload"]
+        Resource  = "${local.app_bucket_arn}/*"
+        Condition = local.app_own_buckets
       },
       # Create a user, and change its inline policy, only with the boundary.
+      # Nobody else creates users under this path (ADR 0035).
       {
         Effect    = "Allow"
         Action    = ["iam:CreateUser", "iam:PutUserPolicy", "iam:DeleteUserPolicy"]
