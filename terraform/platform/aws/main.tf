@@ -119,8 +119,14 @@ resource "aws_ssm_parameter" "platform_tokens" {
 locals {
   # Line endings are normalized so a Windows checkout (CRLF) and a Linux one
   # produce the same parameters, and plan shows no change between them.
+  # envs.yaml gets the app bucket prefix, IAM path and boundary from
+  # app-storage.tf, so the platform cannot be told other ones than its role allows.
   host_files = {
-    "envs.yaml" = replace(file("${path.module}/host/envs.yaml"), "\r\n", "\n")
+    "envs.yaml" = replace(templatefile("${path.module}/host/envs.yaml", {
+      app_bucket_prefix = local.app_bucket_prefix
+      app_iam_path      = local.app_iam_path
+      app_boundary_arn  = local.app_boundary_arn
+    }), "\r\n", "\n")
     "apps.yaml" = replace(file("${path.module}/host/apps.yaml"), "\r\n", "\n")
   }
 }
