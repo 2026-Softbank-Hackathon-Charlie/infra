@@ -155,6 +155,34 @@ def main():
             assert not any(d["kind"] == "Secret" for d in docs), "Platform secrets stay in SSM"
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
+            if not ingress:
+                assert not any(d["metadata"]["name"] == "hopcharlie-gcp-adc" for d in docs), "No Google ADC without gcp values"
+        # Google ADC for the gcs storage driver (ADR 0041): only the API pod gets
+        # the projected token; the gateway and Postgres share the service account.
+        gcp_values = work / "platform-gcp.json"
+        adc = {"type": "external_account", "audience": "//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
+               "subject_token_type": "urn:ietf:params:oauth:token-type:jwt", "token_url": "https://sts.googleapis.com/v1/token",
+               "credential_source": {"file": "/var/run/secrets/gcp/token"}}
+        audience = "https://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks"
+        gcp_values.write_text(json.dumps({"gcp": {"credentialConfig": adc, "tokenAudience": audience}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(gcp_values)))
+        cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-gcp-adc")
+        assert json.loads(cm["data"]["adc.json"]) == adc, cm["data"]
+        for d in docs:
+            if d["kind"] not in ("Deployment", "StatefulSet"):
+                continue
+            pod = d["spec"]["template"]["spec"]
+            tokens = [s["serviceAccountToken"] for v in pod.get("volumes") or [] for s in (v.get("projected") or {}).get("sources") or [] if "serviceAccountToken" in s]
+            env = {e["name"]: e.get("value") for c in pod["containers"] for e in c.get("env") or []}
+            if d["metadata"]["name"] == "hopcharlie-api":
+                assert tokens == [{"audience": audience, "expirationSeconds": 3600, "path": "token"}], tokens
+                assert env["GOOGLE_APPLICATION_CREDENTIALS"] == "/etc/gcp/adc.json"
+            else:
+                assert not tokens and "GOOGLE_APPLICATION_CREDENTIALS" not in env, d["metadata"]["name"]
+        half = work / "platform-gcp-half.json"
+        half.write_text(json.dumps({"gcp": {"credentialConfig": adc}}))
+        result = subprocess.run([HELM, "template", "hopcharlie-platform", str(ROOT / "helm/charts/hopcharlie-platform"), "--namespace", "charlie-platform", "-f", str(platform_values), "-f", str(half)], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode != 0 and "go together" in result.stderr, "gcp values come in pairs"
         google_values = work / "headlamp-gke-google.json"
         google_values.write_text(json.dumps({
             "proxy": {"trustedProxyCIDRs": ["10.40.0.0/16"]},

@@ -26,6 +26,26 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.api | quote }}
+{{- $gcp := .Values.gcp }}
+{{- if or $gcp.credentialConfig $gcp.tokenAudience }}
+{{- if not (and $gcp.credentialConfig $gcp.tokenAudience) }}
+{{- fail "gcp.credentialConfig and gcp.tokenAudience go together" }}
+{{- end }}
+{{- if ne (dig "credential_source" "file" "" $gcp.credentialConfig) "/var/run/secrets/gcp/token" }}
+{{- fail "gcp.credentialConfig.credential_source.file must be /var/run/secrets/gcp/token" }}
+{{- end }}
+---
+# Public Google ADC configuration (infra ADR 0041): no key, only where to find
+# the projected token and which service account to impersonate.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopcharlie-gcp-adc
+  labels:
+    {{- include "hopcharlie.labels" "api" | nindent 4 }}
+data:
+  adc.json: {{ toJson $gcp.credentialConfig | quote }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -77,6 +97,10 @@ spec:
             {{- with .Values.appDomain }}
             - {name: PLATFORM_APP_DOMAIN, value: {{ . | quote }}}
             {{- end }}
+            {{- if $gcp.tokenAudience }}
+            # The gcs storage driver uses Google ADC (infra ADR 0041).
+            - {name: GOOGLE_APPLICATION_CREDENTIALS, value: /etc/gcp/adc.json}
+            {{- end }}
             {{- with .Values.github.appId }}
             # The private key and the webhook secret come from SSM (fetch-settings.sh).
             - {name: PLATFORM_GITHUB_APP_ID, value: {{ . | quote }}}
@@ -108,8 +132,26 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: settings, mountPath: /config, readOnly: true}
+            {{- if $gcp.tokenAudience }}
+            - {name: gcp-token, mountPath: /var/run/secrets/gcp, readOnly: true}
+            - {name: gcp-adc, mountPath: /etc/gcp, readOnly: true}
+            {{- end }}
       volumes:
         {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        {{- if $gcp.tokenAudience }}
+        # Only this pod gets a token for the Google audience; the gateway and
+        # Postgres share the service account but not this token.
+        - name: gcp-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: {{ $gcp.tokenAudience | quote }}
+                  expirationSeconds: 3600
+                  path: token
+        - name: gcp-adc
+          configMap:
+            name: hopcharlie-gcp-adc
+        {{- end }}
         - name: data
           persistentVolumeClaim:
             claimName: hopcharlie-api-data
