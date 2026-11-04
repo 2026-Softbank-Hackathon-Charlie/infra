@@ -53,7 +53,7 @@ class GCPDeliveryTests(unittest.TestCase):
 
     def test_all_gcp_roots_get_backend_free_checks_and_mock_tests(self):
         validate = self.workflow['jobs']['validate']
-        self.assertEqual(set(validate['strategy']['matrix']['root']), {'terraform/bootstrap/gcp', 'terraform/environments/gcp/dev/workload', 'terraform/integrations/gcp/argocd', 'terraform/integrations/gcp/platform-storage'})
+        self.assertEqual(set(validate['strategy']['matrix']['root']), {'terraform/bootstrap/gcp', 'terraform/environments/gcp/dev/workload', 'terraform/integrations/gcp/argocd', 'terraform/integrations/gcp/platform-storage', 'terraform/integrations/gcp/app-images'})
         command = validate['steps'][-1]['run']
         for part in ('-backend=false', '-lockfile=readonly', 'validate', ' test'):
             self.assertIn(part, command)
