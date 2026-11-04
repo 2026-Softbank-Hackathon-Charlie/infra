@@ -76,7 +76,7 @@
 
 ### 인증서 스크립트([scripts/put-sealed-secrets-cert.sh](../../scripts/put-sealed-secrets-cert.sh))
 
-- 워크로드 API 터널(`make aws-tunnel CLUSTER=workload`)의 kubeconfig로 `/api/v1/namespaces/kube-system/services/http:sealed-secrets-controller:/proxy/v1/cert.pem`을 읽어, 인증서 하나이고 개인키가 없는지 확인한 뒤 SSM String `/hopcharlie/sealed-secrets/eks`에 넣는다. `tf.sh`처럼 해커톤 계정이 아닌 프로필은 거부하고, subject, 만료일, SHA-256 지문만 출력한다.
+- 워크로드 API 터널(`make aws-tunnel CLUSTER=workload`)의 kubeconfig로 `/api/v1/namespaces/kube-system/services/http:sealed-secrets-controller:http/proxy/v1/cert.pem`을 읽어, 인증서 하나이고 개인키가 없는지 확인한 뒤 SSM String `/hopcharlie/sealed-secrets/eks`에 넣는다. `tf.sh`처럼 해커톤 계정이 아닌 프로필은 거부하고, subject, 만료일, SHA-256 지문만 출력한다.
 
 ## 영향과 후속 작업
 
