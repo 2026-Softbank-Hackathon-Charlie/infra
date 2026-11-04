@@ -14,7 +14,7 @@ metadata:
     app: {{ include "clickstack.fullname" . }}
     {{- if .Values.hyperdx.deployment.labels }}
     {{- with .Values.hyperdx.deployment.labels }}
-    {{- toYaml . | nindent 4 }} 
+    {{- toYaml . | nindent 4 }}
     {{- end -}}
     {{- end }}
 spec:

@@ -21,15 +21,15 @@ Ingress is enabled. Check your ingress resource for the configured host:
 Application Access:
   For security, the service uses ClusterIP and is not exposed externally by default.
   Choose one of the following access methods:
-  
+
   1. Enable Ingress (Recommended for Production):
      Configure hyperdx.ingress with your annotations and spec.
      See the chart documentation for nginx and ALB examples.
-  
+
   2. Port Forward (Development/Testing):
      kubectl port-forward svc/{{ include "clickstack.hyperdx.fullname" . }} {{ .Values.hyperdx.ports.app }}:{{ .Values.hyperdx.ports.app }}
      Then access: http://localhost:{{ .Values.hyperdx.ports.app }}
-  
+
   Note: This application handles sensitive telemetry data and should not be exposed
   directly to the internet without proper authentication and encryption.
 {{- end }}
