@@ -64,6 +64,12 @@
           "storageClass": "charlie-gcp-balanced",
           "storageSize": "1Gi"
         },
+        "s3": {
+          "endpoint": "https://storage.googleapis.com",
+          "region": "auto",
+          "bucketPrefix": "hopcharlie-gke-",
+          "credentialsSecret": "app-s3"
+        },
         "quota": {
           "enabled": true,
           "hard": {
