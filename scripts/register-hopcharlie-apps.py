@@ -16,6 +16,7 @@ Every command uses the management kubeconfig of make aws-tunnel and names only
 these objects. See docs/runbooks/app-routing.md.
 """
 import argparse
+import base64
 import getpass
 import json
 from pathlib import Path
@@ -65,6 +66,17 @@ def repository_secret(token):
         'type': 'Opaque',
         'stringData': {'type': 'git', 'url': gitops_url(), 'username': 'x-access-token', 'password': token},
     }
+
+
+def repositories(argo):
+    """Name to URL of every Argo CD repository Secret; only the url field is decoded."""
+    listing = argo('-n', NAMESPACE, 'get', 'secret', '-l', 'argocd.argoproj.io/secret-type=repository', '-o',
+                   'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.data.url}{"\n"}{end}').stdout
+    repos = {}
+    for line in listing.splitlines():
+        name, _, url = line.partition('\t')
+        repos[name] = base64.b64decode(url).decode() if url else ''
+    return repos
 
 
 def read_token(path):
@@ -137,10 +149,11 @@ def preview(argo, args):
     print(f"{ROOT_APP} values: repo {values['repoURL']} revision {values['revision']}, "
           f"workload {values['targets']['workload']['endpoint']}")
     print(f'rendered {OUT.relative_to(ROOT).as_posix()}/register.yaml and children.yaml')
-    names = argo('-n', NAMESPACE, 'get', 'secret', '-l', 'argocd.argoproj.io/secret-type=repository',
-                 '-o', 'name').stdout.split()
-    print(f"repository Secrets: {', '.join(n.split('/')[-1] for n in names) or 'none'}")
-    print(f'  {REPO_SECRET} for {gitops_url()}: {"exists" if f"secret/{REPO_SECRET}" in names else "missing"}')
+    repos = repositories(argo)
+    print('repository Secrets:' + ('' if repos else ' none'))
+    for name, url in repos.items():
+        print(f'  {name}: {url}')
+    print(f'  {REPO_SECRET} for {gitops_url()}: {"exists" if REPO_SECRET in repos else "missing"}')
     present = {name: argo.exists(kind, name) for kind, name in
                (('appproject', PROJECT), ('application', APPLICATION), ('applicationset', APPSET))}
     for name, found in present.items():
@@ -158,6 +171,8 @@ def preview(argo, args):
 
 def add_repository(argo, args):
     require(not argo.exists('secret', REPO_SECRET), f'{NAMESPACE}/{REPO_SECRET} exists; it is not replaced')
+    other = [name for name, url in repositories(argo).items() if url == gitops_url()]
+    require(not other, f'{", ".join(other)} already holds a credential for {gitops_url()}')
     token = read_token(args.token_file)
     payload = json.dumps(repository_secret(token))
     for dry in (['--dry-run=server'], []):

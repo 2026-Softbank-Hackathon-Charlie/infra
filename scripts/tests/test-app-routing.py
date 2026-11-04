@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 TOKEN = 'eyJfake.platform-token.sig'
 ENDPOINT = 'https://ABCDEF.gr7.ap-northeast-2.eks.amazonaws.com'
@@ -23,6 +25,10 @@ def load(name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def in_namespace(manifests, namespace='charlie-system'):
+    return any((d.get('metadata') or {}).get('namespace') == namespace for d in yaml.safe_load_all(manifests or '') if d)
 
 
 def done(args, stdout='', code=0, stderr=''):
@@ -61,7 +67,7 @@ class KubeconfigTests(unittest.TestCase):
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(ROOT / 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml', self.manifest)
         self.account, self.parameter, self.whoami, self.stored = '525091405886', '', None, None
-        self.secret_access = 'no'
+        self.secret_access, self.has_namespace = 'no', True
 
     def answer(self, args, stdin):
         if args[0] == 'aws':
@@ -77,6 +83,12 @@ class KubeconfigTests(unittest.TestCase):
                 value = args[args.index('--value') + 1]
                 self.stored = Path(value.removeprefix('file://')).read_text()
                 return done(args, '3\n')
+        if 'namespace' in args and '--ignore-not-found' in args:
+            return done(args, 'namespace/charlie-system' if self.has_namespace else '')
+        if 'apply' in args:
+            if 'kind: Namespace' in (stdin or ''):
+                self.has_namespace = True
+            return done(args, 'applied')
         if 'view' in args:
             return done(args, json.dumps({'clusters': [{'cluster': {
                 'server': 'https://127.0.0.1:11443', 'tls-server-name': ENDPOINT[8:].lower()}}]}))
@@ -90,7 +102,8 @@ class KubeconfigTests(unittest.TestCase):
             yes = yes or (rule[:2] == ['get', 'secrets'] and self.secret_access == 'yes')
             return done(args, 'yes' if yes else 'no - no RBAC policy matched', 0 if yes else 1)
         if 'diff' in args:
-            return done(args, code=1)
+            # The API server rejects a dry-run of an object in a missing namespace.
+            return done(args, code=1 if self.has_namespace or not in_namespace(stdin) else 2)
         return done(args, 'ok')
 
     def invoke(self, *argv):
@@ -110,6 +123,18 @@ class KubeconfigTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertFalse(calls.has('apply') or calls.has('put-parameter'))
         self.assertTrue(calls.has('diff', '--server-side'))
+
+    def test_missing_namespace(self):
+        self.has_namespace = False
+        code, calls, out = self.invoke()
+        self.assertEqual(code, 0, out)
+        self.assertFalse(in_namespace(next(i for a, i in calls.log if 'diff' in a)))
+        self.assertFalse(calls.has('apply'))
+        code, calls, out = self.invoke('--apply')
+        self.assertEqual(code, 0, out)
+        applied = [[d['kind'] for d in yaml.safe_load_all(i) if d] for a, i in calls.log if 'apply' in a]
+        self.assertEqual(applied, [['Namespace'], ['Namespace', 'ServiceAccount', 'Secret', 'ClusterRole', 'ClusterRoleBinding']])
+        self.assertEqual(len(calls.has('diff')), 2)
 
     def test_other_account_is_refused_first(self):
         self.account = '111111111111'
@@ -161,11 +186,14 @@ class RegisterTests(unittest.TestCase):
         self.token_file = self.dir / 'token'
         self.token_file.write_text(TOKEN + '\n')
         self.existing, self.app = set(), {'metadata': {'name': 'charlie-management-hopcharlie-apps'}, 'spec': {}}
+        self.repositories = {'charlie-infra-repository': 'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git'}
 
     def answer(self, args, stdin):
         if '--ignore-not-found' in args:
             kind, name = args[args.index('get') + 1:args.index('get') + 3]
             return done(args, f'{kind}/{name}' if name in self.existing else '')
+        if 'secret' in args and '-l' in args:
+            return done(args, ''.join(f'{n}\t{base64.b64encode(u.encode()).decode()}\n' for n, u in self.repositories.items()))
         if args[0] == 'git':
             return done(args, 'same\n' if 'rev-parse' in args else '')
         if 'get' in args and 'json' in args:
@@ -205,6 +233,13 @@ class RegisterTests(unittest.TestCase):
         self.assertEqual(secret['metadata']['labels'], {'argocd.argoproj.io/secret-type': 'repository'})
         self.assertEqual(secret['stringData'], {'type': 'git', 'url': 'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git',
                                                 'username': 'x-access-token', 'password': TOKEN})
+
+    def test_second_credential_for_the_same_url_is_refused(self):
+        self.repositories['old-gitops'] = 'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git'
+        code, calls, out = self.invoke('add-repository', '--token-file', str(self.token_file))
+        self.assertEqual(code, 1)
+        self.assertIn('old-gitops', out)
+        self.assertFalse(calls.has('create'))
 
     def test_existing_objects_are_not_replaced(self):
         self.existing = {'charlie-gitops-repository'}

@@ -22,6 +22,8 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / 'clusters/aws-dev-workload/hopcharlie-platform-access.yaml'
 PARAMETER = '/hopcharlie/kube/eks'
@@ -47,9 +49,9 @@ def require(ok, message):
         raise Refused(message)
 
 
-def run(args, check=True):
+def run(args, check=True, stdin=None):
     # stdout is captured and never echoed; CLI errors stay visible on stderr.
-    return subprocess.run(args, check=check, text=True, encoding='utf-8', stdout=subprocess.PIPE)
+    return subprocess.run(args, input=stdin, check=check, text=True, encoding='utf-8', stdout=subprocess.PIPE)
 
 
 def project():
@@ -101,15 +103,39 @@ def main(argv=None):
         for k in kube:
             print(f"  {k['Name']}: modified {k.get('LastModifiedDate')} by {k.get('LastModifiedUser')}")
         print(f'{PARAMETER}: {"exists" if exists else "missing"}')
-        print(f'RBAC diff of {MANIFEST.relative_to(ROOT).as_posix()} (empty: nothing to change):', flush=True)
-        diff = subprocess.run(operator('diff', '--server-side', f'--field-manager={FIELD_MANAGER}', '-f', str(MANIFEST)))
-        require(diff.returncode in (0, 1), 'kubectl diff failed')
+
+        # A server-side diff of an object in a missing namespace fails with NotFound, so
+        # before the namespace exists only the cluster-scoped objects can be diffed.
+        docs = [d for d in yaml.safe_load_all(MANIFEST.read_text(encoding='utf-8')) if d]
+        namespace = [d for d in docs if d['kind'] == 'Namespace']
+        namespaced = [d for d in docs if d['metadata'].get('namespace')]
+        cluster_scoped = [d for d in docs if d not in namespace and d not in namespaced]
+
+        def diff(objects, what):
+            print(f'diff of {what} (empty: nothing to change):', flush=True)
+            result = subprocess.run(operator('diff', '--server-side', f'--field-manager={FIELD_MANAGER}', '-f', '-'),
+                                    input=yaml.safe_dump_all(objects), text=True, encoding='utf-8')
+            require(result.returncode in (0, 1), 'kubectl diff failed')
+
+        def apply(objects):
+            run(operator('apply', '--server-side', f'--field-manager={FIELD_MANAGER}', '-f', '-'),
+                stdin=yaml.safe_dump_all(objects))
+
+        has_namespace = bool(run(operator('get', 'namespace', NAMESPACE, '-o', 'name', '--ignore-not-found')).stdout.strip())
+        if has_namespace:
+            diff(docs, MANIFEST.relative_to(ROOT).as_posix())
+        else:
+            print(f'namespace {NAMESPACE} is missing: --apply creates it and the ServiceAccount and token Secret in it')
+            diff(cluster_scoped, 'the cluster-scoped objects')
         if not args.apply:
             print('Nothing changed. Re-run with --apply to apply the RBAC and store the kubeconfig.')
             return 0
         require(not exists or args.replace, f'{PARAMETER} exists; add --replace to overwrite it')
 
-        run(operator('apply', '--server-side', f'--field-manager={FIELD_MANAGER}', '-f', str(MANIFEST)))
+        if not has_namespace:
+            apply(namespace)
+            diff(namespaced, f'the objects in {NAMESPACE}')
+        apply(docs)
         token = ''
         for _ in range(30):  # the token controller fills the Secret asynchronously
             data = run(operator('-n', NAMESPACE, 'get', 'secret', TOKEN_SECRET, '-o', 'jsonpath={.data.token}'),
