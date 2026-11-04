@@ -131,6 +131,16 @@ def main():
                 docs = render(chart, values_root / f"{name}.yaml", release, namespace, extra)
                 check_project(docs, projects[purpose], namespace)
                 seen.update(check_images(docs))
+        # GKE sealed-secrets (ADR 0043): applied by hand, not Argo. It must keep
+        # its own key, never renew it, and unseal in every namespace.
+        docs = render(work / "charts/sealed-secrets/sealed-secrets", ROOT / "clusters/gcp-dev-workload/values/sealed-secrets.yaml", "sealed-secrets-gcp", "charlie-apps")
+        seen.update(check_images(docs))
+        args = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["containers"][0]["args"]
+        assert {"--key-prefix=sealed-secrets-gcp-key", "--key-renew-period=0"} <= set(args) and not any(a.startswith("--all-namespaces") for a in args), args
+        cluster_rbac = {(d["kind"], d["metadata"]["name"]) for d in docs if d["kind"] in {"ClusterRole", "ClusterRoleBinding"}}
+        assert cluster_rbac == {("ClusterRole", "secrets-unsealer"), ("ClusterRoleBinding", "sealed-secrets-gcp")}, cluster_rbac
+        assert not any(d["metadata"]["name"].endswith("service-proxier") for d in docs)
+        assert all(d["metadata"].get("namespace", "charlie-apps") == "charlie-apps" for d in docs if d["kind"] not in CLUSTER_KINDS)
         # HopCharlie platform: before and after the shared ALB is turned on.
         platform_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml"
         for ingress in (False, True):

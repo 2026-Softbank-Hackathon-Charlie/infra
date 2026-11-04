@@ -511,6 +511,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [clusters/gcp-dev-workload/values/cnpg-poc.yaml](clusters/gcp-dev-workload/values/cnpg-poc.yaml) | 공통 PoC 차트의 GCP 디스크·operator·네트워크·백업 값 |
 | [clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml](clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml) | AWS와 같은 고정 Barman 컨트롤러·sidecar 이미지 |
 | [clusters/gcp-dev-workload/values/cert-manager.yaml](clusters/gcp-dev-workload/values/cert-manager.yaml) | AWS와 같은 고정 cert-manager 이미지·CRD 설정 |
+| [clusters/gcp-dev-workload/values/sealed-secrets.yaml](clusters/gcp-dev-workload/values/sealed-secrets.yaml) | GKE sealed-secrets 실제 설치 값(모든 namespace, 키 갱신 끔, ADR 0043) |
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 
@@ -559,6 +560,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0040-use-gcs-for-gke-app-buckets.md](docs/adr/0040-use-gcs-for-gke-app-buckets.md) | GKE 앱 파일 저장소를 GCS의 S3 호환 API로 쓰는 제안 |
 | [docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md](docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md) | 플랫폼 gcs 드라이버의 키 없는 GCP 권한 제안 |
 | [docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md](docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md) | 플랫폼 앱 이미지를 AR에도 올려 GKE가 받게 하는 제안 |
+| [docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md](docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md) | GKE sealed-secrets 값 파일·수동 적용·키 백업 절차 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드 RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/eks` 저장 |
