@@ -8,6 +8,12 @@
 #   kubeContext     required, the kubeconfig context of the cluster
 #   kubeconfig      optional path; default loading rules ($KUBECONFIG, ~/.kube/config) otherwise
 #   gatewayBackend  optional, the traffic gateway backend for this environment; defaults to name
+#   sealedSecretsCert  optional, the cluster's Sealed Secrets public certificate; apps with
+#                      secrets or an s3 resource deploy only where it is set (platform ADR 0019)
+#   storage         optional, the driver that makes app buckets and keys (platform ADR 0016);
+#                   apps with an s3 resource register only where it is set. For driver aws,
+#                   Terraform fills in the bucket prefix, IAM path and boundary that
+#                   app-storage.tf lets the platform pod role use (templatefile in main.tf).
 environments:
   - name: gke
     provider: gcp
@@ -19,6 +25,13 @@ environments:
     displayName: AWS EKS
     region: ap-northeast-2
     kubeContext: eks-hopcharlie
+    sealedSecretsCert: /config/sealed-secrets/eks.pem
+    storage:
+      driver: aws
+      bucketPrefix: ${app_bucket_prefix}
+      region: ap-northeast-2
+      iamPath: ${app_iam_path}
+      permissionsBoundary: ${app_boundary_arn}
   - name: onprem
     provider: onprem
     displayName: On-prem k3s

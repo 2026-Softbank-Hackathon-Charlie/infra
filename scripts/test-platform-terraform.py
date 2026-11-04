@@ -135,7 +135,8 @@ class PlatformTerraformTests(unittest.TestCase):
         generic = load_script(ROOT / 'scripts/terraform-verify.py', 'generic_verify')
         config = load_script(ROOT / 'scripts/project-config.py', 'project_config')
         self.assertEqual(generic.ROOTS, ('bootstrap/aws', 'account/aws', 'aws/dev/foundation',
-                                       'modules/eks', 'aws/dev/management', 'aws/dev/workload'))
+                                       'modules/eks', 'aws/dev/management', 'aws/dev/workload',
+                                       'integrations/aws-gcp/tailscale'))
         self.assertEqual(config.STACKS, ('bootstrap/aws', 'account/aws', 'aws/dev/foundation',
                                         'aws/dev/management', 'aws/dev/workload'))
         self.assertIn('all-runtime) stacks=(bootstrap/aws aws/dev/foundation aws/dev/management aws/dev/workload)',
