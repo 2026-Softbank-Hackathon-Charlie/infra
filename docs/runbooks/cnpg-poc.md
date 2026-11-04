@@ -103,72 +103,7 @@ DB 앱 `charlie-workload-cnpg-poc`를 수동 sync하고 source Cluster가 Ready,
 
 ## 현재 접속 정보와 로컬 접속
 
-2026-11-04 마지막 배포 확인 기준 source Ready1/1, DB2/Role4의 applied·observedGeneration 최신, Argo Synced/Healthy다. SQL 접속·합성 데이터 주입·migration/grant·실제 복원 시험은 아직 수행하지 않았다. 따라서 runtime Role의 생성 완료와 앱 테이블 CRUD 준비 완료를 구분한다. 이 절은 기존 private EKS·SSM·TLS 접속 경로의 안내이며 명령을 실행한 결과가 아니다.
-
-| 항목 | 값 |
-| --- | --- |
-| AWS 계정 / 리전 | 525091405886 / ap-northeast-2 |
-| AWS CLI profile | charlie-admin |
-| EKS / DB namespace | charlie-dev-workload / charlie-db |
-| CNPG Cluster / PostgreSQL | postgres-poc / 18.6 |
-| 읽기·쓰기 host | postgres-poc-rw.charlie-db.svc.cluster.local |
-| port / TLS | 5432 / sslmode=verify-full |
-| Argo 위치 / 앱 | charlie-dev-management의 argocd / charlie-workload-cnpg-poc |
-
-서비스는 같은 workload 안에서 위 `-rw` Service를 사용한다. 이 DB에 외부 공개 endpoint는 구성하지 않았다. Primary Pod IP를 앱 설정에 고정하지 않는다. 다른 클러스터·관리 플랫폼에서 이 DNS로 바로 접속하는 구성은 준비하지 않았다.
-
-| 서비스 / 용도 | Database | PostgreSQL Role | Secret 이름 | Secret namespace |
-| --- | --- | --- | --- | --- |
-| A migration·초기 접속 | db_a | svc_a_owner | svc-a-owner | charlie-db |
-| A 앱 실행 | db_a | svc_a_runtime | svc-a-runtime | charlie-db, charlie-apps |
-| B migration·초기 접속 | db_b | svc_b_owner | svc-b-owner | charlie-db |
-| B 앱 실행 | db_b | svc_b_runtime | svc-b-runtime | charlie-db, charlie-apps |
-
-Secret 키는 username/password다. owner는 자기 DB의 migration용이고 runtime은 앱용이다. 전체 max_connections=50, owner Role별 connectionLimit=3, runtime Role별=10이며 PoC 시험의 앱 연결 합계 목표는10개 이하다. 실제 앱 schema·table·sequence와 runtime GRANT는 아래 migration 절차를 실행한 뒤 검증해야 한다. 기본 접속 DB를 생략하면 사용자 이름과 같은 DB에 접속하려 하므로 항상 db_a 또는 db_b를 지정한다.
-
-앱 Pod는 charlie-apps namespace와 Pod template label `charlie.dev/cnpg-client: "true"`를 사용한다. 이 label은 Deployment metadata가 아닌 `spec.template.metadata.labels`에 지정한다. DB namespace의 클라이언트도 같은 label이 필요하다. 다른 namespace는 현재 허용 대상이 아니다. 앱 namespace의 runtime Secret을 참조하고, 공개 CA 전용 Secret `postgres-poc-ca`의 `ca.crt`만 `/ca/ca.crt` 등에 마운트한다. 연결 값은 다음과 같다(A 기준, B는 Database/Role/Secret만 바꾼다).
-
-```text
-PGHOST=postgres-poc-rw.charlie-db.svc.cluster.local
-PGPORT=5432
-PGDATABASE=db_a
-PGUSER=svc_a_runtime                 # svc-a-runtime Secret의 username
-PGPASSWORD=<같은 Secret의 password>  # secretKeyRef 또는 보호된 파일로 전달
-PGSSLMODE=verify-full
-PGSSLROOTCERT=/ca/ca.crt
-```
-
-현재 작업자의 로컬 보관 디렉터리는 `/Users/timbergrizzzz/dev/charlie-infra/.generated/cnpg-poc-credentials/`다. 디렉터리0700·파일0600·Git 제외이며 암호화된 보관소가 아니다. 비밀번호는 svc-a-owner.password, svc-a-runtime.password, svc-b-owner.password, svc-b-runtime.password에 각각 있고, 공개 DB CA는 postgres-poc-public-ca.pem이다. 이 파일들은 raw password 파일이므로 libpq PGPASSFILE 형식과 다르다. DB 접속에는 봉인키 복구 JSON이나 sealed-secrets-public.pem을 사용하지 않는다. 비밀번호·복구 개인키를 채팅·Git·명령 인자에 복사하지 않는다.
-
-로컬 접속은 **세 터미널**을 사용한다. 기존 CLI 인증이 유효해야 하고 AWS CLI·session-manager-plugin·kubectl·psql이 필요하다. 아래는 현재 작업자의 경로이며 팀원은 자신의 checkout·AWS profile·인가된 자격 증명/공개 CA 경로를 사용한다. 로컬 포트가 이미 사용 중이면 다른 빈 포트를 선택한다.
-
-터미널1 — workload private API에 SSM 터널을 열고 유지한다. 이 명령은 로컬 전용 kubeconfig를 만들며 전역 kubeconfig를 덮어쓰지 않는다.
-
-```bash
-cd /Users/timbergrizzzz/dev/charlie-infra
-make aws-tunnel CLUSTER=workload AWS_PROFILE=charlie-admin
-```
-
-터미널2 — 로컬 loopback15432에서 DB Service로 port-forward한다. 위 터널도 계속 열어 둔다.
-
-```bash
-kubectl \
-  --kubeconfig /Users/timbergrizzzz/dev/charlie-infra/.generated/access/workload.kubeconfig \
-  --context charlie-dev-workload \
-  -n charlie-db port-forward --address 127.0.0.1 \
-  svc/postgres-poc-rw 15432:5432
-```
-
-터미널3 — 최초 확인은 A owner로 접속한다. 비밀번호는 svc-a-owner.password에 보관한 값을 psql의 비밀번호 프롬프트에 입력한다. 접속 명령에는 비밀번호가 포함되지 않는다.
-
-```bash
-psql -X -W \
-  "host=postgres-poc-rw.charlie-db.svc.cluster.local hostaddr=127.0.0.1 port=15432 dbname=db_a user=svc_a_owner sslmode=verify-full sslrootcert=/Users/timbergrizzzz/dev/charlie-infra/.generated/cnpg-poc-credentials/postgres-poc-public-ca.pem connect_timeout=5"
-```
-
-`hostaddr`는 실제 연결을 로컬 터널로 보내고 `host`는 서버 인증서의 호스트명 검증에 사용한다. host를 localhost로 바꾸거나 sslmode를 낮추지 않는다. B는 dbname=db_b·user=svc_b_owner와 대응 비밀번호를 사용한다. 접속 후 `\conninfo`와 `SELECT current_database(), current_user;`로 대상·계정을 확인하고 `\q`로 종료한다. 이 SQL은 안내용이며 이번 정리 작업에서는 실행하지 않았다. [libpq 연결 옵션](https://www.postgresql.org/docs/18/libpq-connect.html#LIBPQ-PARAMKEYWORDS), [kubectl port-forward](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/)를 따른다.
-
-작업 종료 시 psql을 종료하고 터미널2·1을 각각 Ctrl+C로 닫는다. Service port-forward는 선택한 Pod가 종료되면 다시 열어야 한다. 이 관리 접속 경로는 앱 Pod의 NetworkPolicy 격리 시험을 대체하지 않는다. Argo 화면은 별도 management API 터널에서 `make aws-tunnel CLUSTER=management AWS_PROFILE=charlie-admin`과 `make argo-port-forward`를 유지한 뒤 https://localhost:8080 에서 기존 로그인으로 해당 앱을 찾는다. 기본 management/workload API 로컬 포트는10443/11443으로 서로 다르다.
+DB·Role·Secret 매핑, 로컬 세 터미널 접속, 앱 설정, Argo 상태 확인과 오류 대응은 [별도 접속 가이드](cnpg-access.md)를 따른다. 2026-11-04 마지막 확인에서 source Ready1/1·DB2/Role4 적용·Argo Synced/Healthy였으며 SQL 접속·migration/grant·데이터 주입·실제 복원은 아직 미실행이다.
 
 ## 수동 migration·기능·격리 시험
 

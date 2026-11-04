@@ -608,10 +608,11 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 | [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 
-## AWS CNPG PoC — 코드 준비, 실제 배포 전
+## AWS CNPG PoC — 구축 상태와 접속
 
 단일 PostgreSQL과 서비스 A/B DB·Role, 전용 S3 백업·수동 복구 구성을 제공합니다.
-[승인된 계획](docs/plans/cnpg-aws-poc.md)과 [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+[접속 가이드](docs/runbooks/cnpg-access.md), [승인된 계획](docs/plans/cnpg-aws-poc.md), [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+2026-11-04 확인에서 DB Ready1/1·DB2/Role4 적용·Argo Synced/Healthy였으며 SQL 접속·migration/grant·실제 복원/RPO/RTO는 아직 미검증입니다.
 새 Argo 앱은 수동 상태이며 root 전체 sync·관리 플랫폼 DB 변경은 하지 않습니다.
 실제 백업 버킷 입력이 없으면 DB 차트 렌더링은 실패합니다. 코드·로컬 검사 성공은 배포나 RPO/RTO 달성 증명이 아닙니다.
 
@@ -625,6 +626,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0006-back-up-cnpg-poc-with-barman.md](docs/adr/0006-back-up-cnpg-poc-with-barman.md) | CNPG 구현·검증·운영 기록 |
 | [docs/plans/cnpg-aws-poc.md](docs/plans/cnpg-aws-poc.md) | CNPG 구현·검증·운영 기록 |
 | [docs/runbooks/cnpg-poc.md](docs/runbooks/cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/runbooks/cnpg-access.md](docs/runbooks/cnpg-access.md) | DB 접속 정보·SSM/port-forward·TLS·앱 설정·오류 확인 안내 |
 | [examples/cnpg-initial-backup.yaml.example](examples/cnpg-initial-backup.yaml.example) | CNPG 수동 검증·복원 fixture |
 | [examples/cnpg-poc/Chart.yaml](examples/cnpg-poc/Chart.yaml) | CNPG 수동 검증·복원 fixture |
 | [examples/cnpg-poc/files/fingerprint.sql](examples/cnpg-poc/files/fingerprint.sql) | CNPG 수동 검증·복원 fixture |
