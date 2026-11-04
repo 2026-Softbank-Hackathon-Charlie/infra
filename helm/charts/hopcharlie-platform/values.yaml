@@ -26,6 +26,10 @@
     "codebuildProject": "",
     "imageRegistry": ""
   },
+  "gcp": {
+    "credentialConfig": {},
+    "tokenAudience": ""
+  },
   "egressPorts": [80, 5432],
   "storage": {
     "className": "gp3",

@@ -1,0 +1,2 @@
+# Reuse the existing state bucket; the root fixes a separate gcp/dev/platform-storage prefix.
+bucket = "REPLACE_WITH_EXISTING_GCP_STATE_BUCKET"

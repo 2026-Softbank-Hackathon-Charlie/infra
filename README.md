@@ -557,6 +557,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md](docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md) | GKE 동적 앱 namespace의 제한된 Argo 권한·소유권 보호 제안 |
 | [docs/adr/0039-add-gke-app-environment.md](docs/adr/0039-add-gke-app-environment.md) | 앱 ApplicationSet의 GKE 환경과 내부 로드밸런서 제안 |
 | [docs/adr/0040-use-gcs-for-gke-app-buckets.md](docs/adr/0040-use-gcs-for-gke-app-buckets.md) | GKE 앱 파일 저장소를 GCS의 S3 호환 API로 쓰는 제안 |
+| [docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md](docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md) | 플랫폼 gcs 드라이버의 키 없는 GCP 권한 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드 RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/eks` 저장 |
@@ -702,6 +703,14 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/argocd/variables.tf](terraform/integrations/gcp/argocd/variables.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [terraform/integrations/gcp/argocd/versions.tf](terraform/integrations/gcp/argocd/versions.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
 | [terraform/integrations/gcp/argocd/tests/federation.tftest.hcl](terraform/integrations/gcp/argocd/tests/federation.tftest.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/platform-storage/.terraform.lock.hcl](terraform/integrations/gcp/platform-storage/.terraform.lock.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/backend.hcl.example](terraform/integrations/gcp/platform-storage/backend.hcl.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/main.tf](terraform/integrations/gcp/platform-storage/main.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/outputs.tf](terraform/integrations/gcp/platform-storage/outputs.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/terraform.tfvars.example](terraform/integrations/gcp/platform-storage/terraform.tfvars.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/variables.tf](terraform/integrations/gcp/platform-storage/variables.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/versions.tf](terraform/integrations/gcp/platform-storage/versions.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl](terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
 
 ## AWS↔GKE 앱 사설 경로 (Tailscale)
 
