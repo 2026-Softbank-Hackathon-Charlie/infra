@@ -1,14 +1,15 @@
 {
   "repoURL": "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git",
   "revision": "main",
-  "headlamp": {"enabled": false},
+  "headlamp": {
+    "enabled": false
+  },
   "targets": {},
   "addons": {
     "management": [
       "aws-load-balancer-controller",
       "metrics-server",
       "kube-prometheus-stack",
-      "loki",
       "sealed-secrets"
     ],
     "workload": [
@@ -17,6 +18,15 @@
       "kube-prometheus-stack",
       "sealed-secrets",
       "argo-rollouts"
+    ]
+  },
+  "observability": {
+    "enabled": false,
+    "agentTargets": [
+      "management"
+    ],
+    "gatewayTargets": [
+      "management"
     ]
   }
 }

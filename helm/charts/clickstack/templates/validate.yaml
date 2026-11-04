@@ -1,0 +1,28 @@
+{{- if hasKey .Values.hyperdx "secrets" }}
+{{- fail "Use existingSecrets references; hyperdx.secrets values are forbidden" }}
+{{- end }}
+{{- if hasKey .Values.hyperdx.config "MONGO_URI" }}
+{{- fail "MONGO_URI must come from the runtime Secret, never a ConfigMap" }}
+{{- end }}
+{{- if .Values.hyperdx.deployment.defaultConnections }}
+{{- fail "Use connections.json in existingSecrets.sources" }}
+{{- end }}
+{{- range $key, $value := .Values.hyperdx.config }}
+{{- if regexMatch "(?i)(password|session_secret|token_encryption_key|api_key|auth_token|default_connections|default_sources)" $key }}
+{{- fail (printf "%s belongs in a Secret reference, not hyperdx.config" $key) }}
+{{- end }}
+{{- if and (hasPrefix "NEXT_PUBLIC_" $key) (or (ne $key "NEXT_PUBLIC_ENABLE_PROMQL") (not (has (toString $value) (list "true" "false")))) }}
+{{- fail "Only the public PromQL boolean flag is allowed in NEXT_PUBLIC_*" }}
+{{- end }}
+{{- if regexMatch "://[^/: ]+:[^/@ ]+@" (toString $value) }}
+{{- fail "Credential-bearing URLs belong in Secret references" }}
+{{- end }}
+{{- end }}
+{{- range .Values.hyperdx.deployment.env }}
+{{- if and (hasKey . "value") (regexMatch "(?i)(password|secret|token|api_key|mongo_uri|default_connections|default_sources)" .name) }}
+{{- fail "Sensitive environment variables require secretKeyRef" }}
+{{- end }}
+{{- if hasPrefix "NEXT_PUBLIC_" .name }}
+{{- fail "Public frontend variables are restricted to the non-secret config boolean" }}
+{{- end }}
+{{- end }}

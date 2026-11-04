@@ -32,7 +32,10 @@
     "credentialConfig": {},
     "tokenAudience": ""
   },
-  "egressPorts": [80, 5432],
+  "egressPorts": [
+    80,
+    5432
+  ],
   "storage": {
     "className": "gp3",
     "postgres": "10Gi",
@@ -43,5 +46,8 @@
     "enabled": false,
     "groupName": "charlie-management-external",
     "domain": ""
+  },
+  "observability": {
+    "enabled": false
   }
 }

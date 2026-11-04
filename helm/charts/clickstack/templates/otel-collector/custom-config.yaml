@@ -1,0 +1,20 @@
+{{- if (index .Values "otel-collector" "enabled") }}
+{{- $config := fromYaml .Values.global.otelCollector.customConfig }}
+{{- $tokens := list "${env:OTLP_AUTH_TOKEN}" "Bearer ${env:OTLP_AUTH_TOKEN}" }}
+{{- range $i, $key := .Values.additionalIngestTokenKeys }}
+{{- $tokens = append $tokens (printf "${env:OTLP_EXTRA_TOKEN_%d}" $i) }}
+{{- $tokens = append $tokens (printf "Bearer ${env:OTLP_EXTRA_TOKEN_%d}" $i) }}
+{{- end }}
+{{- $_ := set $config.extensions "bearertokenauth/hyperdx" (dict "scheme" "" "tokens" $tokens) }}
+{{- $receiver := index $config.receivers "otlp/hyperdx" }}
+{{- $_ := set $receiver.protocols.http "auth" (dict "authenticator" "bearertokenauth/hyperdx") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickstack-otel-custom-config
+  labels:
+    {{- include "clickstack.labels" . | nindent 4 }}
+data:
+  custom.config.yaml: |
+    {{- toYaml $config | nindent 4 }}
+{{- end }}

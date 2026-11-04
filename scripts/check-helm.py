@@ -152,6 +152,7 @@ def check_system_network_policy():
 def main():
     check_system_network_policy()
     assert helm("version", "--short").startswith("v" + VERSIONS["helm"]), "Use the pinned Helm version"
+    subprocess.run([os.environ.get("PYTHON", "python3"), str(ROOT / "scripts/check-clickstack.py")], check=True)
     fixture = json.loads((ROOT / "helm/gitops/ci/targets-values.yaml").read_text())
     # Render the staged configuration and the OTel-enabled variant.
     with tempfile.TemporaryDirectory(prefix="charlie-helm-") as temp:

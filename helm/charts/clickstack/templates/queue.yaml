@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clickstack-collector-queue
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.collectorQueue.storageClassName | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.collectorQueue.size | quote }}

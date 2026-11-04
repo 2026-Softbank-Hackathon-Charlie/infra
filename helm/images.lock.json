@@ -33,6 +33,16 @@
     "quay.io/jetstack/cert-manager-startupapicheck:v1.21.3": "sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1",
     "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:eea0cc4": "sha256:02621a204f64d765fdb3d887340b2e19e12f08342485d5dd527bc5a59fc8eeb5",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4e5089b": "sha256:407c4a92453b2c5b4b957d9d4038b0cc58ef90af2bf431c243a0e3b84c0ec78c"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4e5089b": "sha256:407c4a92453b2c5b4b957d9d4038b0cc58ef90af2bf431c243a0e3b84c0ec78c",
+    "docker.hyperdx.io/hyperdx/hyperdx:2.39.1": "sha256:619783ca66d6c81f72a0106f4013d65865ac42e064491b19c0019ffec268f316",
+    "docker.clickhouse.com/clickhouse/clickstack-otel-collector:2.39.1": "sha256:fb71cb46bfc11413e9b96b056118f66293262579cec42927d7f1ca38d3732146",
+    "docker.io/clickhouse/clickhouse-server:26.8.36.3-alpine": "sha256:f5443f9ffa48f0154cdd50cab39fed732201762574a27f04f1f564bbba81832d",
+    "docker.io/clickhouse/clickhouse-keeper:26.8.36.3-alpine": "sha256:82cb1687db7d461b180ac17b5a7a1db91d9fcbf8ba91aa32aea85998cd61383d",
+    "quay.io/mongodb/mongodb-kubernetes:1.7.0": "sha256:0d20841dfb82edded60493e1b222734240c2142665316fb92469df9dcf9fada5",
+    "quay.io/mongodb/mongodb-community-server:8.0.17-ubi9": "sha256:9905955c5e256352c47401d22f38e5de3281843bfa6f51b3a61dcad5c1725157",
+    "quay.io/mongodb/mongodb-agent:108.0.2.8729-1": "sha256:b422829aac63f068aed4a6948fd14cbd3c3bfad6d47ab76523f6839bf20b0203",
+    "quay.io/mongodb/mongodb-kubernetes-operator-version-upgrade-post-start-hook:1.0.10": "sha256:3744901d095c6cc7392ed079c7a4ec01feeb67dd73145935068f41ad6bc81c28",
+    "quay.io/mongodb/mongodb-kubernetes-readinessprobe:1.0.23": "sha256:436fc328f3887f022a4760afd03da1a7091d285baf3d627a17d80bbdaab0ee47",
+    "ghcr.io/clickhouse/clickhouse-operator": "sha256:d51ca53f09677ebf46ac78bddf8d2dc5e0e412bd2062be3e596bed5879748886"
   }
 }
