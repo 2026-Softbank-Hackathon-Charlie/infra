@@ -73,6 +73,7 @@
     "configs": {
       "cm": {
         "exec.enabled": "false",
+        "resource.respectRBAC": "normal",
         "resource.customizations.health.argoproj.io_Application": "hs = {}\nhs.status = \"Progressing\"\nhs.message = \"Waiting for child Application\"\nif obj.status ~= nil and obj.status.health ~= nil then\n  hs.status = obj.status.health.status\n  hs.message = obj.status.health.message or \"\"\nend\nreturn hs\n",
         "resource.customizations.health.bitnami.com_SealedSecret": "hs = {}\nhs.status = \"Progressing\"\nhs.message = \"Waiting for the sealed-secrets controller to unseal this generation\"\nif obj.status ~= nil and obj.metadata.generation ~= nil and obj.status.observedGeneration == obj.metadata.generation and obj.status.conditions ~= nil then\n  for _, c in ipairs(obj.status.conditions) do\n    if c.type == \"Synced\" and c.status == \"True\" then\n      hs.status = \"Healthy\"\n      hs.message = c.message or \"\"\n    elseif c.type == \"Synced\" and c.status == \"False\" then\n      hs.status = \"Degraded\"\n      hs.message = c.message or \"\"\n    end\n  end\nend\nreturn hs\n"
       },

@@ -57,6 +57,87 @@ class ArgoGCPTests(unittest.TestCase):
         cfg = inputs(); cfg['federation_config']['credential_source']['file'] = '/tmp/untrusted'
         with self.assertRaises(ValueError): self.prepare.prepare(cfg, metadata(), {})
 
+    def test_dynamic_registration_changes_cache_without_changing_auth(self):
+        legacy = self.prepare.prepare(inputs(), metadata(), {})
+        stage1 = self.prepare.prepare(inputs(), metadata(), {}, dynamic_apps=True)
+        self.assertEqual(stage1['management-manifests.json'], legacy['management-manifests.json'])
+        self.assertEqual(stage1['bootstrap-overlay.json'], legacy['bootstrap-overlay.json'])
+        self.assertEqual(stage1['gke-rbac-values.json']['dynamicApps'], {'enabled': True, 'grantAccess': False})
+        dynamic = self.prepare.prepare(inputs(), metadata(), {}, dynamic_apps=True, grant_access=True)
+        old_cluster = next(d for d in legacy['management-manifests.json']['items'] if d['kind'] == 'Secret')
+        cluster = next(d for d in dynamic['management-manifests.json']['items'] if d['kind'] == 'Secret')
+        self.assertEqual(cluster['stringData'], {**old_cluster['stringData'], 'namespaces': '', 'clusterResources': 'true'})
+        self.assertEqual(dynamic['management-manifests.json']['items'][0], legacy['management-manifests.json']['items'][0])
+        for component in ('controller', 'server'):
+            self.assertEqual(dynamic['bootstrap-overlay.json']['argo-cd'][component], legacy['bootstrap-overlay.json']['argo-cd'][component])
+        self.assertEqual(dynamic['bootstrap-overlay.json']['argo-cd']['configs'], {'cm': {'resource.respectRBAC': 'normal'}})
+        self.assertEqual(dynamic['gke-rbac-values.json'], {**legacy['gke-rbac-values.json'], 'dynamicApps': {'enabled': True, 'grantAccess': True}})
+        self.assertEqual(self.prepare.prepare(inputs(), metadata(), dynamic['bootstrap-overlay.json'], dynamic_apps=True, grant_access=True), dynamic)
+
+    def test_dynamic_rbac_is_bounded_and_admission_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            values = Path(directory) / 'values.json'
+            values.write_text(json.dumps(self.prepare.prepare(inputs(), metadata(), {}, dynamic_apps=True, grant_access=True)['gke-rbac-values.json']))
+            result = subprocess.run([HELM, 'template', 'gcp-argocd-access', str(ROOT/'helm/charts/gcp-argocd-access'), '--namespace', 'charlie-apps', '--kube-version', '1.35.0', '-f', str(values)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+        self.assertEqual(len(docs), 6)
+        role = next(d for d in docs if d['kind'] == 'ClusterRole')
+        expected = {('', 'namespaces'), ('', 'services'), ('', 'resourcequotas'), ('', 'limitranges'), ('apps', 'deployments'), ('postgresql.cnpg.io', 'clusters'), ('networking.k8s.io', 'networkpolicies'), ('bitnami.com', 'sealedsecrets')}
+        actual = {(group, resource) for rule in role['rules'] for group in rule['apiGroups'] for resource in rule['resources']}
+        self.assertEqual(actual, expected)
+        self.assertTrue(all(set(rule['verbs']) == {'get', 'list', 'watch', 'create', 'update', 'patch', 'delete'} for rule in role['rules']))
+        bindings = [d for d in docs if d['kind'] == 'ClusterRoleBinding']
+        self.assertEqual({b['roleRef']['name'] for b in bindings}, {'view', role['metadata']['name']})
+        self.assertTrue(all(b['subjects'] == [{'kind': 'User', 'apiGroup': 'rbac.authorization.k8s.io', 'name': EMAIL}] for b in bindings))
+        policy = next(d for d in docs if d['kind'] == 'ValidatingAdmissionPolicy')
+        binding = next(d for d in docs if d['kind'] == 'ValidatingAdmissionPolicyBinding')
+        self.assertEqual(policy['spec']['failurePolicy'], 'Fail')
+        self.assertEqual(policy['spec']['matchConditions'], [{'name': 'argocd-google-identity', 'expression': "request.userInfo.username == '" + EMAIL + "'"}])
+        self.assertNotIn('namespaceSelector', policy['spec']['matchConstraints'])
+        self.assertEqual(binding['spec'], {'policyName': policy['metadata']['name'], 'validationActions': ['Deny']})
+        self.assertTrue(all(set(rule['operations']) == {'CREATE', 'UPDATE', 'DELETE'} for rule in policy['spec']['matchConstraints']['resourceRules']))
+        policy_resources = {(group, resource) for rule in policy['spec']['matchConstraints']['resourceRules'] for group in rule['apiGroups'] for resource in rule['resources']}
+        self.assertEqual(policy_resources, expected, 'Every resource with write access must be covered by the ownership policy')
+        variables = {v['name']: v['expression'] for v in policy['spec']['variables']}
+        denied = yaml.safe_load((ROOT/'helm/charts/hopcharlie-apps/values.yaml').read_text())['deniedNamespaces']
+        self.assertEqual(set(json.loads(variables['protectedNamespaces'])), set(denied))
+        self.assertFalse(any('namespaceObject' in expression for expression in variables.values()))
+        expressions = '\n'.join(v['expression'] for v in policy['spec']['validations'])
+        for guard in ('oldObject.metadata.labels', "'hopcharlie.dev/app'", "'hopcharlie.dev/instance'", 'namespaceObject != null', "'pod-security.kubernetes.io/enforce'", "== 'restricted'", "'pod-security.kubernetes.io/enforce-version'", "== 'latest'"):
+            self.assertIn(guard, expressions)
+        self.assertIn('<= 53', variables['ownedNamespace'])
+        self.assertIn("+ '--'", variables['ownedNamespace'])
+
+    def test_dynamic_mode_cannot_create_baseline_namespaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.prepare.prepare(inputs(), metadata(), {}, dynamic_apps=True)['gke-rbac-values.json']
+            config['createNamespaces'] = True
+            values = Path(directory) / 'values.json'; values.write_text(json.dumps(config))
+            result = subprocess.run([HELM, 'template', 'gcp-argocd-access', str(ROOT/'helm/charts/gcp-argocd-access'), '-f', str(values)], capture_output=True, text=True, encoding='utf-8')
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_dynamic_policy_stage_does_not_grant_write_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.prepare.prepare(inputs(), metadata(), {}, dynamic_apps=True)['gke-rbac-values.json']
+            values = Path(directory) / 'values.json'; values.write_text(json.dumps(config))
+            result = subprocess.run([HELM, 'template', 'gcp-argocd-access', str(ROOT/'helm/charts/gcp-argocd-access'), '-f', str(values)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+        self.assertEqual(len(docs), 5)
+        self.assertEqual([d['roleRef']['name'] for d in docs if d['kind'] == 'ClusterRoleBinding'], ['view'])
+        self.assertTrue(any(d['kind'] == 'ValidatingAdmissionPolicyBinding' for d in docs))
+
+    def test_dynamic_grant_requires_policy_mode(self):
+        with self.assertRaises(ValueError):
+            self.prepare.prepare(inputs(), metadata(), {}, grant_access=True)
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.prepare.prepare(inputs(), metadata(), {})['gke-rbac-values.json']
+            config['dynamicApps'] = {'enabled': False, 'grantAccess': True}
+            values = Path(directory) / 'values.json'; values.write_text(json.dumps(config))
+            result = subprocess.run([HELM, 'template', 'gcp-argocd-access', str(ROOT/'helm/charts/gcp-argocd-access'), '-f', str(values)], capture_output=True, text=True, encoding='utf-8')
+            self.assertNotEqual(result.returncode, 0)
+
     def test_unsafe_endpoint_and_ca(self):
         for endpoint in ['http://bad.test', 'user@bad.test', 'bad.test/path', 'bad.test:443', '']:
             cluster = metadata(); cluster['endpoint'] = endpoint
