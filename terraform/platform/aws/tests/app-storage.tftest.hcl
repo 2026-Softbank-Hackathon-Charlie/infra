@@ -28,28 +28,34 @@ run "app_storage_contract" {
   }
   assert {
     condition = (
-      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 5 &&
+      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 7 &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Action == "s3:CreateBucket" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Resource == "arn:aws:s3:::hopcharlie-eks-*" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Condition == { StringEquals = { "s3:LocationConstraint" = "ap-northeast-2" } } &&
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[1].Action) == toset(["s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:DeleteBucket"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[1].Action == "s3:GetBucketTagging" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[1].Resource == "arn:aws:s3:::hopcharlie-eks-*" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[1].Condition == { StringEquals = { "s3:ResourceAccount" = "123456789012" } } &&
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Action) == toset(["s3:DeleteObject", "s3:DeleteObjectVersion", "s3:AbortMultipartUpload"]) &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Resource == "arn:aws:s3:::hopcharlie-eks-*/*" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Condition == { StringEquals = { "s3:ResourceAccount" = "123456789012" } }
+      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[1].Condition) &&
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Action) == toset(["s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:DeleteBucket"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Resource == "arn:aws:s3:::hopcharlie-eks-*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[2].Condition == { StringEquals = { "s3:ResourceAccount" = "123456789012" } } &&
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Action) == toset(["s3:DeleteObject", "s3:DeleteObjectVersion", "s3:AbortMultipartUpload"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Resource == "arn:aws:s3:::hopcharlie-eks-*/*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Condition == { StringEquals = { "s3:ResourceAccount" = "123456789012" } }
     )
-    error_message = "The platform may create buckets only in its region and manage and empty only this account's hopcharlie-eks-* buckets."
+    error_message = "The platform may create buckets only in its region, read bucket tags, and change, list and empty only this account's hopcharlie-eks-* buckets."
   }
   assert {
     condition = (
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Action) == toset(["iam:CreateUser", "iam:PutUserPolicy", "iam:DeleteUserPolicy"]) &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[3].Condition == { StringEquals = { "iam:PermissionsBoundary" = "arn:aws:iam::123456789012:policy/hopcharlie-app-boundary" } } &&
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Action) == toset(["iam:TagUser", "iam:GetUser", "iam:DeleteUser", "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys"]) &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*"
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Action) == toset(["iam:CreateUser", "iam:PutUserPolicy", "iam:DeleteUserPolicy"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Condition == { StringEquals = { "iam:PermissionsBoundary" = "arn:aws:iam::123456789012:policy/hopcharlie-app-boundary" } } &&
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5].Action) == toset(["iam:TagUser", "iam:GetUser", "iam:DeleteUser", "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Action == "iam:GetUser" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Resource == "arn:aws:iam::123456789012:user/hopcharlie-app-*" &&
+      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Condition)
     )
-    error_message = "The platform may create users and set their inline policy only under /hopcharlie-apps/ with the boundary."
+    error_message = "The platform may create users and set their inline policy only under /hopcharlie-apps/ with the boundary, and may only read users by the path-less name pattern."
   }
   assert {
     condition = length(setintersection(

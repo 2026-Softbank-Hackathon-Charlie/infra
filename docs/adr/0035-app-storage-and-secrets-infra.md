@@ -54,10 +54,12 @@
 - 관리형 정책 `hopcharlie-app-boundary`: `arn:aws:s3:::hopcharlie-eks-*`에 `s3:ListBucket`, `s3:ListBucketMultipartUploads`, `s3:GetBucketLocation`, 그 객체에 `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:GetObjectTagging`, `s3:PutObjectTagging`, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts`만 허용한다. 두 문장 모두 `s3:ResourceAccount`가 이 계정일 때만이다. 플랫폼이 쓰는 인라인 정책(platform `internal/storage`의 `bucketPolicy`)은 이 안에 들어간다.
 - 플랫폼 pod 역할의 인라인 정책 `app-storage`는 platform의 aws 드라이버(`internal/storage/aws.go`)가 부르는 API만 허용한다.
   - `s3:CreateBucket`: `hopcharlie-eks-*`, 조건 `s3:LocationConstraint`가 `var.region`(ap-northeast-2). 드라이버는 ACL이나 object ownership을 넘기지 않는다.
-  - `s3:GetBucketTagging`, `s3:PutBucketTagging`, `s3:PutBucketPublicAccessBlock`, `s3:ListBucketVersions`, `s3:ListBucketMultipartUploads`, `s3:DeleteBucket`: `hopcharlie-eks-*`, 조건 `s3:ResourceAccount`가 이 계정
+  - `s3:GetBucketTagging`: `hopcharlie-eks-*`, 조건 없음. 드라이버는 이 호출로 앱 태그를 읽고 버킷이 없는지도 안다. 없는 버킷에는 `s3:ResourceAccount` 값이 없어서 조건을 걸면 NoSuchBucket 대신 AccessDenied가 된다. 읽기 전용이다.
+  - `s3:PutBucketTagging`, `s3:PutBucketPublicAccessBlock`, `s3:ListBucketVersions`, `s3:ListBucketMultipartUploads`, `s3:DeleteBucket`: `hopcharlie-eks-*`, 조건 `s3:ResourceAccount`가 이 계정
   - `s3:DeleteObject`, `s3:DeleteObjectVersion`, `s3:AbortMultipartUpload`: 그 객체, 같은 조건. 버킷을 비울 때 모든 버전과 delete marker를 VersionId로 지우고 끝나지 않은 multipart upload를 멈춘다.
   - `iam:CreateUser`, `iam:PutUserPolicy`, `iam:DeleteUserPolicy`: `user/hopcharlie-apps/*`, 조건 `iam:PermissionsBoundary`가 위 boundary ARN
   - `iam:TagUser`, `iam:GetUser`, `iam:DeleteUser`, `iam:CreateAccessKey`, `iam:DeleteAccessKey`, `iam:ListAccessKeys`: `user/hopcharlie-apps/*`
+  - `iam:GetUser`: 경로 없는 `user/hopcharlie-app-*`. IAM은 없는 사용자의 경로를 모르므로 경로 없는 ARN으로 평가한다. 이것이 없으면 없는 사용자에 NoSuchEntity 대신 AccessDenied가 와서, 중간에 실패한 Delete를 다시 해도 끝나지 않는다. 읽기 전용이다.
   - 관리형 정책 붙이기, boundary 바꾸기와 지우기, 로그인 프로필, 그룹, 사용자 이름과 경로 바꾸기, 정책 수정, 버킷 정책과 ACL과 ownership 변경, 역할 자신의 객체 읽기와 쓰기는 주지 않는다. mock test가 이 목록이 없음을 확인한다.
 - `/hopcharlie-apps/` 경로에는 플랫폼만 사용자를 만든다. 사람이나 다른 도구는 이 경로에 사용자를 만들지 않는다. 플랫폼은 이 경로에 있는 사용자의 키를 만들고 지울 수 있기 때문이다.
 - `random_bytes`(32바이트, random provider 3.9.1)로 키를 만들고 SSM SecureString `/hopcharlie/app-secrets-key`에 base64로 넣는다.
@@ -85,7 +87,8 @@
   - 게이트웨이와 PostgreSQL pod도 같은 ServiceAccount `hopcharlie-platform`을 써서 같은 Pod Identity 역할을 받는다. 그래서 이 두 pod도 앱 버킷과 IAM 사용자 권한, 시크릿 키 읽기를 가진다(SSM `/hopcharlie/*` 읽기는 원래 공유했다). 후속 작업으로 API 전용 ServiceAccount와 역할을 만들고 이 권한을 그쪽으로 옮긴다.
   - 플랫폼 역할은 boundary 범위 안에서 이 계정의 모든 `hopcharlie-eks-*` 버킷 객체를 쓸 수 있는 사용자를 만들 수 있다. 버킷 하나로 좁히는 것은 플랫폼이 쓰는 인라인 정책에 달려 있다.
   - boundary가 플랫폼 인라인 정책보다 좁으면 그 차이만큼의 호출은 조용히 거부된다. 드라이버나 인라인 정책이 바뀌면 이 두 정책도 함께 바꾼다. 버킷 CORS처럼 버킷 설정이 필요한 앱은 지금 범위로는 안 된다.
-  - 드라이버의 GetUser는 경로가 다른 같은 이름의 사용자를 읽지 못하고 AccessDenied를 받는다. 이름이 겹치면 드라이버가 ErrInUse 대신 일반 오류를 낸다.
+  - 드라이버의 GetUser는 `/hopcharlie-apps/`도 루트 경로도 아닌 다른 경로에 있는 같은 이름의 사용자를 읽지 못하고 AccessDenied를 받는다. 그때는 드라이버가 ErrInUse 대신 일반 오류를 낸다.
+  - 경로 없는 GetUser와 조건 없는 GetBucketTagging으로 플랫폼 역할은 `hopcharlie-app-*` 사용자의 정보와 `hopcharlie-eks-*` 버킷의 태그를 읽을 수 있다. 다른 계정의 같은 이름 버킷 태그도 그 계정이 허용했다면 읽힌다. 둘 다 읽기만 한다.
   - boundary를 쓰는 사용자가 남아 있으면 `./tf.sh destroy`가 정책 삭제에서 실패한다. 앱을 먼저 지운다.
   - Argo CD는 client-side apply로 last-applied annotation(최대 262144바이트)에 매니페스트 전체를 둔다. 값 하나가 4096바이트면 암호문은 약 6KB이므로, 이런 값이 약 40개를 넘으면 `app-secrets` 적용이 실패한다. 짧은 값은 개당 1KB 안팎이라 50개도 괜찮다.
   - S3 키를 바꿔도 파드는 다시 뜨지 않는다(checksum은 앱 시크릿만 다룬다). 키 교체는 platform ADR 0016처럼 나중에 더한다.

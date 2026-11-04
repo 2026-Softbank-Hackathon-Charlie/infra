@@ -69,11 +69,18 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Resource  = local.app_bucket_arn
         Condition = { StringEquals = { "s3:LocationConstraint" = var.region } }
       },
-      # Check the app tag, tag, close to the public, list what is left and
-      # delete the instances' buckets.
+      # Read the app tag. Also how the driver finds a missing bucket: without
+      # a bucket there is no s3:ResourceAccount, so a condition would turn
+      # NoSuchBucket into AccessDenied. Read only.
+      {
+        Effect   = "Allow"
+        Action   = "s3:GetBucketTagging"
+        Resource = local.app_bucket_arn
+      },
+      # Tag, close to the public, list what is left and delete the instances' buckets.
       {
         Effect    = "Allow"
-        Action    = ["s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:DeleteBucket"]
+        Action    = ["s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads", "s3:DeleteBucket"]
         Resource  = local.app_bucket_arn
         Condition = local.app_own_buckets
       },
@@ -98,6 +105,15 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Effect   = "Allow"
         Action   = ["iam:TagUser", "iam:GetUser", "iam:DeleteUser", "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys"]
         Resource = local.app_user_arn
+      },
+      # Read a user by name only. IAM cannot know the path of a user that does
+      # not exist, so GetUser on a missing one is checked against the path-less
+      # ARN; without this it is AccessDenied, not NoSuchEntity, and a retried
+      # Delete never finishes. Read only.
+      {
+        Effect   = "Allow"
+        Action   = "iam:GetUser"
+        Resource = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:user/hopcharlie-app-*"
       },
     ]
   })
