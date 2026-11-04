@@ -233,6 +233,29 @@ make tf-apply STACK=account/aws
 4. Run workflow에서 `action=plan`, `stack=bootstrap`으로 실행해 OIDC·state 연결을 확인합니다. 이 단계에서 EKS는 생성하지 않습니다.
 5. 이후 필요할 때만 foundation과 EKS를 각각 검토·적용합니다. EKS에는 운영자 IAM ARN과 선행 foundation state가 필요합니다.
 
+### Self-hosted runner
+
+조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0042](docs/adr/0042-run-actions-on-self-hosted-runner.md)). 호스트는 해커톤 AWS 계정의 EC2 한 대(`Name=hopcharlie-github-runner`, t3.xlarge)이고, runner 3개가 job을 하나씩 동시에 실행한다. 호스트가 없으면 job은 실패하지 않고 24시간까지 `queued`로 기다린다.
+
+저장소 루트에서 아래 명령으로 올리고 내린다. AWS 프로필 `hopcharlie`(또는 `AWS_PROFILE`)와 `admin:org` 권한이 있는 gh가 필요하다.
+
+```bash
+gh auth refresh -h github.com -s admin:org
+python scripts/github-runner/up.py --dry-run   # 바꿀 것만 출력한다
+python scripts/github-runner/up.py             # 없는 자원을 만들고 runner 3개를 등록한 뒤 조직 runner 상태를 출력한다
+python scripts/github-runner/down.py           # 지울 것만 출력한다
+python scripts/github-runner/down.py --apply   # runner 등록을 해제하고 인스턴스, 보안 그룹, IAM 역할을 지운다
+```
+
+`up.py`는 다시 실행해도 안전하다. 있는 자원은 그대로 쓰고 이미 등록한 runner는 건너뛴다. job이 어느 runner에서 돌았는지는 run의 "Set up job" 로그의 Runner name으로 확인한다. 호스트 셸은 `aws ssm start-session --target <instance-id>`로 열고, bootstrap 로그는 `/var/log/github-runner-bootstrap.log`에 있다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0042-run-actions-on-self-hosted-runner.md](docs/adr/0042-run-actions-on-self-hosted-runner.md) | private 저장소의 Actions를 조직 self-hosted runner에서 실행하는 결정 |
+| [scripts/github-runner/up.py](scripts/github-runner/up.py) | runner 호스트 IAM, 보안 그룹, EC2를 찾거나 만들고 SSM으로 bootstrap을 실행 |
+| [scripts/github-runner/bootstrap.sh](scripts/github-runner/bootstrap.sh) | 호스트에서 root로 도구, runner 3개, 메타데이터 차단, Docker 정리 타이머를 설치 |
+| [scripts/github-runner/down.py](scripts/github-runner/down.py) | runner 등록 해제와 호스트 자원 삭제 |
+
 ## Private EKS 접근과 Argo CD 설치
 
 이미 설치한 Argo CD에 접속할 때는 아래 두 명령만 실행합니다. 저장소 루트에서 각각 별도 터미널을 사용합니다.

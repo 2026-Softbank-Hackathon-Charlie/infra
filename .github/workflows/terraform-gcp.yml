@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -52,7 +52,7 @@ jobs:
           terraform -chdir="$TF_ROOT" test
 
   baseline:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       (inputs.action == 'plan' || (inputs.action == 'apply' && inputs.confirm_apply && vars.GCP_APPLY_ENABLED == 'true'))
     needs: [validate, baseline]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 45
     environment: ${{ inputs.action == 'apply' && 'gcp-apply' || 'gcp-plan' }}
     concurrency:
