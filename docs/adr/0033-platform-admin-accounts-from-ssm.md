@@ -22,7 +22,7 @@
 
 - SSM SecureString `/hopcharlie/platform-admins`에 `이름:bcrypt 해시` 목록을 둔다. 사람이 `aws ssm put-parameter`로 만들고 Terraform은 관리하지 않는다. 값이 Terraform state에 남지 않는다.
 - API의 init 컨테이너(`helm/charts/hopcharlie-platform/templates/settings.yaml`)가 이 파라미터를 읽어 `api.env`의 `PLATFORM_ADMINS`로 쓴다. API 컨테이너는 `api.env`를 셸 확장 없이 읽으므로 해시의 `$`가 그대로 전달된다.
-- 해시는 platform 저장소의 `go run ./cmd/api -hash-password`로 만든다. 비밀번호는 화면에 보이지 않고 해시만 출력된다.
+- 해시는 platform 저장소의 `go run ./cmd/api -hash-password`로 만든다. 터미널에서는 비밀번호 입력이 가려지고 해시만 출력된다. Windows에서는 Git Bash(mintty)가 입력을 가리지 못하므로 PowerShell에서 실행한다.
 - 정적 토큰 `/hopcharlie/platform-tokens`는 그대로 둔다. AI 플래너, 부하 생성기처럼 로그인할 수 없는 프로그램이 계속 쓴다.
 
 ## 영향과 후속 작업
@@ -30,6 +30,8 @@
 - 기대 효과: 플랫폼 이미지에 ADR 0018 구현이 들어간 뒤 이 설정이 배포되면 콘솔 일반 모드 로그인과 CLI device code 로그인이 동작한다.
 - 단점과 위험:
   - 파라미터가 없는 상태에서 이 설정이 배포되면 API의 init 컨테이너가 실패하고, Recreate 전략이라 그동안 API가 내려간다. 파라미터를 먼저 만든다.
+  - 값이 잘못되어도(해시 형식 오류, 같은 이름 두 번, 관리자마다 다른 bcrypt cost) API가 시작하지 않는다. 정적 토큰을 쓰는 프로그램까지 함께 멈추므로, `-hash-password`로 만든 해시만 넣고 목록 전체를 확인한 뒤 바꾼다.
+  - `put-parameter --overwrite`는 값을 통째로 바꾼다. 관리자를 추가할 때 지금 값을 읽지 않고 한 명만 넣으면 다른 관리자가 사라진다.
   - 관리자를 추가하거나 비밀번호를 바꾸면 `hopcharlie-api` Deployment를 다시 시작해야 반영된다. 이미 발급된 세션과 CLI 토큰은 만료되거나 로그아웃할 때까지 유효하다.
 - 필요한 후속 작업 및 검증:
   - SSM `/hopcharlie/platform-admins` 생성([절차](../../terraform/platform/aws/README.md#설정-바꾸기))

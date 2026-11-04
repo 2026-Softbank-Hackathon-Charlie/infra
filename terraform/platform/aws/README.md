@@ -172,12 +172,26 @@ bash "$PLATFORM_DIR/deploy/aws/redeploy.sh"
 
 GitHub App 파라미터 두 개는 관리 EKS의 API pod가 시작할 때만 읽습니다. 차트에 `github.appId`를 넣기 전에 만들어 두고, 값을 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
 
-관리자 계정은 platform 저장소에서 비밀번호의 bcrypt 해시를 만들어 넣습니다. 비밀번호는 화면에 보이지 않고, 해시만 SSM에 들어갑니다. 관리자가 여럿이면 `이름:해시`를 쉼표로 이어 붙입니다. 이 파라미터가 없으면 API pod가 시작하지 않으므로 차트보다 먼저 만들고, 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
+관리자 계정은 platform 저장소에서 비밀번호의 bcrypt 해시를 만들어 넣습니다. 비밀번호는 해시를 만들 때만 입력하고, SSM에는 해시만 들어갑니다. 이 파라미터가 없으면 API pod가 시작하지 않으므로 차트보다 먼저 만들고, 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
+
+- 값은 `이름:해시`를 쉼표로 이은 목록 전체입니다. `--overwrite`는 값을 통째로 바꾸므로, 관리자를 추가하거나 비밀번호를 바꿀 때는 먼저 `aws ssm get-parameter --with-decryption`으로 지금 값을 읽고, 항목을 더하거나 바꾼 목록 전체를 넣습니다.
+- 같은 이름이 두 번 있거나, 해시 형식이 틀리거나, 관리자마다 bcrypt cost가 다르면 API가 시작하지 않습니다. `-hash-password`로 만든 해시만 씁니다.
+- 비밀번호 입력은 터미널에서만 가려집니다. Windows의 Git Bash(mintty)에서는 입력한 비밀번호가 화면에 보일 수 있으므로 PowerShell에서 실행합니다.
+
+```powershell
+# PowerShell, platform 저장소에서. 관리자 한 명으로 처음 만드는 경우
+$hash = go run ./cmd/api -hash-password   # 비밀번호를 묻는다. 입력은 보이지 않는다
+aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 --overwrite `
+  --name /hopcharlie/platform-admins --type SecureString --value "<아이디>:$hash"
+Remove-Variable hash
+```
+
+Linux와 macOS 터미널에서는 같은 일을 이렇게 합니다.
 
 ```bash
 cd "$PLATFORM_DIR"
-hash="$(go run ./cmd/api -hash-password)"   # 비밀번호를 묻는다
-MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 --overwrite \
+hash="$(go run ./cmd/api -hash-password)"   # 비밀번호를 묻는다. 입력은 보이지 않는다
+aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 --overwrite \
   --name /hopcharlie/platform-admins --type SecureString --value "<아이디>:$hash"
 unset hash
 ```
