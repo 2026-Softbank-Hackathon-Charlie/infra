@@ -68,4 +68,14 @@ run "app_storage_contract" {
     condition     = random_bytes.app_secrets_key.length == 32 && aws_ssm_parameter.app_secrets_key.name == "/hopcharlie/app-secrets-key" && aws_ssm_parameter.app_secrets_key.type == "SecureString"
     error_message = "The app secrets key must be 32 random bytes in the SecureString /hopcharlie/app-secrets-key."
   }
+  assert {
+    condition = one([for e in yamldecode(local.host_files["envs.yaml"]).environments : e if e.name == "eks"]).sealedSecretsCert == "/config/sealed-secrets/eks.pem" && one([for e in yamldecode(local.host_files["envs.yaml"]).environments : e if e.name == "eks"]).storage == {
+      driver              = "aws"
+      bucketPrefix        = "hopcharlie-eks-"
+      region              = "ap-northeast-2"
+      iamPath             = "/hopcharlie-apps/"
+      permissionsBoundary = "arn:aws:iam::525091405886:policy/hopcharlie-app-boundary"
+    }
+    error_message = "Environment eks must point at its Sealed Secrets certificate and name the bucket prefix, IAM path and boundary that this stack allows."
+  }
 }
