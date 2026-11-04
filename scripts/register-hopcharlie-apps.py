@@ -71,7 +71,9 @@ def repository_secret(token):
 def repositories(argo):
     """Name to URL of every Argo CD repository Secret; only the url field is decoded."""
     listing = argo('-n', NAMESPACE, 'get', 'secret', '-l', 'argocd.argoproj.io/secret-type=repository', '-o',
-                   'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.data.url}{"\n"}{end}').stdout
+                   # raw: kubectl must receive the \t and \n escapes, not a literal tab and
+                   # newline, which kubectl on Windows rejects as an unterminated string
+                   r'jsonpath={range .items[*]}{.metadata.name}{"\t"}{.data.url}{"\n"}{end}').stdout
     repos = {}
     for line in listing.splitlines():
         name, _, url = line.partition('\t')
