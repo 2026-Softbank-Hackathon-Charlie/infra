@@ -24,7 +24,7 @@ kubeconfig=.generated/access/workload.kubeconfig # written by make aws-tunnel CL
 context=charlie-dev-workload
 # The workload sealed-secrets addon: chart 2.20.0 in kube-system with
 # fullnameOverride sealed-secrets-controller (clusters/aws-dev-workload/values/sealed-secrets.yaml).
-cert_path=/api/v1/namespaces/kube-system/services/http:sealed-secrets-controller:/proxy/v1/cert.pem
+cert_path=/api/v1/namespaces/kube-system/services/http:sealed-secrets-controller:http/proxy/v1/cert.pem
 
 if [ ! -f "$kubeconfig" ]; then
   echo "put-sealed-secrets-cert.sh: $kubeconfig is missing; run make aws-tunnel CLUSTER=workload first" >&2
