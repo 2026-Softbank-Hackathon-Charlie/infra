@@ -27,7 +27,8 @@ data:
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
     #                   apps.yaml, kube/<cluster> (one kubeconfig per cluster),
     #                   and with GITHUB_APP_ID github-app.pem and the webhook
-    #                   secret in api.env
+    #                   secret in api.env. api.env also carries the console
+    #                   administrators (platform-admins: name:bcrypt-hash,...).
     set -euo pipefail
     umask 077
 
@@ -48,6 +49,7 @@ data:
         db="$(get db-password)"
         gw="$(get gateway-admin-token)"
         tokens="$(get platform-tokens)"
+        admins="$(get platform-admins)"
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
@@ -76,6 +78,7 @@ data:
           printf 'PLATFORM_DATABASE_URL=postgres://charlie:%s@hopcharlie-postgres:5432/charlie?sslmode=disable\n' "$db"
           printf 'GATEWAY_TOKEN=%s\n' "$gw"
           printf 'PLATFORM_TOKENS=%s\n' "$tokens"
+          printf 'PLATFORM_ADMINS=%s\n' "$admins"
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
         } > /config/api.env

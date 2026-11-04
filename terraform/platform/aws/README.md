@@ -153,6 +153,7 @@ Terraform이 관리하는 설정(`host/compose.yaml`, `host/Caddyfile`, `host/en
 | `/hopcharlie/tailscale-authkey` | 있으면 호스트가 Tailscale에 붙음 | 아래 명령 |
 | `/hopcharlie/github-app-private-key` | GitHub App `hopcharlie-platform`의 private key PEM. 관리 EKS의 API pod만 읽음 ([ADR 0021](../../../docs/adr/0021-configure-platform-github-app-deploy.md)) | 아래 명령 |
 | `/hopcharlie/github-webhook-secret` | 같은 App의 webhook secret. App 설정의 값과 같아야 함 | 아래 명령 |
+| `/hopcharlie/platform-admins` | 콘솔 관리자 계정. `이름:bcrypt 해시`를 쉼표로 구분. 관리 EKS의 API pod가 `PLATFORM_ADMINS`로 읽음 ([ADR 0033](../../../docs/adr/0033-platform-admin-accounts-from-ssm.md)) | 아래 관리자 계정 명령 |
 
 ```bash
 # 파일 내용을 그대로 넣는다. 파일은 넣은 뒤 지운다.
@@ -170,6 +171,16 @@ bash "$PLATFORM_DIR/deploy/aws/redeploy.sh"
 ```
 
 GitHub App 파라미터 두 개는 관리 EKS의 API pod가 시작할 때만 읽습니다. 차트에 `github.appId`를 넣기 전에 만들어 두고, 값을 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
+
+관리자 계정은 platform 저장소에서 비밀번호의 bcrypt 해시를 만들어 넣습니다. 비밀번호는 화면에 보이지 않고, 해시만 SSM에 들어갑니다. 관리자가 여럿이면 `이름:해시`를 쉼표로 이어 붙입니다. 이 파라미터가 없으면 API pod가 시작하지 않으므로 차트보다 먼저 만들고, 바꾼 뒤에는 `hopcharlie-api` Deployment를 다시 시작합니다.
+
+```bash
+cd "$PLATFORM_DIR"
+hash="$(go run ./cmd/api -hash-password)"   # 비밀번호를 묻는다
+MSYS_NO_PATHCONV=1 aws ssm put-parameter --profile hopcharlie --region ap-northeast-2 --overwrite \
+  --name /hopcharlie/platform-admins --type SecureString --value "<아이디>:$hash"
+unset hash
+```
 
 ### 클러스터 연결
 
