@@ -57,6 +57,7 @@
 | [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
 | [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC 실행을 위한 기존 GKE 노드 풀 증설 제안 |
 | [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
+| [docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md](docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md) | AWS CNPG 앱의 admission 기본값·Role 생략 값 비교 정책 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
 | [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
 | [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
@@ -607,10 +608,11 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 | [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
 
-## AWS CNPG PoC — 코드 준비, 실제 배포 전
+## AWS CNPG PoC — 구축 상태와 접속
 
 단일 PostgreSQL과 서비스 A/B DB·Role, 전용 S3 백업·수동 복구 구성을 제공합니다.
-[승인된 계획](docs/plans/cnpg-aws-poc.md)과 [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+[접속 가이드](docs/runbooks/cnpg-access.md), [승인된 계획](docs/plans/cnpg-aws-poc.md), [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+2026-11-04 확인에서 DB Ready1/1·DB2/Role4 적용·Argo Synced/Healthy였으며 SQL 접속·migration/grant·실제 복원/RPO/RTO는 아직 미검증입니다.
 새 Argo 앱은 수동 상태이며 root 전체 sync·관리 플랫폼 DB 변경은 하지 않습니다.
 실제 백업 버킷 입력이 없으면 DB 차트 렌더링은 실패합니다. 코드·로컬 검사 성공은 배포나 RPO/RTO 달성 증명이 아닙니다.
 
@@ -624,6 +626,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0006-back-up-cnpg-poc-with-barman.md](docs/adr/0006-back-up-cnpg-poc-with-barman.md) | CNPG 구현·검증·운영 기록 |
 | [docs/plans/cnpg-aws-poc.md](docs/plans/cnpg-aws-poc.md) | CNPG 구현·검증·운영 기록 |
 | [docs/runbooks/cnpg-poc.md](docs/runbooks/cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/runbooks/cnpg-access.md](docs/runbooks/cnpg-access.md) | DB 접속 정보·SSM/port-forward·TLS·앱 설정·오류 확인 안내 |
 | [examples/cnpg-initial-backup.yaml.example](examples/cnpg-initial-backup.yaml.example) | CNPG 수동 검증·복원 fixture |
 | [examples/cnpg-poc/Chart.yaml](examples/cnpg-poc/Chart.yaml) | CNPG 수동 검증·복원 fixture |
 | [examples/cnpg-poc/files/fingerprint.sql](examples/cnpg-poc/files/fingerprint.sql) | CNPG 수동 검증·복원 fixture |

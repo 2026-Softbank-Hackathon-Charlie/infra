@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-02
 - 재검토: 2026-11-03 — 저장소·운영 기록 업데이트 반영. 후속 승인한 읽기 전용 배포 확인 결과는 11절에 기록
-- 상태: 기반·Sealed Secrets·cert-manager·Barman·인증정보 준비 완료. source Cluster는 admission 호환성 수정 배포 대기. SQL·실제 백업/복원 미검증
+- 상태: source Ready1/1·DB2/Role4·20Gi PVC 준비 완료, WAL 보관·예약 백업 성공 조건 관측. Argo 비교 정책 적용 후 Synced/Healthy. SQL·실제 복원/RPO/RTO 미검증
 - 작업 분류: 영향이 크거나 불확실한 작업. 데이터 영속성, IAM, 네트워크, GitOps 소유권 및 여러 구성 요소의 연계 변경을 포함한다.
 - 사용자 확정 조건: 해커톤 PoC, 실제 개인정보·운영 데이터가 아닌 현실적인 합성 서비스 데이터 사용, AWS 워크로드 클러스터 우선.
 - 브랜치 조건: 개발은 `codex` prefix 없는 `feat/aws-cnpg-poc`에서 진행. 기존 작업 파일은 원래 checkout에 보존하고 별도 worktree에서 로컬 `origin/main@82b6617`로 fast-forward해 구현한다. 원격 조회·merge·배포 실행과 구분한다.
@@ -272,6 +272,24 @@ Secret 값·DB 데이터·Pod 로그·SSM Parameter 값·state/plan은 읽지 �
 - DB 앱의 선언16개 중15개는 적용됐지만 `postgres-poc` Cluster만 `instances:1 + primaryUpdateStrategy:supervised` 조합으로 webhook에 거부됐다. source Cluster/PVC가 없는 것을 별도 상태 조회로 확인했다. 기존 생성 자원·키·암호를 보존하고 후속 설치를 중단했다. SQL/실제 백업/복원 시험과 DB CA 전달은 실행하지 않았다.
 - source와 복원 예제의 strategy 두 곳을 `unsupervised`로 고치는 수정 계획은 새 에이전트 리뷰 GREEN(미해결 CRITICAL/MAJOR/MINOR0) 후 사용자 개발 승인을 받았다. 스키마 외의 단일 인스턴스 조합 검사와 모든 source/full/PITR 렌더 검증, 최종 병합 SHA 동등성 검증 및 server dry-run을 추가한다. [ADR0029](../adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md)에 Primary 재시작 영향을 기록했다.
 - 수정 브랜치는 `fix/cnpg-single-instance-update-policy`이며 새 코드의 게시/PR/병합·실제 DB 앱 revision 적용은 구체적인 commit과 검사 결과를 제시한 뒤 별도 실행 승인을 받는다. 기존86af299의 설치 승인을 새 코드 배포로 확대하지 않는다. 실제 restore 실행은 포함하지 않는다.
+
+## 15. source 배포·runtime 상태 확인 — 2026-11-04
+
+- 수정 commit `fa525e242bd53106cb6c2841a104fd3827df1261`의 게시/PR/CI 통과 후 병합과 DB 배포 재개를 사용자가 승인했다. [PR32](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/32)는 `87bd4e9ea04b8ba9112b69a5b13e8bca20f002ee`로 병합됐다. source/full/PITR 렌더가 strategy 외 기존 runtime spec과 같은 것을 확인하고 source server dry-run 통과 후 DB 앱만 새 SHA에 수동 Sync했다.
+- 인증 만료 이후 별도 승인으로 기존 charlie-admin CLI login의 임시 인증을 갱신했다. 사용자가 브라우저 로그인을 완료했으며 동일 계정·기존 로그인 신원 일치를 확인했다. 장기 Access Key/IAM 정책 변경은 없었다.
+- 최종 Sync operation은 Succeeded, source Ready1/1이며 Database2개(db_a/db_b)와 Role4개의 applied/observedGeneration이 최신이다. source PVC postgres-poc-1은20Gi/Bound/cnpg-gp3-retain이고 Retain이다. Barman sidecar의 Pod Identity 주입 필드 이름과 공개 CA(ca.crt만)의 charlie-apps 전달을 확인했다. CA 개인키·기존 Secret 값은 읽지 않았다.
+- ContinuousArchiving=True와 예약 LastBackupSucceeded=True를 관측했다. 마지막 성공 조건 전환 시각은2026-11-03T18:00:15Z다. 수동 Backup/Job/SQL·Pod 재생성·실제 복원·RPO/RTO 시험은 수행하지 않았다. 예약 백업 성공 조건을 복원 가능성 검증 완료로 표현하지 않는다.
+- 기존 키·암호를 재사용했고 승인된 Git 제외0700/0600 보관 경로를 유지한다. 임시 SSM 연결을 종료 확인하고 자기 kubeconfig를 제거했다. Argo는 Healthy지만 admission 기본값/Role 생략 필드로 Cluster와 Role4개의 비교만 OutOfSync였다.
+
+## 16. AWS DB 앱 비교 정책 보정 — 2026-11-04
+
+- 운영 비교 정책 변경으로 전체 계획과 새 독립 plan-reviewer의 리뷰를 수행했다. SSA 전에 JQ가 desired false/[]를 제거할 수 있다는 초기 MAJOR는 실제 Argo3.5.3의 사전 ignore 생략·SSA 이후 정규화 순서, dry-run ForceConflicts, CNPG inRoles의 기본 atomic topology 근거로 해소했다. 실제 JQ 후처리의 false/[] 동등성과 권한5개/membership/connectionLimit/login/inherit 반례9개를 확인했다. 엔진 fixture 실행·production 권한 변경 시험과는 구분한다. 최종 GREEN, 미해결 CRITICAL/MAJOR 없음.
+- 사용자는 DB 설정이 아닌 Argo 앱 비교 정책만 바뀐다는 설명 후 “적용해줘”로 새 브랜치의 예제·검사·문서·ADR 및 해당 앱의 비교 설정/hard refresh·조건부 원복을 승인했다. 새 브랜치는 `fix/cnpg-argo-diff`, 기준 main `1e74328`이며 원래 checkout의 다른 변경은 보존했다. 새 push/PR/merge는 포함하지 않는다.
+- 변경 범위는 `argocd/charlie-workload-cnpg-poc`의 ServerSideDiff/IncludeMutationWebhook annotation과 charlie-db의 정확한 Role 네 이름에 대한 false/[] ignore 규칙이다. DB spec/권한·Secret·Pod/PVC·Git revision·수동 Sync 정책·다른 앱/global 설정은 유지한다. 새 결정은 [ADR0034](../adr/0034-compare-cnpg-admission-defaults-in-argocd.md)에 기록한다.
+- 실제 Argo3.5.3·live inRoles의 기본 atomic topology·source87bd4e9·UID/resourceVersion·operation 및 기존 비교 정책 부재를 재확인하고 다섯 CR의 server dry-run 예측 일치를 확인했다. 첫 적용에서 Cluster는 Synced가 됐지만 Role4의 전체 객체에는 API가 dry-run에 증가시키는 metadata.generation 차이가 남아 추가한 정책만 조건부 원복했다. 새 Sync는 요청하지 않았다.
+- 후속 리뷰 GREEN으로 같은 네 Role 규칙의 `/metadata/generation` JSON pointer만 세부 보완했다. 핵심 접근법·권한·위험 범위 확대는 없으며 실제 spec의 ignore 범위는 그대로다. 첫 감시기·조건부 원복과 임시 연결 종료를 완료한 뒤 후속 실행을 직렬화했다. Role4 각각에서 generation 외 차이 없음과 generation 정규화 후 일치를 확인하고, generation+실제 권한5개/membership/connectionLimit/login/inherit 반례를 각9개씩 총36개 검증했다. live Role의 generation/observedGeneration 일치와 applied 검증도 유지했다.
+- 보완 정책을 해당 앱만 조건부 patch하고 hard refresh했다. 최종 Synced/Healthy이며 Cluster/DB2/Role4/Pod/PVC 총9개 UID/spec와 Pod 재시작 횟수가 **첫 적용 전부터** 같았다. source SHA87bd4e9·수동 정책·Sync operation 이력도 동일했다. Ready/ContinuousArchiving/LastBackupSucceeded 조건은 계속 True였다. DB 재배포·재시작·SQL·실제 복원 시험이나 다른 앱/global 설정 변경은 없었다. 두 임시 SSM 세션 종료와 kubeconfig 제거를 확인했다.
+- 검증: 고정 Helm3.19.1·chart cache 기반 CNPG 전체 렌더/CRD/앱 정책 검사, Job12개·freeze14개 검사 통과. 위험한 Role/namespace/앱 범위·무조건 권한 ignore·넓은 metadata pointer 변경9종이 거부되는 것을 확인했다. 문서 목록·로컬 링크·diff 포맷 검사도 통과했다. source/restore runtime template와 값은 변경하지 않았다. 새 브랜치의 로컬 코드·문서만 기록했고 새 push/PR/merge는 수행하지 않았다.
 
 ## 관련 자료
 
