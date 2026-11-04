@@ -26,7 +26,7 @@
 - 공개 Service: `LoadBalancer`, 포트 80, `networking.gke.io/load-balancer-type: Internal`, `externalTrafficPolicy: Local`. 앱 차트에 `profile.publicService.externalTrafficPolicy`를 더하고, 비우면 클러스터 기본값을 쓴다(`eks`는 바뀌지 않는다).
 - NetworkPolicy: 게이트웨이 대역 `10.40.0.0/19`만 받는다. Tailscale 라우터가 SNAT를 하지 않아 이 주소가 그대로 도착한다.
 - DB: `charlie-gcp-balanced`, 1Gi. quota와 limitRange는 `eks`와 같다.
-- 파일 저장소(`s3`): 넣지 않는다. GKE에는 플랫폼이 만드는 앱 버킷이 아직 없으므로, `s3` 리소스가 있는 앱은 렌더링에서 실패한다(버킷 없이 배포되는 것보다 먼저 멈추는 쪽을 택한다).
+- 파일 저장소(`s3`): 넣지 않는다. GKE에는 플랫폼이 만드는 앱 버킷이 아직 없으므로, `s3` 리소스가 있는 앱은 렌더링에서 실패한다(버킷 없이 배포되는 것보다 먼저 멈추는 쪽을 택한다). → [ADR 0040](0040-use-gcs-for-gke-app-buckets.md)이 이 항목을 대체한다(GCS의 S3 호환 API).
 
 ## 영향과 후속 작업
 
@@ -39,7 +39,7 @@
   1. Argo CD에 GKE 클러스터 등록과 ADR 0038 두 단계 활성화
   2. Tailscale 라우터 apply와 tailnet 등록
   3. 시험 앱 하나로 GKE 배포, 내부 로드밸런서, 게이트웨이 주소까지 확인
-  4. GKE 앱 버킷(GCS)과 플랫폼 지원은 별도 결정
+  4. GKE 앱 버킷(GCS)과 플랫폼 지원은 별도 결정 → [ADR 0040](0040-use-gcs-for-gke-app-buckets.md)
 
 ## 관련 자료
 

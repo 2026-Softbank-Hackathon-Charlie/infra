@@ -243,7 +243,7 @@ def main():
                     assert ports == ([80] if public else []), ports
         # GKE apps (ADR 0039): an internal passthrough load balancer that keeps the
         # gateway's source address for the NetworkPolicy, reached over the Tailscale
-        # routers (ADR 0037). GKE has no app bucket yet, so an s3 app fails to render.
+        # routers (ADR 0037). Buckets are GCS through its S3-compatible API (ADR 0040).
         gke_profile = work / "gke-profile.json"
         gke = json.loads(apps_values.read_text())["environments"]["gke"]
         assert gke["cluster"] == {"name": "charlie-dev-gcp-workload"}, gke["cluster"]
@@ -254,11 +254,13 @@ def main():
             plain = work / ("gke-" + ci.name)
             plain.write_text(json.dumps(gitops_file))
             namespace = gitops_file["namespace"]
-            if any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or []):
-                result = subprocess.run([HELM, "template", namespace, str(ROOT / "helm/charts/hopcharlie-app"), "--namespace", namespace, "-f", str(plain), "-f", str(gke_profile)], capture_output=True, text=True, encoding="utf-8")
-                assert result.returncode != 0 and "profile.s3" in result.stderr, "GKE must refuse s3 apps until it has app buckets"
-                continue
             docs = render(ROOT / "helm/charts/hopcharlie-app", plain, namespace, namespace, ("-f", gke_profile))
+            has_s3 = any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or [])
+            for pod in (d["spec"]["template"] for d in docs if d["kind"] == "Deployment"):
+                for container in pod["spec"]["containers"]:
+                    env = {e["name"]: e.get("value") for e in container["env"] if e["name"].startswith("S3_")}
+                    expected = {"S3_ENDPOINT": "https://storage.googleapis.com", "S3_BUCKET": "hopcharlie-gke-" + namespace, "S3_REGION": "auto", "S3_PATH_STYLE": "false", "S3_ACCESS_KEY": None, "S3_SECRET_KEY": None}
+                    assert env == (expected if has_s3 else {}), env
             for doc in docs:
                 assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
             for svc in (d for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"):
