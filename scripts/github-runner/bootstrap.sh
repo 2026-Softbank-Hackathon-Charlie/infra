@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
-# Runs as root on the runner host (Ubuntu 24.04) through SSM Run Command; up.py
-# sends it with the inputs below (ADR 0042). Safe to run again: it installs what
-# is missing and leaves runners that are already configured alone.
+# Runs as root on the runner host (Ubuntu 24.04) with the inputs below (ADR 0045).
+# up.py sends it through SSM Run Command (AWS EC2), gcp_up.py copies it over IAP
+# SSH and runs it with sudo (GCP VM). Safe to run again: it installs what is
+# missing and leaves runners that are already configured alone.
 #
-#   RUNNER_TOKEN    org registration token (never printed)
-#   RUNNER_VERSION  actions/runner version, e.g. 2.338.2
-#   RUNNER_SHA256   sha256 of actions-runner-linux-x64-<version>.tar.gz
-#   RUNNER_ORG_URL  https://github.com/<org>
-#   RUNNER_LABEL    extra label, default hopcharlie
-#   RUNNER_COUNT    runners on this host, default 3
+#   RUNNER_TOKEN        org registration token (never printed)
+#   RUNNER_TOKEN_FILE   or a file holding the token; read, then deleted
+#   RUNNER_VERSION      actions/runner version, e.g. 2.338.2
+#   RUNNER_SHA256       sha256 of actions-runner-linux-x64-<version>.tar.gz
+#   RUNNER_ORG_URL      https://github.com/<org>
+#   RUNNER_LABEL        extra label, default hopcharlie
+#   RUNNER_COUNT        runners on this host, default 3
+#   RUNNER_NAME_PREFIX  runner names are <prefix>-1..<count>, default hopcharlie-runner
 #
 # Detailed output goes to /var/log/github-runner-bootstrap.log; stdout only gets
 # the steps, a summary and, on failure, the end of that log.
 set -euo pipefail
+if [ -n "${RUNNER_TOKEN_FILE:-}" ]; then
+  RUNNER_TOKEN="$(cat "$RUNNER_TOKEN_FILE")"
+  rm -f "$RUNNER_TOKEN_FILE"
+fi
 : "${RUNNER_TOKEN:?}" "${RUNNER_VERSION:?}" "${RUNNER_SHA256:?}" "${RUNNER_ORG_URL:?}"
 label="${RUNNER_LABEL:-hopcharlie}"
 count="${RUNNER_COUNT:-3}"
+prefix="${RUNNER_NAME_PREFIX:-hopcharlie-runner}"
 base=/opt/actions-runner
 export DEBIAN_FRONTEND=noninteractive HOME=/root
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
@@ -89,8 +97,9 @@ step 'user runner'
 id runner >/dev/null 2>&1 || useradd --create-home --shell /bin/bash runner
 usermod -aG docker runner
 
-# IMDS hop limit 1 keeps containers away from the instance role, but steps run on
-# the host as runner. Reject their metadata requests too; root (SSM agent) keeps it.
+# On EC2 the IMDS hop limit 1 keeps containers away from the instance role, but
+# steps run on the host as runner. Reject their metadata requests too; root (SSM
+# agent, Google guest agent) keeps it. GCP's metadata server is the same address.
 step 'block instance metadata for runner'
 cat > /etc/systemd/system/github-runner-imds-block.service <<'UNIT'
 [Unit]
@@ -139,7 +148,7 @@ tarball="$base/actions-runner-linux-x64-$RUNNER_VERSION.tar.gz"
 deps_installed=no
 for n in $(seq 1 "$count"); do
   dir="$base/$n"
-  name="hopcharlie-runner-$n"
+  name="$prefix-$n"
   if [ -f "$dir/.runner" ]; then
     step "$name: already configured"
   else
@@ -176,7 +185,9 @@ step 'summary'
   python3 --version
   jq --version
   df -h / | tail -n 1
+  # On GCP the metadata server is also the DNS server; runner must still resolve through the local stub.
+  printf 'runner resolves github.com: %s\n' "$(runuser -u runner -- getent hosts github.com >/dev/null && echo yes || echo NO)"
   for n in $(seq 1 "$count"); do
-    printf 'hopcharlie-runner-%s: %s\n' "$n" "$(systemctl is-active "$(cat "$base/$n/.service")")"
+    printf '%s-%s: %s\n' "$prefix" "$n" "$(systemctl is-active "$(cat "$base/$n/.service")")"
   done
 } >&3

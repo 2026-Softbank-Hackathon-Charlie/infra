@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove the self-hosted runner host that up.py made (ADR 0042).
+"""Remove the self-hosted runner host that up.py made (ADR 0045).
 
 Without --apply it changes nothing and prints what it would remove. With --apply
 it unregisters the runners on the instance through SSM with an org removal token
@@ -73,7 +73,7 @@ def main(argv=None):
             require(token, 'gh returned no removal token')
             try:
                 run_on_instance(instance_id, ['set -eu', f'export RUNNER_TOKEN={shlex.quote(token)}', REMOVE],
-                                'github runner removal (infra ADR 0042)', token, timeout=600)
+                                'github runner removal (infra ADR 0045)', token, timeout=600)
             except Refused as error:
                 print(f'{error}; deleting the runners through the API instead')
 

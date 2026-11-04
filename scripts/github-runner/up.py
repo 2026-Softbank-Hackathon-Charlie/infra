@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bring up the org's self-hosted GitHub Actions runner host (ADR 0042).
+"""Bring up the org's self-hosted GitHub Actions runner host (ADR 0045).
 
 In the hackathon account (525091405886, ap-northeast-2) it reuses or creates
 the IAM role and instance profile hopcharlie-github-runner (EC2 trust, one
@@ -211,7 +211,7 @@ def ensure_iam(state):
     role, attached, _, profile, roles = state
     if not role:
         aws('iam', 'create-role', '--role-name', NAME, '--assume-role-policy-document', json.dumps(TRUST),
-            '--description', 'GitHub Actions runner host (infra ADR 0042): SSM only',
+            '--description', 'GitHub Actions runner host (infra ADR 0045): SSM only',
             '--tags', *[f'Key={k},Value={v}' for k, v in TAGS.items()])
         print(f'created IAM role {NAME}')
     aws('iam', 'put-role-policy', '--role-name', NAME, '--policy-name', AGENT_POLICY_NAME,
@@ -233,7 +233,7 @@ def ensure_group(vpc, group):
     if group:
         return group['GroupId']
     group_id = aws('ec2', 'create-security-group', '--group-name', NAME, '--vpc-id', vpc,
-                   '--description', 'GitHub Actions runner host, no ingress (infra ADR 0042)',
+                   '--description', 'GitHub Actions runner host, no ingress (infra ADR 0045)',
                    '--tag-specifications', json.dumps([{'ResourceType': 'security-group', 'Tags': tags()}]))['GroupId']
     print(f'created security group {group_id} (no ingress, all egress)')
     return group_id
@@ -360,7 +360,7 @@ def main(argv=None):
             'set -eu',
             f'echo {base64.b64encode(gzip.compress(script)).decode()} | base64 -d | gunzip > /root/github-runner-bootstrap.sh',
             ' '.join(f'{k}={shlex.quote(v)}' for k, v in inputs.items()) + ' bash /root/github-runner-bootstrap.sh',
-        ], 'github runner bootstrap (infra ADR 0042)', token)
+        ], 'github runner bootstrap (infra ADR 0045)', token)
 
         print('org runners:')
         for _ in range(12):  # the services connect a few seconds after they start
