@@ -36,6 +36,10 @@ variables {
 run "foundation_contract" {
   command = apply
   assert {
+    condition     = module.eks.network_policy_enforcing_mode == "strict"
+    error_message = "The workload cluster must default to strict network policy enforcement."
+  }
+  assert {
     condition     = output.target.id == "aws-dev-workload" && output.target.subnet_ids_by_az == data.terraform_remote_state.foundation.outputs.workload_subnet_ids_by_az && output.target.argocd_role_arn == data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["workload"] && output.target.ssm_bridge_instance_id == "i-0123456789abcdef0" && output.target.additional_operator_principal_arns == var.additional_operator_principal_arns
     error_message = "Consume only the correct foundation target contract, without cross-root state."
   }
@@ -53,4 +57,18 @@ run "foundation_contract" {
     )
     error_message = "Each CNPG service account must receive only its source/restore role on the workload cluster, with trust tags enabled."
   }
+}
+
+run "standard_bootstrap_and_rollback" {
+  command = apply
+  variables { network_policy_enforcing_mode = "standard" }
+  assert {
+    condition     = module.eks.network_policy_enforcing_mode == "standard"
+    error_message = "Fresh bootstrap and rollback must be able to select standard mode."
+  }
+}
+run "reject_invalid_network_policy_mode" {
+  command = plan
+  variables { network_policy_enforcing_mode = "disabled" }
+  expect_failures = [var.network_policy_enforcing_mode]
 }

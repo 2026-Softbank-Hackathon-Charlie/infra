@@ -20,6 +20,7 @@ module "eks" {
   vpc_id                             = data.terraform_remote_state.foundation.outputs.vpc_id
   subnet_ids_by_az                   = data.terraform_remote_state.foundation.outputs.workload_subnet_ids_by_az
   service_cidr                       = "172.21.0.0/16"
+  network_policy_enforcing_mode      = var.network_policy_enforcing_mode
   operator_principal_arn             = var.operator_principal_arn
   additional_operator_principal_arns = var.additional_operator_principal_arns
   argocd_deploy_role_arn             = data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["workload"]

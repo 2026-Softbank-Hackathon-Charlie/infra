@@ -37,7 +37,7 @@ run "private_multi_az" {
     error_message = "Custom LT must retain cluster SG and source SG without exposing IMDS."
   }
   assert {
-    condition     = strcontains(base64decode(aws_launch_template.node.user_data), "/etc/eks/nodeadm.d/99-charlie-max-pods.yaml") && strcontains(base64decode(aws_launch_template.node.user_data), "maxPods: 35") && jsondecode(aws_eks_addon.cni.configuration_values).env.ENABLE_PREFIX_DELEGATION == "true" && jsondecode(aws_eks_addon.cni.configuration_values).enableNetworkPolicy == "true"
+    condition     = strcontains(base64decode(aws_launch_template.node.user_data), "/etc/eks/nodeadm.d/99-charlie-max-pods.yaml") && strcontains(base64decode(aws_launch_template.node.user_data), "maxPods: 35") && jsondecode(aws_eks_addon.cni.configuration_values).env.ENABLE_PREFIX_DELEGATION == "true" && jsondecode(aws_eks_addon.cni.configuration_values).enableNetworkPolicy == "true" && jsondecode(aws_eks_addon.cni.configuration_values).env.NETWORK_POLICY_ENFORCING_MODE == "standard"
     error_message = "NodeConfig and CNI prefix/network policy configuration must agree."
   }
   assert {
@@ -97,4 +97,18 @@ run "reject_single_az" {
   command = plan
   variables { subnet_ids_by_az = { ap-northeast-2a = "subnet-0123456789abcdef0" } }
   expect_failures = [var.subnet_ids_by_az]
+}
+
+run "strict_network_policy" {
+  command = apply
+  variables { network_policy_enforcing_mode = "strict" }
+  assert {
+    condition     = jsondecode(aws_eks_addon.cni.configuration_values).env.NETWORK_POLICY_ENFORCING_MODE == "strict" && jsondecode(aws_eks_addon.cni.configuration_values).env.WARM_PREFIX_TARGET == "1" && jsondecode(aws_eks_addon.cni.configuration_values).env.ENABLE_PREFIX_DELEGATION == "true" && jsondecode(aws_eks_addon.cni.configuration_values).enableNetworkPolicy == "true"
+    error_message = "Strict mode must reach the addon without losing existing CNI settings."
+  }
+}
+run "reject_invalid_network_policy_mode" {
+  command = plan
+  variables { network_policy_enforcing_mode = "STRICT" }
+  expect_failures = [var.network_policy_enforcing_mode]
 }

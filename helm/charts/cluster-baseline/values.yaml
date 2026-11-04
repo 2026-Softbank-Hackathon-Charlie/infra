@@ -17,6 +17,7 @@
   },
   "networkPolicy": {
     "enabled": true,
+    "systemCompatibilityNamespaces": [],
     "cnpg": {
       "enabled": false
     }

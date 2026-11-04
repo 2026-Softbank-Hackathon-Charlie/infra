@@ -7,3 +7,7 @@ output "api_security_group_id" { value = aws_security_group.api.id }
 output "node_security_group_id" { value = aws_security_group.node.id }
 output "node_group_names_by_az" { value = { for az, group in aws_eks_node_group.az : az => group.node_group_name } }
 output "load_balancer_controller_role_arn" { value = aws_iam_role.lbc.arn }
+output "network_policy_enforcing_mode" {
+  description = "Configured VPC CNI mode; does not confirm the live aws-node rollout."
+  value       = jsondecode(aws_eks_addon.cni.configuration_values).env.NETWORK_POLICY_ENFORCING_MODE
+}

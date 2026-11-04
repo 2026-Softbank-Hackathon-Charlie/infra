@@ -88,7 +88,7 @@ resource "aws_eks_addon" "cni" {
   resolve_conflicts_on_update = "PRESERVE"
   configuration_values = jsonencode({
     enableNetworkPolicy = "true",
-    env                 = { ENABLE_PREFIX_DELEGATION = "true", WARM_PREFIX_TARGET = "1", NETWORK_POLICY_ENFORCING_MODE = "standard" }
+    env                 = { ENABLE_PREFIX_DELEGATION = "true", WARM_PREFIX_TARGET = "1", NETWORK_POLICY_ENFORCING_MODE = var.network_policy_enforcing_mode }
   })
   tags       = local.tags
   depends_on = [aws_iam_role_policy_attachment.cni]

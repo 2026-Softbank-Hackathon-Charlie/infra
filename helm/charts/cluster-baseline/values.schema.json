@@ -59,6 +59,11 @@
         "enabled": {
           "type": "boolean"
         },
+        "systemCompatibilityNamespaces": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["kube-system", "observability", "cnpg-system", "cert-manager"]}
+        },
         "cnpg": {
           "type": "object",
           "additionalProperties": false,

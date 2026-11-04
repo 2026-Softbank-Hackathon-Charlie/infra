@@ -34,12 +34,13 @@ def read_json(path):
 
 def project():
     p = read_json(ROOT / 'config/project.json')
-    require(isinstance(p, dict) and set(p) == {'project', 'environment', 'aws_region', 'github_repository', 'github_branch', 'management_cluster_name', 'workload_cluster_name', 'foundation'}, 'Invalid project configuration keys.')
+    require(isinstance(p, dict) and set(p) == {'project', 'environment', 'aws_region', 'github_repository', 'github_branch', 'management_cluster_name', 'workload_cluster_name', 'workload_network_policy_enforcing_mode', 'foundation'}, 'Invalid project configuration keys.')
     require(p['project'] == 'charlie' and p['environment'] == 'dev', 'This repository supports charlie/dev; renaming requires a separate migration review.')
     require(isinstance(p['aws_region'], str) and re.fullmatch(r'[a-z]{2}-[a-z]+-\d+', p['aws_region']), 'Invalid AWS region.')
     require(isinstance(p['github_repository'], str) and re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', p['github_repository']), 'Invalid GitHub repository.')
     require(p['github_branch'] == 'main', 'Only main deployment is supported.')
     require(p['management_cluster_name'] == 'charlie-dev-management' and p['workload_cluster_name'] == 'charlie-dev-workload', 'Keep the existing cluster identities; renaming requires migration review.')
+    require(p['workload_network_policy_enforcing_mode'] in ('standard', 'strict'), 'Workload network policy enforcing mode must be standard or strict.')
     f = p['foundation']
     require(isinstance(f, dict) and set(f) == {'vpc_cidr', 'availability_zones', 'nat_gateway_mode'}, 'Invalid foundation keys.')
     network = ipaddress.ip_network(f['vpc_cidr'], strict=True)
@@ -136,6 +137,8 @@ def variables(p, a, stack):
         require('operator_principal_arn' in a, 'An existing operator IAM ARN is required before deploying EKS.')
         common.update(operator_principal_arn=a['operator_principal_arn'], additional_operator_principal_arns=a.get('additional_operator_principal_arns', []))
         common['state_bucket_name'] = settings(p, a)['bucket']
+    if stack == 'aws/dev/workload':
+        common['network_policy_enforcing_mode'] = p['workload_network_policy_enforcing_mode']
     return common
 
 
