@@ -74,8 +74,12 @@ run "app_storage_contract" {
       bucketPrefix        = "hopcharlie-eks-"
       region              = "ap-northeast-2"
       iamPath             = "/hopcharlie-apps/"
-      permissionsBoundary = "arn:aws:iam::525091405886:policy/hopcharlie-app-boundary"
+      permissionsBoundary = "arn:aws:iam::123456789012:policy/hopcharlie-app-boundary"
     }
     error_message = "Environment eks must point at its Sealed Secrets certificate and name the bucket prefix, IAM path and boundary that this stack allows."
+  }
+  assert {
+    condition     = aws_ssm_parameter.host_file["envs.yaml"].insecure_value == local.host_files["envs.yaml"] && !strcontains(local.host_files["envs.yaml"], "$${") && !strcontains(local.host_files["envs.yaml"], "\r")
+    error_message = "The envs.yaml parameter must be the rendered file, with every placeholder filled and LF line endings."
   }
 }
