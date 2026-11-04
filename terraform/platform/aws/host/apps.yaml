@@ -21,5 +21,5 @@ apps:
     database: {name: app, user: app, schemas: [app]}
     environments:
       gke:    {cnpgCluster: moimroom-db-gke,    dbHost: moimroom-db-gke-rw.moimroom.gke.ts.net,       passwordEnv: GKE_MOIMROOM_PGPASSWORD,    bucket: "gcs:moimroom-photos-gke"}
-      eks:    {cnpgCluster: moimroom-db-eks,    dbHost: moimroom-db-eks-rw.moimroom.eks.ts.net,       passwordEnv: EKS_MOIMROOM_PGPASSWORD,    bucket: "s3:moimroom-photos-eks"}
+      eks:    {cnpgCluster: moimroom-db,        dbHost: moimroom-db-eks-rw.moimroom.eks.ts.net,       passwordEnv: EKS_MOIMROOM_PGPASSWORD,    bucket: "s3:moimroom-photos-eks"}
       onprem: {cnpgCluster: moimroom-db-onprem, dbHost: moimroom-db-onprem-rw.moimroom.onprem.ts.net, passwordEnv: ONPREM_MOIMROOM_PGPASSWORD, bucket: "minio:moimroom-photos"}
