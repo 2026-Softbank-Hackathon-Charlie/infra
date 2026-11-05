@@ -788,3 +788,29 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [terraform/integrations/aws-gcp/tailscale/policy.json.tftpl](terraform/integrations/aws-gcp/tailscale/policy.json.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 | [terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl](terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 | [terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py](terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+
+## AWS-GCP DB migration preparation
+
+DB network and temporary-access code; disabled examples require separate deployment approval.
+
+- [docs/adr/0047-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0047-connect-cloud-databases-with-scoped-migration-access.md)
+- [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
+- [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
+- [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
+- [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
+- [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
+- [helm/charts/hopcharlie-db-network/templates/services.yaml](helm/charts/hopcharlie-db-network/templates/services.yaml)
+- [helm/charts/hopcharlie-db-network/templates/validate.yaml](helm/charts/hopcharlie-db-network/templates/validate.yaml)
+- [helm/charts/hopcharlie-db-network/values.schema.json](helm/charts/hopcharlie-db-network/values.schema.json)
+- [helm/charts/hopcharlie-db-network/values.yaml](helm/charts/hopcharlie-db-network/values.yaml)
+- [helm/db-network/apps.yaml.example](helm/db-network/apps.yaml.example)
+- [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
+- [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
+- [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
+- [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
+- [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
+- [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
+- [scripts/db-migration-access.py](scripts/db-migration-access.py)
+- [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
+- [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
+- [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)

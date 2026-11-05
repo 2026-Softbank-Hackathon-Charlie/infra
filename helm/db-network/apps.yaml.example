@@ -1,0 +1,17 @@
+# Prepared DB-only catalog, not a deployed configuration.
+# Verify namespaces, schema, gateway app scope and credentials before use.
+# Existing independent primaries are not migration standbys.
+apps:
+  - name: moimroom
+    namespace: moimroom
+    database: {name: app, user: app, schemas: [app]}
+    environments:
+      eks:
+        cnpgCluster: moimroom-db
+        dbHost: db-eks.hopcharlie-db-network.svc.cluster.local
+        passwordEnv: EKS_MOIMROOM_PGPASSWORD
+      gke:
+        cnpgCluster: moimroom-db-gke
+        dbHost: db-gke.hopcharlie-db-network.svc.cluster.local
+        passwordEnv: GKE_MOIMROOM_PGPASSWORD
+# File storage is deliberately omitted from this DB-only example.

@@ -1,0 +1,12 @@
+# Replace example.ts.net with the actual tailnet DNS name before enabling.
+enabled: false
+clusterId: management
+egress:
+  tag: tag:hop-db-client-management
+  peers:
+    eks:
+      hostname: hop-db-management-to-eks
+      tailnetFQDN: hop-db-eks-moimroom.example.ts.net
+    gke:
+      hostname: hop-db-management-to-gke
+      tailnetFQDN: hop-db-gke-moimroom.example.ts.net

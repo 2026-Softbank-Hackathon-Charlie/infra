@@ -1,0 +1,146 @@
+{{- if .Values.enabled }}
+{{- $prefix := printf "hopcharlie-db-network-%s" .Values.clusterId }}
+{{- $clientNamespace := "charlie-platform" }}
+{{- $clientLabels := dict "app.kubernetes.io/part-of" "hopcharlie" "app.kubernetes.io/component" "api" }}
+{{- if ne .Values.clusterId "management" }}
+{{- $clientNamespace = .Values.localDatabase.namespace }}
+{{- $clientLabels = dict "cnpg.io/cluster" .Values.localDatabase.cluster }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-network-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-network-operator
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: operator
+  policyTypes: [Egress]
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+{{- range $peer, $target := .Values.egress.peers }}
+{{- $service := printf "db-%s" $peer }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $service }}-proxy
+  namespace: {{ $.Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "db-network.proxyLabels" (dict "name" $service "namespace" $.Release.Namespace) | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $clientNamespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $clientLabels | nindent 14 }}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" $ | nindent 4 }}
+    # Direct peers may use any destination UDP port after NAT.
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+{{- end }}
+---
+# This allowance relies on existing DB/API DNS, API and replication policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $prefix }}-client
+  namespace: {{ $clientNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $clientLabels | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        {{- range $peer, $target := .Values.egress.peers }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Release.Namespace }}
+          podSelector:
+            matchLabels:
+              {{- include "db-network.proxyLabels" (dict "name" (printf "db-%s" $peer) "namespace" $.Release.Namespace) | nindent 14 }}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- if ne .Values.clusterId "management" }}
+{{- $shadow := printf "%s-ingress" $prefix }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $shadow }}-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "db-network.proxyLabels" (dict "name" $shadow "namespace" .Values.localDatabase.namespace) | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.localDatabase.namespace }}
+          podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ .Values.localDatabase.cluster | quote }}
+              cnpg.io/instanceRole: primary
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $prefix }}-database
+  namespace: {{ .Values.localDatabase.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ .Values.localDatabase.cluster | quote }}
+      cnpg.io/instanceRole: primary
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              {{- include "db-network.proxyLabels" (dict "name" $shadow "namespace" .Values.localDatabase.namespace) | nindent 14 }}
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- end }}
+{{- end }}

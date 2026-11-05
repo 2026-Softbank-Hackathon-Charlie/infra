@@ -1,0 +1,15 @@
+# Prepare a separate standby. Never reuse the existing GCP independent primary.
+enabled: false
+clusterId: gke
+localDatabase:
+  namespace: moimroom
+  cluster: moimroom-db-gke
+ingress:
+  hostname: hop-db-gke-moimroom
+  tag: tag:hop-db-gke
+egress:
+  tag: tag:hop-db-client-gke
+  peers:
+    eks:
+      hostname: hop-db-gke-to-eks
+      tailnetFQDN: hop-db-eks-moimroom.example.ts.net

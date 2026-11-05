@@ -1,0 +1,43 @@
+{{- if .Values.enabled }}
+{{- $proxyClass := printf "hopcharlie-db-network-%s" .Values.clusterId }}
+{{- if ne .Values.clusterId "management" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $proxyClass }}-ingress
+  namespace: {{ .Values.localDatabase.namespace }}
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: {{ .Values.ingress.hostname | quote }}
+    tailscale.com/tags: {{ .Values.ingress.tag | quote }}
+    tailscale.com/proxy-class: {{ $proxyClass | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    cnpg.io/cluster: {{ .Values.localDatabase.cluster | quote }}
+    cnpg.io/instanceRole: primary
+  ports:
+    - {name: postgres, port: 5432, targetPort: 5432, protocol: TCP}
+{{- end }}
+{{- range $peer, $target := .Values.egress.peers }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-{{ $peer }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    tailscale.com/tailnet-fqdn: {{ $target.tailnetFQDN | quote }}
+    tailscale.com/hostname: {{ $target.hostname | quote }}
+    tailscale.com/tags: {{ $.Values.egress.tag | quote }}
+    tailscale.com/proxy-class: {{ $proxyClass | quote }}
+spec:
+  # The operator changes ExternalName to its proxy's headless Service.
+  # Keep this manual Helm release outside Argo CD reconciliation.
+  type: ExternalName
+  externalName: placeholder
+  ports:
+    - {name: postgres, port: 5432, targetPort: 5432, protocol: TCP}
+{{- end }}
+{{- end }}
