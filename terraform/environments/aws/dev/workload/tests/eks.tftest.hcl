@@ -36,8 +36,8 @@ variables {
 run "foundation_contract" {
   command = apply
   assert {
-    condition     = module.eks.network_policy_enforcing_mode == "strict"
-    error_message = "The workload cluster must default to strict network policy enforcement."
+    condition     = module.eks.network_policy_enforcing_mode == "standard"
+    error_message = "The workload cluster must default to standard network policy enforcement."
   }
   assert {
     condition     = output.target.id == "aws-dev-workload" && output.target.subnet_ids_by_az == data.terraform_remote_state.foundation.outputs.workload_subnet_ids_by_az && output.target.argocd_role_arn == data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["workload"] && output.target.ssm_bridge_instance_id == "i-0123456789abcdef0" && output.target.additional_operator_principal_arns == var.additional_operator_principal_arns
@@ -59,12 +59,12 @@ run "foundation_contract" {
   }
 }
 
-run "standard_bootstrap_and_rollback" {
+run "explicit_strict_opt_in" {
   command = apply
-  variables { network_policy_enforcing_mode = "standard" }
+  variables { network_policy_enforcing_mode = "strict" }
   assert {
-    condition     = module.eks.network_policy_enforcing_mode == "standard"
-    error_message = "Fresh bootstrap and rollback must be able to select standard mode."
+    condition     = module.eks.network_policy_enforcing_mode == "strict"
+    error_message = "Strict enforcement must remain available through explicit opt-in."
   }
 }
 run "reject_invalid_network_policy_mode" {

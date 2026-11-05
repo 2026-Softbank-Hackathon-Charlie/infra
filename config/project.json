@@ -6,7 +6,7 @@
   "github_branch": "main",
   "management_cluster_name": "charlie-dev-management",
   "workload_cluster_name": "charlie-dev-workload",
-  "workload_network_policy_enforcing_mode": "strict",
+  "workload_network_policy_enforcing_mode": "standard",
   "foundation": {
     "vpc_cidr": "10.40.0.0/16",
     "availability_zones": [

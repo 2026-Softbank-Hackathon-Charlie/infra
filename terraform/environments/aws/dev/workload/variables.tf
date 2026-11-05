@@ -45,7 +45,7 @@ variable "state_bucket_name" {
 variable "network_policy_enforcing_mode" {
   description = "Workload VPC CNI mode. Use standard for first bootstrap or rollback; sync baseline before strict."
   type        = string
-  default     = "strict"
+  default     = "standard"
   validation {
     condition     = contains(["standard", "strict"], var.network_policy_enforcing_mode)
     error_message = "Network policy enforcing mode must be standard or strict."

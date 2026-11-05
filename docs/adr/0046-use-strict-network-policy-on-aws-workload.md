@@ -4,6 +4,8 @@
 - 상태: 제안
 - 관련 ADR: [ADR 0002](0002-require-approval-for-privileged-operations.md), [ADR 0005](0005-scope-aws-cnpg-poc.md)
 
+기본값 변경 이력: 최초 strict 기본값 제안은 [ADR 0048](0048-keep-workload-network-policy-standard-by-default.md)로 변경한다. 현재 canonical/workload 기본값은 standard이고 strict는 별도 조율·승인을 거친 명시적 선택이다. 아래 시스템 정책과 전환 절차의 범위는 유지한다.
+
 ## 배경과 제약
 
 현재 shared EKS 모듈은 VPC CNI의 NetworkPolicy를 켜되 `NETWORK_POLICY_ENFORCING_MODE=standard`를 고정한다. AWS 문서에 따르면 standard에서는 새 Pod의 정책이 적용될 때까지 default allow 구간이 있다. strict는 그 구간을 default deny로 시작하므로 정책이 없는 CoreDNS와 controller도 통신이 막힐 수 있다. 이 변경은 AWS workload만 대상으로 하며 management의 standard 동작을 유지한다.
@@ -21,7 +23,7 @@ AWS는 ownerReferences가 있는 Deployment 등에서 관리하는 Pod를 Networ
 
 ## 결정과 이유
 
-shared 모듈의 검증된 입력 `network_policy_enforcing_mode`는 standard를 기본값으로 두고 standard/strict만 받는다. AWS workload root는 strict가 기본이며, local/CI wrapper는 공유 입력 `config/project.json`의 `workload_network_policy_enforcing_mode`(기본 strict)를 workload의 `network_policy_enforcing_mode`로만 전달한다. canonical config와 Terraform 양쪽에서 standard/strict만 허용한다. management 등 다른 stack에는 전달하지 않는다. 이 canonical 입력을 standard로 바꾸어 최초 bootstrap과 rollback을 수행할 수 있고, 기존 `TF_VAR_*` 등 hidden-input 차단은 유지한다. addon 버전, prefix delegation, IRSA와 다른 CNI 옵션은 유지한다. 모듈 출력은 구성된 addon 값을 보여 주며 live rollout 완료를 의미하지 않는다.
+shared 모듈의 검증된 입력 `network_policy_enforcing_mode`는 standard를 기본값으로 두고 standard/strict만 받는다. AWS workload root는 standard가 기본이며, local/CI wrapper는 공유 입력 `config/project.json`의 `workload_network_policy_enforcing_mode`(기본 standard)를 workload의 `network_policy_enforcing_mode`로만 전달한다. canonical config와 Terraform 양쪽에서 standard/strict만 허용한다. management 등 다른 stack에는 전달하지 않는다. 이 canonical 입력을 standard로 바꾸어 최초 bootstrap과 rollback을 수행할 수 있고, 기존 `TF_VAR_*` 등 hidden-input 차단은 유지한다. addon 버전, prefix delegation, IRSA와 다른 CNI 옵션은 유지한다. 모듈 출력은 구성된 addon 값을 보여 주며 live rollout 완료를 의미하지 않는다.
 
 cluster-baseline의 `networkPolicy.systemCompatibilityNamespaces`는 기본 빈 배열이다. workload 값에서만 kube-system, observability, cnpg-system, cert-manager를 지정한다. schema는 이 네 값과 중복 없는 배열만 허용한다. 각 namespace의 모든 Pod에 ingress/egress 호환 정책을 생성한다. 이 정책은 기존 restrictive NetworkPolicy도 합집합으로 넓히므로 현재 무제한인 namespace에만 사용한다. management 값에는 추가하지 않는다. workload AppProject destination도 cnpg-system과 cert-manager 두 개만 추가한다.
 
@@ -49,7 +51,7 @@ charlie-apps의 baseline, charlie-db의 cnpg-poc, 동적 앱 및 sandbox 정책�
 
 - 로컬 bootstrap/rollback: `config/project.json`의 `workload_network_policy_enforcing_mode`를 `"standard"`로 편집하고, 기존 account 입력을 사용해 `make tf-plan STACK=aws/dev/workload`로 검토한다. 별도 승인 후 `make tf-apply STACK=aws/dev/workload`를 수행한다. 다른 stack에는 mode가 전달되지 않는다. `TF_VAR_network_policy_enforcing_mode`는 지원하지 않으며 wrapper가 거절한다.
 - CI bootstrap/rollback: 동일 canonical 파일의 값을 standard로 바꾼 reviewed revision을 main에 반영한 뒤 기존 workflow_dispatch에서 `stack=workload`, `action=plan`을 선택한다. 별도 승인된 apply만 실행한다. workflow는 main의 파일을 읽으므로 로컬 편집만 하거나 환경 변수/GitHub 변수에 mode를 넣어서는 CI 입력이 바뀌지 않는다. main 반영에는 위 merge 전 gate와 Git 게시 승인이 별도로 필요하다. CI에서 즉시 mode override하는 입력은 추가하지 않는다.
-- 새 클러스터는 standard 상태로 bootstrap하고 Argo CD 등록과 baseline/policy sync를 마친 다음 inventory와 검증을 거쳐 canonical 값을 strict로 바꾼다. 처음부터 strict로 bootstrap하면 정책을 배포할 controller 자체가 통신하지 못할 수 있다. main의 기본 strict 값으로 최초 workload apply를 바로 실행하지 않는다.
+- 새 클러스터는 standard 상태로 bootstrap하고 Argo CD 등록과 baseline/policy sync를 마친 다음 inventory와 검증을 거쳐 canonical 값을 strict로 바꾼다. 처음부터 strict로 bootstrap하면 정책을 배포할 controller 자체가 통신하지 못할 수 있다. 최초 workload apply는 standard 기본값을 유지하며 strict 선택은 별도 조율·승인 후 수행한다.
 - rollback 후 모든 aws-node가 standard가 되었는지 확인한다. 필요 시 영향받은 업무 Pod를 다시 생성하고 DNS/controller 복구를 확인한다. baseline 정책은 먼저 지우지 않는다. standard로 돌아가면 startup default allow 위험도 돌아오므로 원인과 다음 전환 조건을 기록한다.
 
 ## 관련 자료
