@@ -1,0 +1,15 @@
+# Catalog example; verify the actual database before enabling.
+enabled: false
+clusterId: eks
+localDatabase:
+  namespace: moimroom
+  cluster: moimroom-db
+ingress:
+  hostname: hop-db-eks-moimroom
+  tag: tag:hop-db-eks
+egress:
+  tag: tag:hop-db-client-eks
+  peers:
+    gke:
+      hostname: hop-db-eks-to-gke
+      tailnetFQDN: hop-db-gke-moimroom.example.ts.net

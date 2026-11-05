@@ -1,0 +1,18 @@
+{{- if .Values.enabled }}
+{{- if ne .Release.Namespace "hopcharlie-db-network" }}
+{{- fail "enabled db-network must use the pre-existing hopcharlie-db-network namespace" }}
+{{- end }}
+{{- $hostnames := list }}
+{{- range .Values.egress.peers }}
+{{- $hostnames = append $hostnames .hostname }}
+{{- end }}
+{{- if ne .Values.clusterId "management" }}
+{{- $hostnames = append $hostnames .Values.ingress.hostname }}
+{{- if eq .Values.ingress.tag .Values.egress.tag }}
+{{- fail "ingress.tag and egress.tag must be distinct" }}
+{{- end }}
+{{- end }}
+{{- if ne (len $hostnames) (len (uniq $hostnames)) }}
+{{- fail "all local ingress and egress hostnames must be unique" }}
+{{- end }}
+{{- end }}

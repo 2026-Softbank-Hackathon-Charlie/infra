@@ -799,3 +799,29 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
 | [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
 | [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |
+
+## AWS-GCP DB migration preparation
+
+DB network and temporary-access code; disabled examples require separate deployment approval.
+
+- [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
+- [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
+- [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
+- [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
+- [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
+- [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
+- [helm/charts/hopcharlie-db-network/templates/services.yaml](helm/charts/hopcharlie-db-network/templates/services.yaml)
+- [helm/charts/hopcharlie-db-network/templates/validate.yaml](helm/charts/hopcharlie-db-network/templates/validate.yaml)
+- [helm/charts/hopcharlie-db-network/values.schema.json](helm/charts/hopcharlie-db-network/values.schema.json)
+- [helm/charts/hopcharlie-db-network/values.yaml](helm/charts/hopcharlie-db-network/values.yaml)
+- [helm/db-network/apps.yaml.example](helm/db-network/apps.yaml.example)
+- [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
+- [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
+- [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
+- [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
+- [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
+- [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
+- [scripts/db-migration-access.py](scripts/db-migration-access.py)
+- [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
+- [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
+- [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)

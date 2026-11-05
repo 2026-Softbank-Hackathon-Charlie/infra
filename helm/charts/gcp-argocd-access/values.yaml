@@ -19,6 +19,7 @@ dynamicApps:
     - cnpg-system
     - default
     - headlamp
+    - hopcharlie-db-network
     - kube-node-lease
     - kube-public
     - kube-system

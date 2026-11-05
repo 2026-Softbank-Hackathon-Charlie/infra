@@ -1,0 +1,33 @@
+# Install manually only after the pinned operator and its CRDs exist in
+# hopcharlie-db-network; this chart never creates a Namespace or a Secret.
+enabled: false
+clusterId: "" # management, eks or gke
+
+# Workload profiles only. The namespace and CNPG Cluster must already exist.
+localDatabase:
+  namespace: ""
+  cluster: ""
+
+# Workload ingress is a separate Service; the CNPG -rw Service is never adopted.
+ingress:
+  hostname: ""
+  tag: ""
+
+egress:
+  tag: ""
+  # management: eks + gke; eks: gke; gke: eks.
+  # Each peer requires a unique local hostname and the remote ingress full FQDN.
+  peers: {}
+
+# Unmeasured starting point; size from the approved connectivity/load trial.
+proxyResources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Existing DB/API namespace guardrails MUST already allow their ordinary
+# traffic (DNS, Kubernetes API, backup/identity endpoints and CNPG replication).
+# This chart only adds exact proxy allowances; Egress policies isolate selected
+# clients if those pre-existing guardrails are absent.

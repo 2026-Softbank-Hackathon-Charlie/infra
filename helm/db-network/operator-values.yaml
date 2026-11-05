@@ -1,0 +1,12 @@
+# tailscale-operator chart 1.104.4; install separately in each cluster.
+# Precreate operator-oauth in hopcharlie-db-network. Never put credentials here.
+fullnameOverride: operator
+oauth:
+  clientId: ""
+  clientSecret: ""
+operatorConfig:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+# Per-cluster hostname and operator/proxy tags are in the runbook.
+# ProxyClass supplies the per-proxy resource budget.

@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["enabled"],
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "clusterId": {"type": "string"},
+    "localDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {"type": "string"},
+        "cluster": {"type": "string"}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hostname": {"type": "string"},
+        "tag": {"type": "string"}
+      }
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": {"type": "string"},
+        "peers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "eks": {"$ref": "#/definitions/peer"},
+            "gke": {"$ref": "#/definitions/peer"}
+          }
+        }
+      }
+    },
+    "proxyResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": {"type": "string", "minLength": 1},
+            "memory": {"type": "string", "minLength": 1}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["memory"],
+          "properties": {
+            "cpu": {"type": "string", "minLength": 1},
+            "memory": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^tag:[a-z][a-z0-9-]*$"
+    },
+    "peer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostname", "tailnetFQDN"],
+      "properties": {
+        "hostname": {"$ref": "#/definitions/name"},
+        "tailnetFQDN": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.ts\\.net$"
+        }
+      }
+    }
+  },
+  "allOf": [{
+    "if": {"properties": {"enabled": {"const": true}}},
+    "then": {
+      "required": ["clusterId", "egress", "proxyResources"],
+      "properties": {
+        "clusterId": {"enum": ["management", "eks", "gke"]},
+        "egress": {
+          "required": ["tag", "peers"],
+          "properties": {"tag": {"$ref": "#/definitions/tag"}}
+        }
+      },
+      "allOf": [{
+        "if": {"properties": {"clusterId": {"const": "management"}}},
+        "then": {
+          "properties": {
+            "localDatabase": {
+              "properties": {"namespace": {"const": ""}, "cluster": {"const": ""}}
+            },
+            "ingress": {
+              "properties": {"hostname": {"const": ""}, "tag": {"const": ""}}
+            },
+            "egress": {
+              "properties": {
+                "peers": {"required": ["eks", "gke"], "minProperties": 2, "maxProperties": 2}
+              }
+            }
+          }
+        },
+        "else": {
+          "required": ["localDatabase", "ingress"],
+          "properties": {
+            "localDatabase": {
+              "required": ["namespace", "cluster"],
+              "properties": {
+                "namespace": {
+                  "allOf": [
+                    {"$ref": "#/definitions/name"},
+                    {"not": {"const": "hopcharlie-db-network"}}
+                  ]
+                },
+                "cluster": {"$ref": "#/definitions/name"}
+              }
+            },
+            "ingress": {
+              "required": ["hostname", "tag"],
+              "properties": {
+                "hostname": {"$ref": "#/definitions/name"},
+                "tag": {"$ref": "#/definitions/tag"}
+              }
+            },
+            "egress": {
+              "properties": {"peers": {"minProperties": 1, "maxProperties": 1}}
+            }
+          }
+        }
+      }, {
+        "if": {"properties": {"clusterId": {"const": "eks"}}},
+        "then": {"properties": {"egress": {"properties": {"peers": {"required": ["gke"]}}}}}
+      }, {
+        "if": {"properties": {"clusterId": {"const": "gke"}}},
+        "then": {"properties": {"egress": {"properties": {"peers": {"required": ["eks"]}}}}}
+      }]
+    }
+  }]
+}
