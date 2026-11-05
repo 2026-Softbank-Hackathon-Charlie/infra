@@ -156,17 +156,28 @@ class ClickStackTests(unittest.TestCase):
     def test_collector_bootstrap_auth_tls_queue(self):
         collector = next(d for d in self.by_kind['Deployment'] if d['metadata']['name'] == 'clickstack-otel-collector')
         c = collector['spec']['template']['spec']['containers'][0]
-        self.assertEqual(c['command'], ['/entrypoint.sh'])
-        self.assertFalse(c.get('args'))
+        self.assertEqual(c['command'], ['/bin/sh', '-ec'])
+        self.assertEqual(c['args'], ['migrate /etc/otel/schema/seed; exec /otelcontribcol --config /etc/otelcol-contrib/custom/custom.config.yaml'])
         env = {e['name']: e for e in c['env']}
         self.assertIn('secretKeyRef', env['OTLP_AUTH_TOKEN']['valueFrom'])
         cm = next(d for d in self.by_kind['ConfigMap'] if d['metadata']['name'] == 'clickstack-otel-custom-config')
         config = yaml.safe_load(cm['data']['custom.config.yaml'])
-        self.assertIsNone(config['receivers']['otlp/hyperdx']['protocols']['grpc'])
+        self.assertNotIn('grpc', config['receivers']['otlp/hyperdx']['protocols'])
         self.assertIn('tls', config['receivers']['otlp/hyperdx']['protocols']['http'])
         self.assertIn('bearertokenauth/hyperdx', config['service']['extensions'])
         self.assertLess(config['processors']['memory_limiter/central']['limit_mib'], 512)
-        self.assertIsNone(config['service']['pipelines']['metrics'])
+        self.assertEqual(set(config['service']['pipelines']), {'logs', 'traces'})
+        for pipeline in config['service']['pipelines'].values():
+            for kind in ('receivers', 'processors', 'exporters'):
+                self.assertTrue(pipeline[kind])
+                for component in pipeline[kind]:
+                    self.assertIn(component, config[kind])
+        for extension in config['service']['extensions']:
+            self.assertIn(extension, config['extensions'])
+        exporter = config['exporters']['clickhouse']
+        for key in ('database', 'endpoint', 'username', 'password', 'timeout', 'create_schema', 'json'):
+            self.assertIn(key, exporter)
+        self.assertNotIn('ttl', exporter)
         self.assertEqual(config['exporters']['clickhouse']['sending_queue']['storage'], 'file_storage/queue')
         self.assertEqual(collector['spec']['strategy']['type'], 'Recreate')
 
