@@ -1,7 +1,7 @@
 # 0049. 플랫폼 GCS 드라이버의 프로젝트 버킷 목록 조회를 허용한다
 
 - 날짜: 2026-11-05
-- 상태: 제안
+- 상태: 채택
 - 관련 ADR: [ADR 0041](0041-keyless-gcp-access-for-platform-app-storage.md)
 
 ## 배경과 제약
@@ -16,7 +16,7 @@ platform PR #63의 GCS 드라이버는 버킷의 라벨뿐 아니라 소속 프�
 
 ## 결정과 이유
 
-기존 `charliePlatformAppIdentities` 역할에 `storage.buckets.list`만 추가하는 안을 제안한다. 새 역할·주체·신뢰 관계를 만들지 않는다. 버킷 생성·수정·삭제와 객체 목록·삭제는 기존 `hopcharlie-gke-*` 조건을 유지한다. 플랫폼에 객체 내용 읽기·쓰기 권한은 추가하지 않는다.
+기존 `charliePlatformAppIdentities` 역할에 `storage.buckets.list`만 추가한다. 새 역할·주체·신뢰 관계를 만들지 않는다. 버킷 생성·수정·삭제와 객체 목록·삭제는 기존 `hopcharlie-gke-*` 조건을 유지한다. 플랫폼에 객체 내용 읽기·쓰기 권한은 추가하지 않는다.
 
 기존 차트의 공개 ADC 설정과 projected token으로 관리 EKS API를 기존 플랫폼 GSA에 연결한다. GKE 환경에는 기존 공개 봉인 인증서와 서울 GCS 저장소 설정을 활성화한다. SSM 환경 파일은 기존 다른 환경을 보존해 별도로 갱신해야 한다.
 

@@ -262,6 +262,7 @@ def main():
         gcp_values = work / "platform-gcp.json"
         adc = {"type": "external_account", "audience": "//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
                "subject_token_type": "urn:ietf:params:oauth:token-type:jwt", "token_url": "https://sts.googleapis.com/v1/token",
+               "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/platform-storage@charlie-test-project.iam.gserviceaccount.com:generateAccessToken",
                "credential_source": {"file": "/var/run/secrets/gcp/token"}}
         audience = "https://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks"
         gcp_values.write_text(json.dumps({"gcp": {"credentialConfig": adc, "tokenAudience": audience}}))
