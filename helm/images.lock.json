@@ -33,7 +33,7 @@
     "quay.io/jetstack/cert-manager-startupapicheck:v1.21.3": "sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1",
     "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:eea0cc4": "sha256:02621a204f64d765fdb3d887340b2e19e12f08342485d5dd527bc5a59fc8eeb5",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4e5089b": "sha256:407c4a92453b2c5b4b957d9d4038b0cc58ef90af2bf431c243a0e3b84c0ec78c",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:7568769": "sha256:08908ad9f08b79b3b89c14682eb99bf618e0d8babba1bb2251d6a5d4c47e2d69",
     "docker.hyperdx.io/hyperdx/hyperdx:2.39.1": "sha256:619783ca66d6c81f72a0106f4013d65865ac42e064491b19c0019ffec268f316",
     "docker.clickhouse.com/clickhouse/clickstack-otel-collector:2.39.1": "sha256:fb71cb46bfc11413e9b96b056118f66293262579cec42927d7f1ca38d3732146",
     "docker.io/clickhouse/clickhouse-server:26.8.36.3-alpine": "sha256:f5443f9ffa48f0154cdd50cab39fed732201762574a27f04f1f564bbba81832d",
