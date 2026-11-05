@@ -45,7 +45,7 @@ FIELD_MANAGER = 'put-platform-kubeconfig'
 ALLOWED = [['get', 'services', '-n', 'default'], ['list', 'services', '-A'], ['list', 'nodes'],
            ['list', 'pods', '-A'], ['list', 'networkpolicies.networking.k8s.io', '-A'],
            ['list', 'clusterrolebindings.rbac.authorization.k8s.io'],
-           ['list', 'clusters.postgresql.cnpg.io', '-A']]
+           ['list', 'clusters.postgresql.cnpg.io', '-A'], ['list', 'objectstores.barmancloud.cnpg.io', '-A']]
 DENIED = [['get', 'secrets', '-n', NAMESPACE], ['list', 'secrets', '-A'], ['list', 'configmaps', '-A'],
           ['patch', 'services', '-n', 'default'], ['create', 'deployments', '-n', 'default'],
           ['patch', 'clusters.postgresql.cnpg.io', '-A'], ['delete', 'namespaces']]
