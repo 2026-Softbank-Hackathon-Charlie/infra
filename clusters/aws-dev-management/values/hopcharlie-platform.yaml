@@ -13,6 +13,17 @@
     "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
     "dsnHostSuffixes": ".ts.net"
   },
+  "gcp": {
+    "tokenAudience": "https://iam.googleapis.com/projects/414068132732/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
+    "credentialConfig": {
+      "type": "external_account",
+      "audience": "//iam.googleapis.com/projects/414068132732/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
+      "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+      "token_url": "https://sts.googleapis.com/v1/token",
+      "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/charlie-platform-storage@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com:generateAccessToken",
+      "credential_source": {"file": "/var/run/secrets/gcp/token"}
+    }
+  },
   "ingress": {
     "enabled": true,
     "domain": "hopcharlie.dev"
