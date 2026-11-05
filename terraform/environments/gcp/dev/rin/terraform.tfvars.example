@@ -1,0 +1,6 @@
+# Public identifiers only. Defaults are the read-only verified rin IDs.
+project_id                 = "project-b47cdba3-db5b-42a2-9a6"
+github_repository_id       = "1443173546"
+github_repository_owner_id = "350278309"
+aws_account_id             = "525091405886"
+ssm_kms_key_arn             = "arn:aws:kms:ap-northeast-2:525091405886:key/b33d433b-2bcc-4923-9daa-361c57730c6d"

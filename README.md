@@ -901,3 +901,22 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
 - [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
 - [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+
+## rin 전용 GCP 이전
+
+로컬 코드·검증 단계이며 실제 cloud 생성/전환과 Git 발행은 별도 승인이 필요합니다. [운영 계약](docs/rin-gcp-host.md)을 확인합니다.
+
+| 파일 | 설명 |
+|---|---|
+| [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/outputs.tf](terraform/environments/gcp/dev/rin/outputs.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/startup.sh](terraform/environments/gcp/dev/rin/startup.sh) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/terraform.tfvars.example](terraform/environments/gcp/dev/rin/terraform.tfvars.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/host.tftest.hcl](terraform/environments/gcp/dev/rin/tests/host.tftest.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/test_bootstrap.py](terraform/environments/gcp/dev/rin/tests/test_bootstrap.py) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/variables.tf](terraform/environments/gcp/dev/rin/variables.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/versions.tf](terraform/environments/gcp/dev/rin/versions.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
