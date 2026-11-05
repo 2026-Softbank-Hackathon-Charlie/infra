@@ -8,7 +8,7 @@ mock_provider "random" {}
 run "app_build_contract" {
   command = plan
   assert {
-    condition     = aws_codebuild_project.app_build.name == "hopcharlie-app-build" && aws_codebuild_project.app_build.build_timeout == 15 && aws_codebuild_project.app_build.queued_timeout == 15 && aws_codebuild_project.app_build.concurrent_build_limit == 3
+    condition     = aws_codebuild_project.app_build.name == "hopcharlie-app-build" && aws_codebuild_project.app_build.build_timeout == 15 && aws_codebuild_project.app_build.queued_timeout == 15 && aws_codebuild_project.app_build.concurrent_build_limit == 4
     error_message = "Build limits and name must match the contract."
   }
   assert {

@@ -47,7 +47,7 @@ resource "aws_codebuild_project" "app_build" {
   service_role           = aws_iam_role.app_build.arn
   build_timeout          = 15
   queued_timeout         = 15
-  concurrent_build_limit = 3
+  concurrent_build_limit = 4
   depends_on             = [aws_iam_role_policy.app_build]
   artifacts { type = "NO_ARTIFACTS" }
   # Reuses Docker layers only when a build lands on the same host shortly after
