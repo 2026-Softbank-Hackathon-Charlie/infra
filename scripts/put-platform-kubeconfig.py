@@ -48,7 +48,8 @@ ALLOWED = [['get', 'services', '-n', 'default'], ['list', 'services', '-A'], ['l
            ['list', 'clusters.postgresql.cnpg.io', '-A'], ['list', 'objectstores.barmancloud.cnpg.io', '-A']]
 DENIED = [['get', 'secrets', '-n', NAMESPACE], ['list', 'secrets', '-A'], ['list', 'configmaps', '-A'],
           ['patch', 'services', '-n', 'default'], ['create', 'deployments', '-n', 'default'],
-          ['patch', 'clusters.postgresql.cnpg.io', '-A'], ['delete', 'namespaces']]
+          ['patch', 'clusters.postgresql.cnpg.io', '-A'], ['patch', 'objectstores.barmancloud.cnpg.io', '-A'],
+          ['delete', 'namespaces']]
 
 
 class Refused(Exception):
