@@ -53,10 +53,10 @@ def read_kube(path):
 
 def token_exec(profile, region, name):
     return {'apiVersion': 'client.authentication.k8s.io/v1beta1', 'command': 'aws',
-            'interactiveMode': 'IfAvailable', 'provideClusterInfo': False,
-            'args': ['--profile', profile, '--region', region, 'eks', 'get-token',
+            'interactiveMode': 'IfAvailable' if profile else 'Never', 'provideClusterInfo': False,
+            'args': (['--profile', profile] if profile else []) + ['--region', region, 'eks', 'get-token',
                      '--cluster-name', name, '--output', 'json'],
-            'env': [{'name': 'AWS_PROFILE', 'value': profile}]}
+            'env': [{'name': 'AWS_PROFILE', 'value': profile}] if profile else []}
 
 
 def tunnel(p, aid, kind, number, profile, path):
@@ -65,7 +65,7 @@ def tunnel(p, aid, kind, number, profile, path):
     arn = f'arn:aws:eks:{region}:{aid}:cluster/{name}'
 
     def aws(*args):
-        return ['aws', '--profile', profile, '--region', region, *args]
+        return ['aws', *(['--profile', profile] if profile else []), '--region', region, *args]
 
     def query(*args):
         return json.loads(run(aws(*args, '--output', 'json')))

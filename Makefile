@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 export STACK AWS_ACCOUNT_ID
 PYTHON ?= python3
-.PHONY: clickstack-check config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
+.PHONY: clickstack-management-check clickstack-check config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
 help:
 	@echo 'make check                          정적 검사·mock test·Helm render'
 	@echo 'make clickstack-check               ClickStack·operator·수집 계약 검사 (클러스터 접근 없음)'
@@ -64,3 +64,6 @@ inventory-check:
 
 clickstack-check:
 	@$(PYTHON) scripts/check-clickstack.py
+
+clickstack-management-check:
+	@$(PYTHON) scripts/tests/test-clickstack-management.py

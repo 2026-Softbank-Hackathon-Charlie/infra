@@ -1,7 +1,7 @@
 # 관리 클러스터 ClickStack 설치 계획 (C)
 
 - 날짜: 2026-11-05
-- 상태: 제안. 계획 리뷰·개발 승인·실행 승인 전. 이 문서만으로 설치하거나 권한을 발급하지 않는다.
+- 상태: 독립 계획 리뷰 GREEN 후 사용자 C 개발 승인. CI 코드 구현 중이며 실제 실행은 미승인/미실행.
 - 분류: 새 CI 배포 경로, EKS 권한, Secret, CRD/operator, PVC 및 실제 로그 수집에 영향을 주는 작업. 전체 계획·독립 리뷰·명시 승인을 적용한다.
 - 관련 결정: [ADR0050](../adr/0050-adopt-clickstack-for-hackathon-observability.md), [ADR0051 제안](../adr/0051-bootstrap-management-clickstack-from-ci.md), [ADR0047](../adr/0047-run-management-scaleout-through-ci.md).
 
@@ -116,3 +116,16 @@
 새 plan-reviewer `review_clickstack_management_deployment`에서 재리뷰 GREEN 판정을 받았고 중대 미해결 지적은 없다. queue backlog 복구를 완료 기준에서 제외하고, owner UID/PVC 기반 순차 재시작·timeout, multi-source revisions, Secret canonical 생성 순서, workload 메타데이터 입력과 management-only 쓰기, 이전 run ID 기반 cleanup을 보완했다.
 
 이는 C 기술 계획의 리뷰 결과이며 사용자 개발/실행 승인이 아니다. 기존 A의 ClickStack15개·전체 Helm 및 inventory460개 검사는 통과했지만 신규 C workflow/helper는 아직 구현하지 않았다. 실제 권한·Secret·sync·런타임 검증도 하지 않았다. 이번 PR 정리 범위의 계획 대비 차이는 최신 main 보존과 ADR0050 번호 정리, 성공한 노드 증설 기록 반영뿐이다. ADR0051은 제안으로 남긴다.
+
+## C 구현 상태
+
+사용자가 `진행해줘`로 CI 코드 구현까지만 승인했다. 별도 `feat/clickstack-management-ci` 브랜치에서 merge된 PR #64를 포함한 main 기준 후속 PR을 준비한다. 새로운 workflow_dispatch·EKS access 변경·운영 Secret 생성·Argo sync는 호출하지 않는다.
+
+버전: Python cryptography50.0.2/cffi2.1.1/pycparser3.12/PyYAML6.0.3의 release hash, Linux kubectl1.35.8 및 SSM plugin1.2.896.0 checksum을 고정했다. synthetic loopback TLS에서 SAN/SNI/CA 검증과 redirect 시 bearer 미전달을 확인한다. run attempt별 태그·event ID는 승인한 소유권/재시도 정책을 구현한 세부 보완이다.
+
+### C 로컬 구현 검증 결과
+
+- C 합성 테스트26개 및 기존 eks-access 테스트7개 통과: preflight 무변경, 잘못된 context/SHA/계정 거부, Secret create-only/부분 재시도/owner 불일치, 임시 mapping 소유권·attempt, 단계 실패 시 다음 sync 차단, cleanup 실패, multi-source revision, strict loopback TLS와 redirect 차단 포함.
+- 기존 ClickStack 계약15개 및 전체 Helm 검사 통과. inventory467개·fmt/config·Python 구문·diff 검사 통과.
+- 실제 임시 EKS mapping·운영 Secret·Argo operation은 호출하지 않았다. DB/operator 이미지 조합과 live 경로는 실행 승인 후 검증 대상이다. 실제 브라우저 조작 및 queue backlog 복구는 이번 자동 확인 범위 밖이다.
+- 새 PR/push workflow는 AWS 인증 없이 client binary 버전/체크섬 및 합성 계약을 검증한다. preflight/deploy/cleanup 수동 CI는 실행 승인 전 호출하지 않는다.

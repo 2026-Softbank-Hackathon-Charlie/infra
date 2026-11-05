@@ -96,7 +96,7 @@ class ClickStackTests(unittest.TestCase):
         fixture = json.loads((ROOT / 'helm/gitops/ci/targets-values.yaml').read_text())
         cls.fixture = fixture
         enabled = copy.deepcopy(fixture)
-        enabled['observability'] = {'enabled': True, 'agentTargets': ['management', 'workload'], 'gatewayTargets': ['management', 'workload']}
+        enabled['observability'] = {'enabled': True, 'agentTargets': ['management', 'workload'], 'gatewayTargets': ['management', 'workload'], 'destinationTargets': ['management', 'workload']}
         cls.gitops = render(ROOT / 'helm/gitops', values=enabled)
 
     def test_no_secret_material_in_render(self):

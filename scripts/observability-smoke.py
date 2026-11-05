@@ -2,6 +2,8 @@
 """Build synthetic correlated OTLP data; sending requires explicit --send and HTTPS."""
 import argparse
 import json
+import http.client
+import socket
 import os
 from pathlib import Path
 import secrets
@@ -37,18 +39,42 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None  # Never forward the bearer token through a redirect.
 
 
-def send(endpoint, ca_file, token, logs, traces):
+class LoopbackHTTPS(urllib.request.HTTPSHandler):
+    """Connect to a local port-forward while retaining the URL hostname for SNI/CA checks."""
+    def __init__(self, context, address):
+        super().__init__(context=context)
+        if address not in ('127.0.0.1', '::1'):
+            raise ValueError('Only a loopback connection override is permitted')
+        self.address = address
+
+    def https_open(self, request):
+        def connection(host, **kwargs):
+            conn = http.client.HTTPSConnection(host, **kwargs)
+            conn._create_connection = lambda target, timeout, source_address=None: socket.create_connection(
+                (self.address, conn.port), timeout, source_address)
+            return conn
+        return self.do_open(connection, request, context=self._context)
+
+
+def send(endpoint, ca_file, token, logs, traces, connect_address=None):
     parsed = urllib.parse.urlsplit(endpoint)
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError('An HTTPS endpoint without credentials/query/fragment is required')
     if not token:
         raise ValueError('OTLP_AUTH_TOKEN is required in the environment')
-    opener = urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca_file)))
+    context = ssl.create_default_context(cafile=ca_file)
+    handler = LoopbackHTTPS(context, connect_address) if connect_address else urllib.request.HTTPSHandler(context=context)
+    opener = urllib.request.build_opener(NoRedirect(), handler)
     for path, data in (('logs', logs), ('traces', traces)):
         request = urllib.request.Request(endpoint.rstrip('/') + '/v1/' + path,
                                          data=json.dumps(data).encode(), method='POST',
                                          headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
-        with opener.open(request, timeout=15) as response:
+        try:
+            response = opener.open(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            error.close()
+            raise ValueError('Collector HTTP response rejected') from None
+        with response:
             body = response.read(1024 * 1024)
             result = json.loads(body) if body else {}
             if result.get('partialSuccess'):
@@ -65,6 +91,7 @@ def main():
     parser.add_argument('--send', action='store_true')
     parser.add_argument('--endpoint')
     parser.add_argument('--ca-file')
+    parser.add_argument('--connect-address', choices=('127.0.0.1', '::1'))
     args = parser.parse_args()
     try:
         logs, traces = payloads(args.count, args.trace_count, args.cluster, args.run_id)
@@ -75,7 +102,7 @@ def main():
         if args.send:
             if not args.endpoint:
                 parser.error('--send requires --endpoint')
-            send(args.endpoint, args.ca_file, os.environ.get('OTLP_AUTH_TOKEN', ''), logs, traces)
+            send(args.endpoint, args.ca_file, os.environ.get('OTLP_AUTH_TOKEN', ''), logs, traces, args.connect_address)
             print(f'Collector accepted requests: logs={args.count}, traces={args.trace_count}; verify stored IDs separately')
         else:
             print(f'Synthetic payloads prepared: logs={args.count}, traces={args.trace_count}; nothing sent')

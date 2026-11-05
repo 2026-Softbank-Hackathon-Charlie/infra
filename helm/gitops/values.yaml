@@ -27,6 +27,9 @@
     ],
     "gatewayTargets": [
       "management"
+    ],
+    "destinationTargets": [
+      "management"
     ]
   }
 }

@@ -876,3 +876,19 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
 - [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
 - [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+
+## 관리 ClickStack 수동 CI 부트스트랩
+
+신규 workflow는 기본 `preflight`이며 실제 `deploy`는 main의 승인 SHA와 명시 확인이 필요하다. 구현 승인은 실제 EKS 접근·Secret 발급·sync 승인이 아니다. 새로운 EKS access entry는 해당 run/attempt의 소유권을 확인해 정리하며 기존 mapping은 변경하지 않는다. 강제 중단 후에는 `cleanup-access`와 이전 run ID를 사용한다. PR #64를 포함한 main 위에서 사용하는 후속 CI다.
+
+로컬/CI 검증은 잠금된 Python 의존성을 격리 환경에 설치한 뒤 `make clickstack-management-check PYTHON=<venv>/bin/python`으로 수행한다. 테스트는 가짜 API와 합성 자격 증명/loopback TLS만 사용한다. 실제 서비스·DB·operator 조합 검증은 배포 승인 후 수행한다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [.github/workflows/clickstack-management.yml](.github/workflows/clickstack-management.yml) | main/SHA/confirm 수동 CI와 always cleanup |
+| [config/clickstack-bootstrap-tools.json](config/clickstack-bootstrap-tools.json) | Linux kubectl/SSM 도구 버전·checksum |
+| [scripts/clickstack-bootstrap-requirements.txt](scripts/clickstack-bootstrap-requirements.txt) | Python 패키지 버전·PyPI release hash 잠금 |
+| [scripts/install-clickstack-tools.py](scripts/install-clickstack-tools.py) | runner 전용 디렉터리에 고정 도구 설치 |
+| [scripts/clickstack_bootstrap.py](scripts/clickstack_bootstrap.py) | 실행 context·인증서·create-only Secret bundle 계약 |
+| [scripts/clickstack-management.py](scripts/clickstack-management.py) | 임시 접근·SSM·Argo 단계·HTTP/DB/재시작 확인 |
+| [scripts/tests/test-clickstack-management.py](scripts/tests/test-clickstack-management.py) | 합성 실패 경로·소유권·SHA·TLS·단계 순서 검증 |

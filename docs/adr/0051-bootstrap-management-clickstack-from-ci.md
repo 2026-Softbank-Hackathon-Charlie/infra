@@ -1,7 +1,7 @@
 # 0051. CI에서 관리 ClickStack을 부트스트랩하는 실행 경로
 
 - 날짜: 2026-11-05
-- 상태: 제안
+- 상태: 채택 — C 개발 계획·코드 구현 승인. 실제 권한·Secret 생성 및 배포는 미승인/미실행
 - 관련 ADR: [0050 ClickStack 선택](0050-adopt-clickstack-for-hackathon-observability.md), [0009 CI IAM 관리자](0009-grant-ci-terraform-administrator-access.md), [0047 CI 노드 증설](0047-run-management-scaleout-through-ci.md)
 
 ## 배경과 제약
@@ -26,7 +26,7 @@
 - 임시 EKS 접근 변경, 지정 Secret 11개, operator/RBAC·PVC·Argo 앱과 테스트 계정/데이터가 실제 실행 승인 대상이다.
 - AppProject 목적지를 management로 제한하는 새 값과 검증을 후속 PR에 구현한다. 다른 클러스터 수집은 확장하지 않는다.
 - private CA의 개인키도 지정 Kubernetes Secret에 보관한다. 데모용 leaf7일/CA30일 갱신 후속 작업과 비용·실패 시 잔존 리소스를 보고한다.
-- 독립 계획 리뷰·사용자 개발 승인 후 구현하며 PR merge와 실제 CI 실행 권한은 별도 구분한다. 현재 이 결정은 채택/배포 완료가 아니다.
+- 독립 계획 리뷰·사용자 개발 승인 후 구현하며 PR merge와 실제 CI 실행 권한은 별도 구분한다. 사용자의 개발 계획 승인은 받았으며 코드 구현만 진행했다. 실제 실행 승인을 의미하지 않는다.
 
 ## 관련 자료
 
@@ -34,3 +34,9 @@
 - [AWS EKS policy 권한](https://docs.aws.amazon.com/eks/latest/userguide/access-policy-permissions.html)
 - [AWS access entry 삭제](https://docs.aws.amazon.com/eks/latest/userguide/deleting-access-entries.html)
 - [Argo kubectl sync](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-kubectl/)
+
+## 구현 보완
+
+GitHub run ID에 attempt 태그를 더해 재실행이 이전 attempt의 mapping을 자동 삭제하지 않도록 했다. 합성 event ID도 attempt별로 구분해 재실행 시 기존 이벤트와 중복 집계하지 않는다. 인증서는 Python cryptography50.0.2로 메모리에서 만들고 Python 의존성 release hash를 고정했다. kubectl1.35.8 및 SSM plugin1.2.896.0의 공식 공개 배포본 checksum을 잠갔다.
+
+정상 실행에서는 access entry 삭제 뒤 터널을 닫기 전에 Kubernetes 요청이 거부되는지 확인한다. 강제 종료 시 이 확인을 보장하지 못하며 별도 cleanup 액션은 owner/run을 검증한 API mapping 정리 결과만 보고한다. 브라우저 조작 및 실제 queue backlog 재생은 검증 완료로 주장하지 않는다.

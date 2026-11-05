@@ -1,4 +1,12 @@
 {{- if .Values.observability.enabled }}
+{{- if not (has "management" .Values.observability.destinationTargets) }}
+{{- fail "observability destinationTargets must include management" }}
+{{- end }}
+{{- range $purpose := concat .Values.observability.agentTargets .Values.observability.gatewayTargets }}
+{{- if not (has $purpose $.Values.observability.destinationTargets) }}
+{{- fail "observability agent/gateway must be inside destinationTargets" }}
+{{- end }}
+{{- end }}
 {{- $management := required "observability requires targets.management" .Values.targets.management }}
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -11,7 +19,8 @@ spec:
     - https://clickhouse.github.io/ClickStack-helm-charts
     - https://open-telemetry.github.io/opentelemetry-helm-charts
   destinations:
-    {{- range $purpose, $target := .Values.targets }}
+    {{- range $purpose := .Values.observability.destinationTargets }}
+    {{- $target := required "missing observability destination" (index $.Values.targets $purpose) }}
     - {server: {{ $target.endpoint | quote }}, namespace: observability}
     {{- end }}
   clusterResourceWhitelist:

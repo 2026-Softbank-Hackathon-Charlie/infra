@@ -1,0 +1,166 @@
+name: Charlie ClickStack bootstrap
+on:
+  pull_request:
+    paths: ['scripts/*clickstack*', 'scripts/tests/test-clickstack*', 'scripts/observability-smoke.py', 'scripts/eks-access.py', 'config/clickstack-bootstrap-tools.json', 'helm/gitops/**', '.github/workflows/clickstack-management.yml']
+  push:
+    paths: ['scripts/*clickstack*', 'scripts/tests/test-clickstack*', 'scripts/observability-smoke.py', 'scripts/eks-access.py', 'config/clickstack-bootstrap-tools.json', 'helm/gitops/**', '.github/workflows/clickstack-management.yml']
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        description: 'preflight는 AWS/렌더 조회만, deploy는 실제 설치, cleanup-access는 이전 실행의 임시 접근 정리'
+        options: [preflight, deploy, cleanup-access]
+        default: preflight
+      expected_sha:
+        type: string
+        description: '승인한 main commit SHA (40 hex)'
+        required: true
+      confirm_execution:
+        type: boolean
+        description: 'deploy/cleanup의 명시적 권한·Secret·설치 범위 실행을 승인했음'
+        default: false
+      cleanup_owner_run_id:
+        type: string
+        description: 'cleanup-access 전용: 정리할 이전 bootstrap workflow run ID'
+        default: ''
+permissions:
+  contents: read
+jobs:
+  bootstrap-contracts:
+    runs-on: [self-hosted, hopcharlie, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v3.19.1
+      - name: Install pinned clients without AWS authentication
+        id: test-tools
+        run: python3 scripts/install-clickstack-tools.py
+      - name: Verify client versions without cluster access
+        shell: bash
+        run: |
+          kubectl version --client -o json | python3 -c 'import json,sys; assert json.load(sys.stdin)["clientVersion"]["gitVersion"] == "v1.35.8"'
+          [[ "$(session-manager-plugin --version)" == "1.2.896.0" ]]
+      - name: Isolated synthetic tests (no AWS authentication)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_env="$(mktemp -d "$RUNNER_TEMP/clickstack-tests.XXXXXX")"
+          trap 'rm -rf "$test_env"' EXIT
+          python3 -m venv "$test_env/venv"
+          "$test_env/venv/bin/python" -m pip install --only-binary=:all: --require-hashes -r scripts/clickstack-bootstrap-requirements.txt
+          "$test_env/venv/bin/python" scripts/tests/test-clickstack-management.py
+          "$test_env/venv/bin/python" scripts/tests/test-eks-access.py
+      - name: Remove synthetic-test clients
+        if: always()
+        env:
+          CLICKSTACK_TOOL_DIR: ${{ steps.test-tools.outputs.directory }}
+        shell: python
+        run: |
+          import os, pathlib, shutil
+          value = os.environ.get('CLICKSTACK_TOOL_DIR')
+          if value:
+              path = pathlib.Path(value)
+              root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+              if path.is_dir() and not path.is_symlink() and path.resolve().parent == root and path.name.startswith('clickstack-tools-' + os.environ['GITHUB_RUN_ID'] + '-'):
+                  shutil.rmtree(path)
+  bootstrap:
+    needs: bootstrap-contracts
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, hopcharlie, linux, x64]
+    timeout-minutes: 90
+    concurrency:
+      group: charlie-terraform-apply
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.TERRAFORM_APPLY_ROLE_ARN }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      CLICKSTACK_ACTION: ${{ inputs.action }}
+      CONFIRM_EXECUTION: ${{ inputs.confirm_execution && 'true' || 'false' }}
+      CLEANUP_OWNER_RUN_ID: ${{ inputs.cleanup_owner_run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check approved SHA before dependency code
+        shell: bash
+        run: |
+          [[ "$GITHUB_REPOSITORY" == 2026-Softbank-Hackathon-Charlie/infra ]]
+          [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$EXPECTED_SHA" ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+          [[ "$CLICKSTACK_ACTION" == preflight || "$CONFIRM_EXECUTION" == true ]]
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare private workspace
+        id: work
+        shell: bash
+        run: |
+          umask 077
+          directory="$(mktemp -d "$RUNNER_TEMP/clickstack-$GITHUB_RUN_ID.XXXXXX")"
+          printf 'directory=%s\n' "$directory" >> "$GITHUB_OUTPUT"
+      - name: Locked Python dependencies
+        env:
+          CLICKSTACK_WORK_DIR: ${{ steps.work.outputs.directory }}
+        run: |
+          python3 -m venv "$CLICKSTACK_WORK_DIR/venv"
+          "$CLICKSTACK_WORK_DIR/venv/bin/python" -m pip install --only-binary=:all: --require-hashes -r scripts/clickstack-bootstrap-requirements.txt
+      - name: Reject unapproved context before AWS authentication
+        env:
+          CLICKSTACK_WORK_DIR: ${{ steps.work.outputs.directory }}
+        run: '"$CLICKSTACK_WORK_DIR/venv/bin/python" scripts/clickstack-management.py --check-context'
+      - uses: azure/setup-helm@v4.3.1
+        if: inputs.action != 'cleanup-access'
+        with:
+          version: v3.19.1
+      - name: Install pinned local tools
+        id: tools
+        if: inputs.action != 'cleanup-access'
+        run: python3 scripts/install-clickstack-tools.py
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: charlie-clickstack-${{ github.run_id }}
+          role-duration-seconds: 7200
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+      - name: Run requested bootstrap stage
+        id: invoke
+        env:
+          CLICKSTACK_WORK_DIR: ${{ steps.work.outputs.directory }}
+        run: '"$CLICKSTACK_WORK_DIR/venv/bin/python" scripts/clickstack-management.py'
+      - name: Always finalize owned access
+        if: always() && inputs.action == 'deploy' && (steps.invoke.outcome == 'success' || steps.invoke.outcome == 'failure' || steps.invoke.outcome == 'cancelled')
+        env:
+          CLICKSTACK_WORK_DIR: ${{ steps.work.outputs.directory }}
+        run: '"$CLICKSTACK_WORK_DIR/venv/bin/python" scripts/clickstack-management.py --finalize'
+      - name: Remove only this run's private workspace and tools
+        if: always()
+        env:
+          CLICKSTACK_WORK_DIR: ${{ steps.work.outputs.directory }}
+          CLICKSTACK_TOOL_DIR: ${{ steps.tools.outputs.directory }}
+        shell: python
+        run: |
+          import os, pathlib, shutil
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          for key, prefix in [('CLICKSTACK_WORK_DIR', 'clickstack-' + os.environ['GITHUB_RUN_ID'] + '.'), ('CLICKSTACK_TOOL_DIR', 'clickstack-tools-' + os.environ['GITHUB_RUN_ID'] + '-')]:
+              value = os.environ.get(key)
+              if not value:
+                  continue
+              path = pathlib.Path(value)
+              if path.is_dir() and not path.is_symlink() and path.resolve().parent == root and path.name.startswith(prefix):
+                  shutil.rmtree(path)
