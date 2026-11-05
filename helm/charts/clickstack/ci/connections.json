@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Local ClickHouse",
+    "host": "http://clickstack-clickhouse-clickhouse-headless:8123",
+    "username": "app",
+    "password": "FIXTURE_READ_PASSWORD"
+  },
+  {
+    "name": "Management Prometheus",
+    "host": "http://monitoring-prometheus.observability.svc:9090",
+    "username": "",
+    "isPrometheusEndpoint": true
+  }
+]

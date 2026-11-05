@@ -1,0 +1,17 @@
+{
+  "annotations": {
+    "artifacthub.io/license": "MIT",
+    "artifacthub.io/links": "- name: Chart Source\n  url: https://github.com/hyperdxio/helm-charts\n- name: Upstream Project\n  url: https://github.com/hyperdxio/hyperdx\n"
+  },
+  "apiVersion": "v2",
+  "appVersion": "2.39.1",
+  "description": "A Helm chart for ClickStack - Full-stack observability with ClickHouse, OpenTelemetry, and HyperDX",
+  "home": "https://clickhouse.com/docs/use-cases/observability/clickstack",
+  "name": "charlie-clickstack",
+  "sources": [
+    "https://github.com/hyperdxio/hyperdx",
+    "https://github.com/hyperdxio/helm-charts"
+  ],
+  "type": "application",
+  "version": "0.1.0"
+}

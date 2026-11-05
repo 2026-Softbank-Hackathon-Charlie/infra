@@ -202,7 +202,7 @@ make tf-apply STACK=account/aws
 
 로컬과 CI는 같은 `config/project.json` 및 `scripts/project-config.py`로 입력을 생성합니다. 계정 JSON과 GitHub 변수는 계정별 값만 제공합니다. 공통 설정과 AWS_REGION·TF_STATE_BUCKET·역할 ARN이 어긋나면 중단합니다. backend JSON과 변수 파일은 임시 생성 후 정리합니다. `bash scripts/tf-ci.sh`의 기본 동작은 `plan bootstrap`입니다. 전체 검토는 `bash scripts/tf-ci.sh plan all-runtime`으로 명시해야 하며, 미생성 foundation 출력을 예측하지 않으므로 최초 구축의 전체 일괄 dry-run이 아닙니다. 최초 생성은 위 의존 순서로 진행합니다.
 
-AWS workload mode의 canonical 입력은 `config/project.json`의 `workload_network_policy_enforcing_mode`(`standard` 기본, `standard|strict`만 허용)이며 workload에만 전달됩니다. 최초 bootstrap/rollback은 standard 기본값을 유지합니다. strict는 별도 조율·검토·승인 후 이 값을 명시적으로 바꾸어 선택합니다([ADR 0048](docs/adr/0048-keep-workload-network-policy-standard-by-default.md)). CI는 main의 해당 파일을 사용하므로 reviewed 설정 변경이 main에 반영돼야 하며 `TF_VAR_*`로 우회할 수 없습니다. baseline은 main을 automated sync하므로 [ADR 0046의 merge 전 inventory gate](docs/adr/0046-use-strict-network-policy-on-aws-workload.md)를 완료하기 전에는 이 정책 변경을 merge하지 않습니다.
+AWS workload mode의 canonical 입력은 `config/project.json`의 `workload_network_policy_enforcing_mode`(`standard` 기본, `standard|strict`만 허용)이며 workload에만 전달됩니다. 최초 bootstrap/rollback은 standard 기본값을 유지합니다. strict는 별도 조율·검토·승인 후 이 값을 명시적으로 바꾸어 선택합니다([ADR 0050](docs/adr/0048-keep-workload-network-policy-standard-by-default.md)). CI는 main의 해당 파일을 사용하므로 reviewed 설정 변경이 main에 반영돼야 하며 `TF_VAR_*`로 우회할 수 없습니다. baseline은 main을 automated sync하므로 [ADR 0046의 merge 전 inventory gate](docs/adr/0046-use-strict-network-policy-on-aws-workload.md)를 완료하기 전에는 이 정책 변경을 merge하지 않습니다.
 
 
 ## GitHub Actions 파이프라인
@@ -801,6 +801,55 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
 | [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
 | [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |
+
+## ClickStack 관측 구성
+
+해커톤 구현 기준과 실제 배포 전 검토는 ADR0050과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [clusters/aws-dev-management/values/clickstack-operators.yaml](clusters/aws-dev-management/values/clickstack-operators.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-management/values/clickstack.yaml](clusters/aws-dev-management/values/clickstack.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-management/values/otel-gateway.yaml](clusters/aws-dev-management/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-workload/values/otel-gateway.yaml](clusters/aws-dev-workload/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/adr/0051-bootstrap-management-clickstack-from-ci.md](docs/adr/0051-bootstrap-management-clickstack-from-ci.md) | CI 부트스트랩 권한·실행 경로 제안 |
+| [docs/plans/clickstack-management-deployment.md](docs/plans/clickstack-management-deployment.md) | 실제 관리 ClickStack 설치 계획·승인 범위 |
+| [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/LICENSE](helm/charts/clickstack/LICENSE) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/UPSTREAM.md](helm/charts/clickstack/UPSTREAM.md) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/ci/connections.json](helm/charts/clickstack/ci/connections.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/ci/sources.json](helm/charts/clickstack/ci/sources.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/NOTES.txt](helm/charts/clickstack/templates/NOTES.txt) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/_helpers.tpl](helm/charts/clickstack/templates/_helpers.tpl) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/additional-manifests.yaml](helm/charts/clickstack/templates/additional-manifests.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/clickhouse/cluster.yaml](helm/charts/clickstack/templates/clickhouse/cluster.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/clickhouse/keeper.yaml](helm/charts/clickstack/templates/clickhouse/keeper.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/configmap.yaml](helm/charts/clickstack/templates/hyperdx/configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml](helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/deployment.yaml](helm/charts/clickstack/templates/hyperdx/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/hpa.yaml](helm/charts/clickstack/templates/hyperdx/hpa.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/ingress.yaml](helm/charts/clickstack/templates/hyperdx/ingress.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml](helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/pdb.yaml](helm/charts/clickstack/templates/hyperdx/pdb.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/service.yaml](helm/charts/clickstack/templates/hyperdx/service.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml](helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/mongodb/community.yaml](helm/charts/clickstack/templates/mongodb/community.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/otel-collector/custom-config.yaml](helm/charts/clickstack/templates/otel-collector/custom-config.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/otel-collector/deployment.yaml](helm/charts/clickstack/templates/otel-collector/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/queue.yaml](helm/charts/clickstack/templates/queue.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/validate.yaml](helm/charts/clickstack/templates/validate.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/values.schema.json](helm/charts/clickstack/values.schema.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/values.yaml](helm/charts/clickstack/values.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/gitops/templates/observability.yaml](helm/gitops/templates/observability.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/check-clickstack.py](scripts/check-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/observability-smoke.py](scripts/observability-smoke.py) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/tests/test-clickstack.py](scripts/tests/test-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
 
 ## AWS-GCP DB migration preparation
 

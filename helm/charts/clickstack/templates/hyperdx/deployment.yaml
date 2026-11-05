@@ -1,0 +1,231 @@
+{{- $podAnnotations := mergeOverwrite (dict) (default (dict) .Values.hyperdx.deployment.annotations) (default (dict) .Values.hyperdx.deployment.podAnnotations) -}}
+{{- $dashboards := default (dict) .Values.hyperdx.dashboards -}}
+{{- include "clickstack.hyperdx.validateDashboards" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clickstack.hyperdx.fullname" . }}
+  {{- with .Values.hyperdx.deployment.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "clickstack.labels" . | nindent 4 }}
+    app: {{ include "clickstack.fullname" . }}
+    {{- if .Values.hyperdx.deployment.labels }}
+    {{- with .Values.hyperdx.deployment.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end -}}
+    {{- end }}
+spec:
+  {{- if not .Values.hyperdx.autoscaling.enabled }}
+  replicas: {{ .Values.hyperdx.deployment.replicas | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "clickstack.selectorLabels" . | nindent 6 }}
+      app: {{ include "clickstack.fullname" . }}
+  template:
+    metadata:
+      labels:
+        {{- include "clickstack.selectorLabels" . | nindent 8 }}
+        app: {{ include "clickstack.fullname" . }}
+        {{- with .Values.hyperdx.deployment.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+      {{- if $podAnnotations }}
+        {{- with $podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end -}}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- if .Values.hyperdx.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.hyperdx.deployment.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.hyperdx.deployment.tolerations }}
+      tolerations:
+        {{- toYaml .Values.hyperdx.deployment.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.hyperdx.deployment.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml .Values.hyperdx.deployment.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.hyperdx.deployment.priorityClassName }}
+      priorityClassName: {{ .Values.hyperdx.deployment.priorityClassName | quote }}
+      {{- end }}
+      {{- if or .Values.hyperdx.serviceAccount.create .Values.hyperdx.serviceAccount.name }}
+      serviceAccountName: {{ include "clickstack.hyperdx.serviceAccountName" . }}
+      {{- end }}
+      {{- with .Values.hyperdx.deployment.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.mongodb.enabled .Values.hyperdx.deployment.initContainers }}
+      initContainers:
+        {{- if .Values.mongodb.enabled }}
+        - name: wait-for-mongodb
+          image: {{ .Values.hyperdx.deployment.waitForMongodb.image }}
+          imagePullPolicy: {{ .Values.hyperdx.deployment.waitForMongodb.pullPolicy }}
+          {{- with .Values.hyperdx.deployment.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command: ['sh', '-c', 'until nc -z {{ include "clickstack.mongodb.svc" . }} 27017; do echo waiting for mongodb; sleep 2; done;']
+        {{- end }}
+        {{- with .Values.hyperdx.deployment.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if or .Values.hyperdx.deployment.volumes $dashboards.enabled }}
+      volumes:
+        {{- with .Values.hyperdx.deployment.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $dashboards.enabled }}
+        - name: dashboards
+          emptyDir: {}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.hyperdx.deployment.image.repository }}:{{ .Values.hyperdx.deployment.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.hyperdx.deployment.image.pullPolicy }}
+          {{- with .Values.hyperdx.deployment.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: app-port
+              containerPort: {{ .Values.hyperdx.ports.app }}
+            - name: api-port
+              containerPort: {{ .Values.hyperdx.ports.api }}
+            - name: opamp-port
+              containerPort: {{ .Values.hyperdx.ports.opamp }}
+          {{- if .Values.hyperdx.deployment.resources }}
+          resources:
+            {{- toYaml .Values.hyperdx.deployment.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.hyperdx.deployment.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.hyperdx.deployment.livenessProbe.path | default "/health" }}
+              port: {{ .Values.hyperdx.ports.api }}
+            initialDelaySeconds: {{ .Values.hyperdx.deployment.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.hyperdx.deployment.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.hyperdx.deployment.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.hyperdx.deployment.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.hyperdx.deployment.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.hyperdx.deployment.readinessProbe.path | default "/ready" }}
+              port: {{ .Values.hyperdx.ports.api }}
+            initialDelaySeconds: {{ .Values.hyperdx.deployment.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.hyperdx.deployment.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.hyperdx.deployment.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.hyperdx.deployment.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if or .Values.hyperdx.deployment.volumeMounts $dashboards.enabled }}
+          volumeMounts:
+            {{- with .Values.hyperdx.deployment.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if $dashboards.enabled }}
+            # read-only: the HyperDX provisioner only reads .json files here, never writes
+            # (hyperdxio/hyperdx#1962); the watcher sidecar owns writes to the shared volume.
+            - name: dashboards
+              mountPath: /dashboards
+              readOnly: true
+            {{- end }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: clickstack-config
+
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.runtime is required" .Values.existingSecrets.runtime | quote }}
+                  key: MONGO_URI
+            - name: EXPRESS_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.runtime is required" .Values.existingSecrets.runtime | quote }}
+                  key: EXPRESS_SESSION_SECRET
+            - name: TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.runtime is required" .Values.existingSecrets.runtime | quote }}
+                  key: TOKEN_ENCRYPTION_KEY
+            - name: HYPERDX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.runtime is required" .Values.existingSecrets.runtime | quote }}
+                  key: HYPERDX_API_KEY
+            - name: DEFAULT_CONNECTIONS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.sources is required" .Values.existingSecrets.sources | quote }}
+                  key: connections.json
+            - name: DEFAULT_SOURCES
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.sources | quote }}
+                  key: sources.json
+            {{- if $dashboards.enabled }}
+            - name: DASHBOARD_PROVISIONER_DIR
+              value: "/dashboards"
+            # Provision discovered dashboards for all HyperDX teams: the watcher has no
+            # team context, so per-team provisioning isn't expressible from a ConfigMap.
+            - name: DASHBOARD_PROVISIONER_ALL_TEAMS
+              value: "true"
+            {{- end }}
+            {{- with .Values.hyperdx.deployment.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if $dashboards.enabled }}
+        - name: dashboard-watcher
+          image: {{ $dashboards.sidecarImage | quote }}
+          imagePullPolicy: {{ $dashboards.sidecarPullPolicy | default "IfNotPresent" }}
+          {{- with .Values.hyperdx.deployment.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $dashboards.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: LABEL
+              value: {{ include "clickstack.hyperdx.dashboardLabelKey" . | quote }}
+            - name: LABEL_VALUE
+              value: {{ include "clickstack.hyperdx.dashboardLabelValue" . | quote }}
+            - name: FOLDER
+              value: "/dashboards"
+            - name: RESOURCE
+              value: "configmap"
+            # Continuously watch for ConfigMap changes (also the image default) so
+            # dashboards added after startup are picked up, not just at boot.
+            - name: METHOD
+              value: "WATCH"
+            {{- if eq (include "clickstack.hyperdx.dashboardsClusterWide" .) "true" }}
+            - name: NAMESPACE
+              value: "ALL"
+            {{- else }}
+            - name: NAMESPACE
+              value: {{ include "clickstack.hyperdx.effectiveNamespaces" . | quote }}
+            {{- end }}
+            - name: UNIQUE_FILENAMES
+              value: "true"
+          volumeMounts:
+            - name: dashboards
+              mountPath: /dashboards
+        {{- end }}

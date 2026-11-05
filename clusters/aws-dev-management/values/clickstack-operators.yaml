@@ -1,0 +1,58 @@
+{
+  "mongodb-operator": {
+    "operator": {
+      "watchNamespace": "observability",
+      "watchedResources": [
+        "mongodbcommunity"
+      ],
+      "enableClusterMongoDBRoles": false,
+      "enablePVCResize": false,
+      "version": "1.7.0@sha256:0d20841dfb82edded60493e1b222734240c2142665316fb92469df9dcf9fada5",
+      "webhook": {
+        "registerConfiguration": false
+      },
+      "telemetry": {
+        "enabled": false
+      }
+    },
+    "community": {
+      "mongodb": {
+        "imageType": "ubi9"
+      },
+      "agent": {
+        "version": "108.0.2.8729-1@sha256:b422829aac63f068aed4a6948fd14cbd3c3bfad6d47ab76523f6839bf20b0203"
+      }
+    },
+    "versionUpgradeHook": {
+      "version": "1.0.10@sha256:3744901d095c6cc7392ed079c7a4ec01feeb67dd73145935068f41ad6bc81c28"
+    },
+    "readinessProbe": {
+      "version": "1.0.23@sha256:436fc328f3887f022a4760afd03da1a7091d285baf3d627a17d80bbdaab0ee47"
+    }
+  },
+  "clickhouse-operator": {
+    "controller": {
+      "watchNamespaces": [
+        "observability"
+      ]
+    },
+    "manager": {
+      "image": {
+        "tag": "v0.0.7",
+        "digest": "sha256:d51ca53f09677ebf46ac78bddf8d2dc5e0e412bd2062be3e596bed5879748886"
+      }
+    },
+    "webhook": {
+      "enabled": false
+    },
+    "certManager": {
+      "enabled": false
+    },
+    "crd": {
+      "enabled": true
+    },
+    "rbac": {
+      "namespaced": true
+    }
+  }
+}

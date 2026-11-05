@@ -2,9 +2,10 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 export STACK AWS_ACCOUNT_ID
 PYTHON ?= python3
-.PHONY: config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
+.PHONY: clickstack-check config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
 help:
 	@echo 'make check                          정적 검사·mock test·Helm render'
+	@echo 'make clickstack-check               ClickStack·operator·수집 계약 검사 (클러스터 접근 없음)'
 	@echo 'make tf-init STACK=aws/dev/foundation  실제 backend 초기화'
 	@echo 'make tf-plan / tf-apply STACK=... AWS_ACCOUNT_ID=...'
 	@echo 'make aws-tunnel [CLUSTER=management|workload]  AWS SSM 터널 (foreground)'
@@ -60,3 +61,6 @@ ci-test:
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 inventory-check:
 	@$(PYTHON) scripts/check-inventory.py
+
+clickstack-check:
+	@$(PYTHON) scripts/check-clickstack.py

@@ -106,3 +106,24 @@ spec:
                   number: 8000
 {{- end }}
 {{- end }}
+
+{{- if (.Values.observability | default dict).enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-otel-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/component, operator: In, values: [api, gateway]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector, app.kubernetes.io/instance: observability-gateway}
+      ports:
+        - {protocol: TCP, port: 4318}
+{{- end }}

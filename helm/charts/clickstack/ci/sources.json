@@ -1,0 +1,57 @@
+[
+  {
+    "name": "Logs",
+    "kind": "log",
+    "connection": "Local ClickHouse",
+    "from": {
+      "databaseName": "default",
+      "tableName": "otel_logs"
+    },
+    "timestampValueExpression": "Timestamp",
+    "implicitColumnExpression": "Body",
+    "bodyExpression": "Body",
+    "serviceNameExpression": "ServiceName",
+    "severityTextExpression": "SeverityText",
+    "eventAttributesExpression": "LogAttributes",
+    "resourceAttributesExpression": "ResourceAttributes",
+    "traceIdExpression": "TraceId",
+    "spanIdExpression": "SpanId",
+    "traceSourceId": "Traces"
+  },
+  {
+    "name": "Traces",
+    "kind": "trace",
+    "connection": "Local ClickHouse",
+    "from": {
+      "databaseName": "default",
+      "tableName": "otel_traces"
+    },
+    "timestampValueExpression": "Timestamp",
+    "implicitColumnExpression": "SpanName",
+    "serviceNameExpression": "ServiceName",
+    "eventAttributesExpression": "SpanAttributes",
+    "resourceAttributesExpression": "ResourceAttributes",
+    "traceIdExpression": "TraceId",
+    "spanIdExpression": "SpanId",
+    "parentSpanIdExpression": "ParentSpanId",
+    "durationExpression": "Duration",
+    "durationPrecision": 9,
+    "spanNameExpression": "SpanName",
+    "spanKindExpression": "SpanKind",
+    "statusCodeExpression": "StatusCode",
+    "statusMessageExpression": "StatusMessage",
+    "spanEventsValueExpression": "Events",
+    "spanLinksValueExpression": "Links",
+    "logSourceId": "Logs"
+  },
+  {
+    "name": "Management Prometheus",
+    "kind": "promql",
+    "connection": "Management Prometheus",
+    "from": {
+      "databaseName": "prometheus",
+      "tableName": "metrics"
+    },
+    "timestampValueExpression": "Timestamp"
+  }
+]

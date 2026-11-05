@@ -1,0 +1,10 @@
+{
+  "existingSecrets": {
+    "runtime": "clickstack-runtime",
+    "collector": "clickstack-collector-auth",
+    "clickhouse": "clickstack-clickhouse-auth",
+    "mongodb": "clickstack-mongodb-auth",
+    "sources": "clickstack-ui-config",
+    "otlpTLS": "clickstack-otlp-tls"
+  }
+}

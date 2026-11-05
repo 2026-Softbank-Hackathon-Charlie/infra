@@ -116,6 +116,9 @@ spec:
 ---
 {{- end }}
 {{- range $name := index $.Values.addons $purpose }}
+{{- if and $.Values.observability.enabled (eq $name "opentelemetry-collector") }}
+{{- fail "Do not enable legacy opentelemetry-collector alongside observability agents" }}
+{{- end }}
 {{- $addon := index $addons $name }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application

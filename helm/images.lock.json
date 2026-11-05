@@ -1,6 +1,16 @@
 {
   "schema_version": 1,
   "images": {
+    "docker.hyperdx.io/hyperdx/hyperdx:2.39.1": "sha256:619783ca66d6c81f72a0106f4013d65865ac42e064491b19c0019ffec268f316",
+    "docker.clickhouse.com/clickhouse/clickstack-otel-collector:2.39.1": "sha256:fb71cb46bfc11413e9b96b056118f66293262579cec42927d7f1ca38d3732146",
+    "docker.io/clickhouse/clickhouse-server:26.8.36.3-alpine": "sha256:f5443f9ffa48f0154cdd50cab39fed732201762574a27f04f1f564bbba81832d",
+    "docker.io/clickhouse/clickhouse-keeper:26.8.36.3-alpine": "sha256:82cb1687db7d461b180ac17b5a7a1db91d9fcbf8ba91aa32aea85998cd61383d",
+    "quay.io/mongodb/mongodb-kubernetes:1.7.0": "sha256:0d20841dfb82edded60493e1b222734240c2142665316fb92469df9dcf9fada5",
+    "quay.io/mongodb/mongodb-community-server:8.0.17-ubi9": "sha256:9905955c5e256352c47401d22f38e5de3281843bfa6f51b3a61dcad5c1725157",
+    "quay.io/mongodb/mongodb-agent:108.0.2.8729-1": "sha256:b422829aac63f068aed4a6948fd14cbd3c3bfad6d47ab76523f6839bf20b0203",
+    "quay.io/mongodb/mongodb-kubernetes-operator-version-upgrade-post-start-hook:1.0.10": "sha256:3744901d095c6cc7392ed079c7a4ec01feeb67dd73145935068f41ad6bc81c28",
+    "quay.io/mongodb/mongodb-kubernetes-readinessprobe:1.0.23": "sha256:436fc328f3887f022a4760afd03da1a7091d285baf3d627a17d80bbdaab0ee47",
+    "ghcr.io/clickhouse/clickhouse-operator": "sha256:d51ca53f09677ebf46ac78bddf8d2dc5e0e412bd2062be3e596bed5879748886",
     "ghcr.io/headlamp-k8s/headlamp:v0.46.0": "sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75",
     "quay.io/oauth2-proxy/oauth2-proxy:v7.15.5": "sha256:8498b0d0ef0a7b29686414000a08aee467f02d0299c9ed1e006a8f33fc017916",
     "quay.io/argoproj/argocd:v3.5.3": "sha256:dd3f47d5a5e4da563a7a398506e892481b358a7cec50abdf320c71aa55904bfa",

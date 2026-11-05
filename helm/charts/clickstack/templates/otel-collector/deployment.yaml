@@ -1,0 +1,95 @@
+{{- $otel := index .Values "otel-collector" }}
+{{- if $otel.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clickstack-collector
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickstack-otel-collector
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app.kubernetes.io/name: clickstack-collector}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: clickstack-collector}
+      annotations:
+        checksum/config: {{ .Values.global.otelCollector.customConfig | sha256sum }}
+    spec:
+      serviceAccountName: clickstack-collector
+      automountServiceAccountToken: false
+      securityContext: {fsGroup: 10001}
+      containers:
+        - name: collector
+          image: "{{ $otel.image.repository }}:{{ $otel.image.tag }}"
+          # Run the distribution entrypoint without the generic chart's extra
+          # relay.yaml argument, which would override standalone pipelines.
+          command: [/entrypoint.sh]
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          envFrom:
+            - configMapRef: {name: clickstack-config}
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecrets.collector is required" .Values.existingSecrets.collector | quote }}
+                  key: CLICKHOUSE_PASSWORD
+            - name: OTLP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.collector | quote }}
+                  key: OTLP_AUTH_TOKEN
+            {{- range $i, $key := .Values.additionalIngestTokenKeys }}
+            - name: OTLP_EXTRA_TOKEN_{{ $i }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.collector | quote }}
+                  key: {{ $key | quote }}
+            {{- end }}
+          ports:
+            - {name: otlp-http, containerPort: 4318}
+            - {name: health, containerPort: 13133}
+          resources:
+            {{- toYaml $otel.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /, port: health}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /, port: health}
+          livenessProbe:
+            httpGet: {path: /, port: health}
+            initialDelaySeconds: 20
+          volumeMounts:
+            - {name: config, mountPath: /etc/otelcol-contrib/custom, readOnly: true}
+            - {name: tls, mountPath: /etc/otel/tls, readOnly: true}
+            - {name: queue, mountPath: /var/lib/otelcol}
+      volumes:
+        - name: config
+          configMap: {name: clickstack-otel-custom-config}
+        - name: tls
+          secret: {secretName: {{ required "existingSecrets.otlpTLS is required" .Values.existingSecrets.otlpTLS | quote }}}
+        - name: queue
+          persistentVolumeClaim: {claimName: clickstack-collector-queue}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickstack-otel-collector
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: clickstack-collector}
+  ports:
+    - {name: otlp-http, port: 4318, targetPort: otlp-http}
+{{- end }}

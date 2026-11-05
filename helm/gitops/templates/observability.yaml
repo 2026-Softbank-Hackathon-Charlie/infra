@@ -1,0 +1,121 @@
+{{- if .Values.observability.enabled }}
+{{- $management := required "observability requires targets.management" .Values.targets.management }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: charlie-observability
+  namespace: argocd
+spec:
+  sourceRepos:
+    - {{ .Values.repoURL | quote }}
+    - https://clickhouse.github.io/ClickStack-helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+  destinations:
+    {{- range $purpose, $target := .Values.targets }}
+    - {server: {{ $target.endpoint | quote }}, namespace: observability}
+    {{- end }}
+  clusterResourceWhitelist:
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: PersistentVolumeClaim}
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: DaemonSet}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: clickhouse.com, kind: ClickHouseCluster}
+    - {group: clickhouse.com, kind: KeeperCluster}
+    - {group: mongodbcommunity.mongodb.com, kind: MongoDBCommunity}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-management-clickstack-operators
+  namespace: argocd
+spec:
+  project: charlie-observability
+  sources:
+    - repoURL: https://clickhouse.github.io/ClickStack-helm-charts
+      chart: clickstack-operators
+      targetRevision: "1.1.0"
+      helm:
+        releaseName: clickstack-operators
+        valueFiles: [$values/clusters/aws-dev-management/values/clickstack-operators.yaml]
+    - repoURL: {{ .Values.repoURL | quote }}
+      targetRevision: {{ .Values.revision | quote }}
+      ref: values
+  destination: {server: {{ $management.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-management-clickstack
+  namespace: argocd
+spec:
+  project: charlie-observability
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.revision | quote }}
+    path: helm/charts/clickstack
+    helm:
+      releaseName: clickstack
+      valueFiles: [../../../clusters/aws-dev-management/values/clickstack.yaml]
+  destination: {server: {{ $management.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- range $purpose := .Values.observability.agentTargets }}
+{{- $target := required (printf "missing agent target %s" $purpose) (index $.Values.targets $purpose) }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-{{ $purpose }}-observability-agent
+  namespace: argocd
+spec:
+  project: charlie-observability
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: "0.175.0"
+      helm:
+        releaseName: observability-agent
+        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/opentelemetry-collector.yaml]
+    - repoURL: {{ $.Values.repoURL | quote }}
+      targetRevision: {{ $.Values.revision | quote }}
+      ref: values
+  destination: {server: {{ $target.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- end }}
+{{- range $purpose := .Values.observability.gatewayTargets }}
+{{- $target := required (printf "missing gateway target %s" $purpose) (index $.Values.targets $purpose) }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-{{ $purpose }}-observability-gateway
+  namespace: argocd
+spec:
+  project: charlie-observability
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: "0.175.0"
+      helm:
+        releaseName: observability-gateway
+        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/otel-gateway.yaml]
+    - repoURL: {{ $.Values.repoURL | quote }}
+      targetRevision: {{ $.Values.revision | quote }}
+      ref: values
+  destination: {server: {{ $target.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- end }}
+{{- end }}
