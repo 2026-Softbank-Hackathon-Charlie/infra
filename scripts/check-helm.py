@@ -65,6 +65,42 @@ def check_project(docs, project, namespace):
             assert doc["metadata"].get("namespace", namespace) in allowed_namespaces, doc["metadata"]
 
 
+PG_ENV = {"DATABASE_URL": "uri", "PGHOST": "host", "PGPORT": "port", "PGDATABASE": "dbname", "PGUSER": "username", "PGPASSWORD": "password", "JDBC_DATABASE_URL": "jdbc-uri"}
+
+
+def check_service_contract(gitops_file, docs, profile):
+    """The per-service contract (platform ADR 0024): a service without a port
+    gets no Service, ports, probes or PORT; memory is its request and limit,
+    cpu its request; the database variables come from CNPG's app secret,
+    before the service's own env; the Postgres pod gets profile.postgres.resources."""
+    values = gitops_file["values"]
+    defaults = {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"memory": "256Mi"}}
+    pg = next((r["name"] for r in values.get("resources") or [] if r["type"] == "postgres"), None)
+    services = {d["metadata"]["name"] for d in docs if d["kind"] == "Service"}
+    for svc in values["services"]:
+        name = f"{values['app']}-{svc['name']}"
+        deployment = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == name)
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        env = [e["name"] for e in container.get("env") or []]
+        port = svc.get("port")
+        assert (name in services) == bool(port), name
+        assert deployment["spec"].get("minReadySeconds") == (None if port else 10), deployment["spec"]
+        assert ("ports" in container) == bool(port) and ("PORT" in env) == bool(port), container
+        assert ("readinessProbe" in container) == bool(port) and ("livenessProbe" in container) == bool(port and svc.get("healthCheck")), container
+        resources = copy.deepcopy(defaults)
+        if svc.get("memory"):
+            resources["requests"]["memory"] = resources["limits"]["memory"] = svc["memory"]
+        if svc.get("cpu"):
+            resources["requests"]["cpu"] = svc["cpu"]
+        assert container["resources"] == resources, (name, container["resources"])
+        own = sorted((svc.get("env") or {}).keys())
+        assert env[len(env) - len(own):] == own, env
+        refs = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container.get("env") or [] if e["name"] in PG_ENV}
+        assert refs == ({k: {"name": f"{values['app']}-{pg}-app", "key": v} for k, v in PG_ENV.items()} if pg else {}), refs
+    for cluster in (d for d in docs if d["kind"] == "Cluster"):
+        assert cluster["spec"].get("resources") == profile.get("postgres", {}).get("resources"), cluster["spec"].get("resources")
+
+
 def check_gke_image_settings(platform_values, work):
     chart = ROOT / "helm/charts/hopcharlie-platform"
     values = json.loads(platform_values.read_text())
@@ -346,6 +382,8 @@ def main():
                 docs = render(ROOT / "helm/charts/hopcharlie-app", ci, gitops_file["namespace"], gitops_file["namespace"], extra)
                 for doc in docs:
                     assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+                profile = json.loads(eks_profile.read_text())["profile"] if extra else gitops_file.get("profile", {})
+                check_service_contract(gitops_file, docs, profile)
                 # Sealed values (platform ADR 0016, 0019): strict-scope SealedSecrets
                 # before the Deployments, envFrom and the checksum only with app secrets,
                 # and one bucket per instance.
@@ -385,6 +423,7 @@ def main():
             plain.write_text(json.dumps(gitops_file))
             namespace = gitops_file["namespace"]
             docs = render(ROOT / "helm/charts/hopcharlie-app", plain, namespace, namespace, ("-f", gke_profile))
+            check_service_contract(gitops_file, docs, gke["profile"])
             has_s3 = any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or [])
             for pod in (d["spec"]["template"] for d in docs if d["kind"] == "Deployment"):
                 for container in pod["spec"]["containers"]:
@@ -409,6 +448,11 @@ def main():
             ("unknown sealed key", lambda v: v["values"]["sealedSecrets"].update(db={})),
             ("profile reading another Secret", lambda v: v["profile"]["s3"].update(credentialsSecret="other")),
             ("env name that is also a secret", lambda v: v["values"]["services"][0]["env"].update(HOST_CODE="plain")),
+            ("public service without a port", lambda v: v["values"]["services"][1].update(public=True)),
+            ("health check without a port", lambda v: v["values"]["services"][1].update(healthCheck="/healthz")),
+            ("database variable in env", lambda v: v["values"]["services"][1]["env"].update(PGHOST="db")),
+            ("database variable as a secret", lambda v: v["values"]["sealedSecrets"]["app"].update(PGPASSWORD="AgA=")),
+            ("memory that is not a quantity", lambda v: v["values"]["services"][1].update(memory="512MB")),
         ):
             values = copy.deepcopy(stateful)
             change(values)

@@ -15,7 +15,11 @@
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "gp3",
-          "storageSize": "1Gi"
+          "storageSize": "1Gi",
+          "resources": {
+            "requests": {"memory": "256Mi"},
+            "limits": {"memory": "512Mi"}
+          }
         },
         "s3": {
           "endpoint": "https://s3.ap-northeast-2.amazonaws.com",
@@ -62,7 +66,11 @@
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "charlie-gcp-balanced",
-          "storageSize": "1Gi"
+          "storageSize": "1Gi",
+          "resources": {
+            "requests": {"memory": "256Mi"},
+            "limits": {"memory": "512Mi"}
+          }
         },
         "s3": {
           "endpoint": "https://storage.googleapis.com",
