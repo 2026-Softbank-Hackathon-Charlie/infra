@@ -26,7 +26,8 @@
     "codebuildProject": "",
     "imageRegistry": "",
     "gkeImageRegistry": "",
-    "gkeImageCredentialConfig": {}
+    "gkeImageCredentialConfig": {},
+    "backendTemplates": ""
   },
   "gcp": {
     "credentialConfig": {},
