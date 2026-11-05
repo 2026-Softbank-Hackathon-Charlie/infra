@@ -1,0 +1,56 @@
+{{- /*
+The platform API may create Jobs in its namespace to start the AI runner
+(hopcharlie-platform chart hopai.yaml, platform POST /v1/ai-runs). RBAC cannot
+limit what a created Job runs, so without this policy the API could start any
+pod in the namespace: with another component's labels (the console and
+gateway Services select on them and would send it their traffic), another
+ServiceAccount, the namespace's Secrets or any image. This keeps its Jobs to
+the runner: label hopai, the platform ServiceAccount, the runner's images, and
+no Secret, hostPath, projected or claimed volumes or secret env.
+*/ -}}
+{{- if and .Values.platform.serviceAccount .Values.platform.aiRunner.enabled }}
+{{- $sa := printf "system:serviceaccount:%s:%s" .Values.platform.namespace .Values.platform.serviceAccount }}
+{{- $images := required "platform.aiRunner.imagePrefixes is required with platform.aiRunner.enabled" .Values.platform.aiRunner.imagePrefixes }}
+{{- $allowed := toJson $images }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-ai-runner
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [batch]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [jobs]
+  matchConditions:
+    - name: platform-service-account
+      expression: {{ printf "request.userInfo.username == '%s'" $sa | quote }}
+  variables:
+    - name: pod
+      expression: "object.spec.template.spec"
+    - name: containers
+      expression: "object.spec.template.spec.containers + (has(object.spec.template.spec.initContainers) ? object.spec.template.spec.initContainers : [])"
+  validations:
+    - expression: {{ printf "object.metadata.namespace == '%s'" .Values.platform.namespace | quote }}
+      message: the platform creates AI runner Jobs only in its own namespace
+    - expression: "has(object.spec.template.metadata.labels) && object.spec.template.metadata.labels['app.kubernetes.io/component'] == 'hopai'"
+      message: an AI runner pod must carry app.kubernetes.io/component=hopai and no other component
+    - expression: {{ printf "has(variables.pod.serviceAccountName) && variables.pod.serviceAccountName == '%s'" .Values.platform.serviceAccount | quote }}
+      message: an AI runner pod runs as the platform ServiceAccount
+    - expression: {{ printf "variables.containers.all(c, %s.exists(p, c.image.startsWith(p)))" $allowed | quote }}
+      message: an AI runner pod runs only the runner's images
+    - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.secret) && !has(v.hostPath) && !has(v.projected) && !has(v.persistentVolumeClaim))"
+      message: an AI runner pod mounts no Secret, hostPath, projected or claimed volume
+    - expression: "variables.containers.all(c, !has(c.envFrom) && (!has(c.env) || c.env.all(e, !has(e.valueFrom))))"
+      message: an AI runner pod reads no Secret or ConfigMap through env
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-ai-runner
+spec:
+  policyName: hopcharlie-platform-ai-runner
+  validationActions: [Deny]
+{{- end }}

@@ -1,0 +1,138 @@
+{{- /*
+The AI runner (ai-sandbox hopai: AI plan, sandbox rehearsal, diagnosis) as a
+Job the platform API starts from the console (POST /v1/ai-runs, platform
+internal/airun). The API reads the Job template below from
+PLATFORM_AIRUN_JOB_TEMPLATE and only fills in APP, FROM and TO.
+
+The Job reads its settings from SSM through the platform ServiceAccount (Pod
+Identity), like the API pod: the Claude key, the sandbox-admin kubeconfigs of
+the workload clusters (/hopcharlie/hopai/*, put there by an operator) and the
+agent entry of /hopcharlie/platform-tokens. It talks to the API inside the
+namespace, to the clusters' API servers and to Claude over 443.
+*/ -}}
+{{- if .Values.hopai.enabled }}
+{{- $image := required "hopai.image is required with hopai.enabled" .Values.hopai.image }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopcharlie-hopai-fetch
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+data:
+  fetch.sh: |
+    # Copies the runner's settings from SSM Parameter Store into /config (an
+    # in-memory volume). Values are never printed.
+    set -euo pipefail
+    umask 077
+    get() { aws ssm get-parameter --with-decryption --name "$PREFIX/$1" --query Parameter.Value --output text | tr -d '\r'; }
+    get hopai/kube-eks > /config/eks.yaml
+    get hopai/kube-gke > /config/gke.yaml
+    key="$(get hopai/anthropic-api-key)"
+    # the first agent entry of name:role:token,... (the token may contain ':')
+    tok="$(get platform-tokens | tr ',' '\n' | awk -F: '$2=="agent"{sub(/^[^:]*:[^:]*:/, ""); print; exit}')"
+    [ -n "$tok" ] || { echo "no agent token in platform-tokens" >&2; exit 1; }
+    printf 'ANTHROPIC_API_KEY=%s\nPLATFORM_TOKEN=%s\n' "$key" "$tok" > /config/hopai.env
+    echo "fetched hopai settings"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopcharlie-hopai-job
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+data:
+  job.yaml: |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      labels:
+        {{- include "hopcharlie.labels" "hopai" | nindent 8 }}
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: {{ .Values.hopai.keepFinishedSeconds }}
+      activeDeadlineSeconds: {{ .Values.hopai.deadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "hopcharlie.labels" "hopai" | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: hopcharlie-platform
+          automountServiceAccountToken: false
+          securityContext:
+            {{- include "hopcharlie.podSecurity" 10001 | nindent 12 }}
+          initContainers:
+            - name: fetch
+              image: {{ .Values.images.awsCli | quote }}
+              command: ["/bin/bash", "/scripts/fetch.sh"]
+              env:
+                - {name: AWS_REGION, value: {{ .Values.awsRegion | quote }}}
+                - {name: PREFIX, value: {{ .Values.parameterPrefix | quote }}}
+                - {name: HOME, value: /tmp}
+              securityContext:
+                {{- include "hopcharlie.containerSecurity" . | nindent 16 }}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 200m, memory: 256Mi}
+              volumeMounts:
+                - {name: config, mountPath: /config}
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+          containers:
+            - name: hopai
+              image: {{ $image | quote }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  while IFS= read -r line || [ -n "$line" ]; do case "$line" in *=*) export "$line";; esac; done < /config/hopai.env
+                  exec hopai run -app "$APP" -from "$FROM" -to "$TO" \
+                    -env gke=/config/gke.yaml -env eks=/config/eks.yaml \
+                    -sandbox-kubeconfig "/config/$TO.yaml" \
+                    -max-runs {{ .Values.hopai.maxRuns }} -out /work/report.json
+              env:
+                - {name: PLATFORM_URL, value: "http://hopcharlie-api:8080"}
+                - {name: HOME, value: /work}
+              securityContext:
+                {{- include "hopcharlie.containerSecurity" . | nindent 16 }}
+              resources:
+                requests: {cpu: 200m, memory: 256Mi}
+                limits: {cpu: "1", memory: 1Gi}
+              volumeMounts:
+                - {name: config, mountPath: /config, readOnly: true}
+                - {name: work, mountPath: /work}
+          volumes:
+            - name: config
+              emptyDir: {medium: Memory, sizeLimit: 8Mi}
+            - name: work
+              emptyDir: {sizeLimit: 256Mi}
+            - name: scripts
+              configMap: {name: hopcharlie-hopai-fetch}
+---
+# The API creates the runner's Jobs and reads their status, in this
+# namespace only. It cannot create Pods directly or change other Jobs' specs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hopcharlie-ai-runner
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hopcharlie-ai-runner
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hopcharlie-ai-runner
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -53,6 +53,13 @@ deniedNamespaces:
 platform:
   namespace: charlie-platform
   serviceAccount: hopcharlie-platform
+  # The platform may create Jobs in its namespace to start the AI runner
+  # (hopcharlie-platform hopai.enabled). A ValidatingAdmissionPolicy keeps
+  # those Jobs to the runner: its label, ServiceAccount and images.
+  aiRunner:
+    enabled: false
+    # Image name prefixes the runner's containers may use (hopai and awsCli).
+    imagePrefixes: []
 
 # Environment name (the <env> of apps/<instance>/<env>.yaml) to its cluster
 # and the hopcharlie-app profile there. Files of an environment that is not

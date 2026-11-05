@@ -434,7 +434,19 @@ def main():
         extra = [arg for name, value in params.items() for arg in ("--set-string", f"{name}={value}")]
         apps_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-apps.yaml"
         docs = render(ROOT / "helm/charts/hopcharlie-apps", apps_values, "hopcharlie-apps", "argocd", extra)
-        assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]
+        assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding",
+                                                   "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicy",
+                                                   "ValidatingAdmissionPolicyBinding", "ValidatingAdmissionPolicyBinding"]
+        # The platform's AI runner Jobs (hopcharlie-platform hopai.yaml) are kept to the
+        # runner by a policy on the platform ServiceAccount's Job requests.
+        runner = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and d["metadata"]["name"] == "hopcharlie-platform-ai-runner")
+        assert runner["spec"]["matchConstraints"]["resourceRules"] == [{"apiGroups": ["batch"], "apiVersions": ["*"], "operations": ["CREATE", "UPDATE"], "resources": ["jobs"]}]
+        assert "system:serviceaccount:charlie-platform:hopcharlie-platform" in runner["spec"]["matchConditions"][0]["expression"]
+        rules = " ".join(v["expression"] for v in runner["spec"]["validations"])
+        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-platform'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom"):
+            assert want in rules, want
+        binding = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["policyName"] == "hopcharlie-platform-ai-runner")
+        assert binding["spec"]["validationActions"] == ["Deny"]
         # Deleting the parent Application must leave the ApplicationSet (ADR 0036): its
         # Applications carry the resources finalizer, which deletes the apps' namespaces.
         appset = next(d for d in docs if d["kind"] == "ApplicationSet")

@@ -52,5 +52,9 @@
       "token_url": "https://sts.googleapis.com/v1/token",
       "type": "external_account"
     }
+  },
+  "hopai": {
+    "enabled": true,
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:be14c65@sha256:8b314952f7c779cb3e2aef132a904a2f916d6971552045b51fb718671deed1c3"
   }
 }
