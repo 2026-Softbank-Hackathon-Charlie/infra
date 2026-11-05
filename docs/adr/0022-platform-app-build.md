@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-03
 - 상태: 제안
-- 관련 ADR: [0015](0015-centralize-platform-terraform-ownership.md), [0016](0016-run-hopcharlie-platform-on-management-cluster.md)
+- 관련 ADR: [0015](0015-centralize-platform-terraform-ownership.md), [0016](0016-run-hopcharlie-platform-on-management-cluster.md), [0055](0055-cache-app-build-layers-and-allow-four-builds.md)(동시 빌드 수와 캐시를 바꾼다)
 
 ## 배경과 제약
 

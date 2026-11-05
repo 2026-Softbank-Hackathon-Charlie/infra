@@ -8,8 +8,12 @@ mock_provider "random" {}
 run "app_build_contract" {
   command = plan
   assert {
-    condition     = aws_codebuild_project.app_build.name == "hopcharlie-app-build" && aws_codebuild_project.app_build.build_timeout == 15 && aws_codebuild_project.app_build.queued_timeout == 15 && aws_codebuild_project.app_build.concurrent_build_limit == 1
+    condition     = aws_codebuild_project.app_build.name == "hopcharlie-app-build" && aws_codebuild_project.app_build.build_timeout == 15 && aws_codebuild_project.app_build.queued_timeout == 15 && aws_codebuild_project.app_build.concurrent_build_limit == 4
     error_message = "Build limits and name must match the contract."
+  }
+  assert {
+    condition     = aws_codebuild_project.app_build.cache[0].type == "LOCAL" && toset(aws_codebuild_project.app_build.cache[0].modes) == toset(["LOCAL_DOCKER_LAYER_CACHE"])
+    error_message = "Builds must keep only the local Docker layer cache."
   }
   assert {
     condition     = aws_codebuild_project.app_build.source[0].type == "NO_SOURCE" && strcontains(aws_codebuild_project.app_build.source[0].buildspec, "exit 1") && aws_codebuild_project.app_build.artifacts[0].type == "NO_ARTIFACTS"
