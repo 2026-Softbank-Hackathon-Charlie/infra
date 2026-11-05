@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-05
 - 상태: 제안
-- 관련 ADR: [ADR 0036](0036-app-routing-and-argo-apps.md), [ADR 0037](0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md), [ADR 0039](0039-add-gke-app-environment.md), [ADR 0046](0046-use-strict-network-policy-on-aws-workload.md), platform ADR 0011(GitHub 앱 배포), ADR 0015(브랜치 인스턴스)
+- 관련 ADR: [ADR 0023](0023-deploy-github-apps-with-applicationset.md)(일부 대체), [ADR 0036](0036-app-routing-and-argo-apps.md)(일부 대체), [ADR 0037](0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md), [ADR 0039](0039-add-gke-app-environment.md), [ADR 0046](0046-use-strict-network-policy-on-aws-workload.md), platform ADR 0011(GitHub 앱 배포), ADR 0015(브랜치 인스턴스)
 
 ## 배경과 제약
 
@@ -32,6 +32,12 @@
 - 클러스터마다 Traefik과 내부 NLB 하나, 앱은 Ingress, 내부 DNS 와일드카드(선택): NLB는 한 번만 기다리고, 새 앱은 Traefik이 Ingress를 읽는 몇 초 안에 열린다. 팀 기술 제안서의 클러스터 안 진입점(Traefik)과 같다.
 
 ## 결정과 이유
+
+이 결정은 다음 부분을 대체한다. 나머지(ApplicationSet, 앱 차트, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거의 다른 항목)는 그대로다.
+
+- [ADR 0023](0023-deploy-github-apps-with-applicationset.md): 환경 `eks` 프로필의 공개 서비스가 앱마다 LBC가 만드는 내부 NLB(ip 대상) 80 포트라는 것, 게이트웨이가 앱 Service의 내부 NLB로 HTTP를 보내고 배포 실행기가 그 NLB 주소를 읽어 게이트웨이에 등록한다는 것. 이제 공개 Service는 ClusterIP 80이고, 앱마다 Ingress를 받으며, 배포 실행기는 `http://<instance>.eks.hopcharlie.internal`을 등록한다.
+- [ADR 0036](0036-app-routing-and-argo-apps.md): 게이트웨이가 앱의 내부 NLB로 보내는 경로와 그 근거(결정 6의 앱 NLB, NLB에서 pod로 가는 보안 그룹 규칙), 플랫폼 kubeconfig로 Service의 NLB 주소를 읽는 용도. 이제 게이트웨이는 공용 NLB `hopcharlie-apps-eks`와 Traefik을 거친다. kubeconfig와 읽기 권한은 gke와 보안 보기 때문에 그대로 둔다.
+
 
 1. 진입점: Traefik 차트 `42.1.2`(Traefik `v3.7.16`, 이미지 digest 고정)를 워크로드 EKS의 `traefik` 네임스페이스에 Argo CD 애드온 `charlie-workload-traefik`으로 둔다. `charlie-root`의 렌더와 같은 객체를 [scripts/register-traefik.py](../../scripts/register-traefik.py)가 만들고(AppProject는 live와 비교해 Traefik 저장소와 `traefik` 대상 추가 말고 다른 차이가 있으면 멈춘 뒤 apply, Application은 resources finalizer를 달고 자동 sync 없이 create), sync 한 번을 요청한다. root는 sync하지 않는다.
    - 쓰지 않는 것은 끈다. CRD provider와 차트의 CRD 25개(`skipCrds`), 대시보드, TLS 진입점(`websecure`).
