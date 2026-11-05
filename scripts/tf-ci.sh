@@ -8,12 +8,12 @@ case "$action" in
   plan|apply) ;;
   *) fail '지원하는 CI 동작: plan, apply' ;;
 esac
-[[ "$#" -le 2 ]] || fail '사용법: tf-ci.sh [plan|apply] [bootstrap|foundation|management|workload|all-runtime]'
+[[ "$#" -le 2 ]] || fail '사용법: tf-ci.sh [plan|apply] [bootstrap|foundation|management|management-scaleout|workload|all-runtime]'
 target="${2:-bootstrap}"
 case "$target" in
   bootstrap) stacks=(bootstrap/aws) ;;
   foundation) stacks=(aws/dev/foundation) ;;
-  management) stacks=(aws/dev/management) ;;
+  management|management-scaleout) stacks=(aws/dev/management) ;;
   workload) stacks=(aws/dev/workload) ;;
   all-runtime) stacks=(bootstrap/aws aws/dev/foundation aws/dev/management aws/dev/workload) ;;
   *) fail '지원하지 않는 stack 선택입니다. account는 관리자 로컬 전용입니다.' ;;
@@ -23,6 +23,11 @@ require_command terraform
 require_command aws
 require_command python3
 enabled_stacks=()
+# Scope this exceptional plan policy to the explicit one-time operation.
+if [[ "$target" == management-scaleout ]]; then
+  [[ "${AWS_ACCOUNT_ID:-}" == 525091405886 && "${AWS_REGION:-}" == ap-northeast-2 ]] || fail 'Scaleout account/region mismatch.'
+fi
+umask 077
 
 # Check every enabled root before applying any resources.
 for stack in "${stacks[@]}"; do
@@ -65,6 +70,31 @@ export AWS_REGION="$expected_region"
 for stack in "${enabled_stacks[@]}"; do
   dir="$(stack_directory "$stack")"
   printf '%s: %s\n' "$action" "$stack"
+  if [[ "$target" == management-scaleout ]]; then
+    # Keep Terraform output out of Actions logs; never upload these temporary files.
+    for stage in init plan apply; do : > "$work/$stage.log"; done
+    terraform -chdir="$dir" init -input=false -lockfile=readonly \
+      -backend-config="$work/$stack/backend.json" > "$work/init.log" 2>&1 \
+      || fail 'Scaleout init failed; raw output withheld.'
+    plan_file="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/charlie-tfplan.XXXXXX")"
+    terraform -chdir="$dir" plan -input=false -lock-timeout=5m -var-file="$work/$stack/inputs.tfvars.json" -out="$plan_file" \
+      > "$work/plan.log" 2>&1 || fail 'Scaleout plan failed; raw output withheld.'
+    guard_result=0
+    terraform -chdir="$dir" show -json "$plan_file" 2> "$work/show.log" \
+      | python3 "$REPO_ROOT/scripts/check-management-scaleout-plan.py" || guard_result=$?
+    if [[ "$guard_result" == 3 ]]; then
+      : # Verified already applied; never apply a refresh-only plan.
+    elif [[ "$guard_result" != 0 ]]; then
+      fail 'Scaleout guard failed; no apply.'
+    elif [[ "$action" == apply ]]; then
+      terraform -chdir="$dir" apply -input=false -lock-timeout=5m "$plan_file" \
+        > "$work/apply.log" 2>&1 || fail 'Scaleout apply failed; inspect approved status APIs; raw output withheld.'
+      printf 'Management scaleout apply completed.\n'
+    fi
+    rm -f "$plan_file"
+    plan_file=''
+    continue
+  fi
   terraform -chdir="$dir" init -input=false -lockfile=readonly \
     -backend-config="$work/$stack/backend.json"
 
