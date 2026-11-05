@@ -65,6 +65,20 @@ spec:
             maxDuration: 3m
         # No CreateNamespace: the chart renders the namespace, so deleting
         # the Application deletes it too.
+        # Syncs leave the ignored fields below as they are, not only the diff.
+        syncOptions:
+          - RespectIgnoreDifferences=true
+      # A migration (ADR 0050) sets these on the app's CNPG Cluster: the operator
+      # adds the peer and its certificate name, and the engine demotes and promotes
+      # through spec.replica. selfHeal must not put them back mid-migration, or both
+      # databases can end up writable.
+      ignoreDifferences:
+        - group: postgresql.cnpg.io
+          kind: Cluster
+          jqPathExpressions:
+            - .spec.replica
+            - .spec.externalClusters
+            - .spec.certificates
   templatePatch: |
     spec:
     {{- range $env, $e := $envs }}
