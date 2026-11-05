@@ -309,6 +309,26 @@ def main():
                 if adc_maps:
                     assert json.loads(adc_maps[0]["data"]["adc.json"]) == configured_gcp["credentialConfig"]
         check_gke_image_settings(platform_values, work)
+        # The eks backend template (ADR 0058): one env=template list, checked here
+        # because the API refuses a bad one at startup.
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform")
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
+        assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        two = work / "platform-two-templates.json"
+        two.write_text(json.dumps({"deploy": {"backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,gke=https://{app}-{service}.{instance}.gke.test:{port}/?env={env}"}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(two)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        assert any(e["name"] == "PLATFORM_APP_BACKEND_TEMPLATES" and e["value"].startswith("eks=") and ",gke=" in e["value"] for e in api["spec"]["template"]["spec"]["containers"][0]["env"])
+        for bad in ("http://{instance}.eks.hopcharlie.internal", "eks=http://{instance}.eks.test,", "eks={instance}.eks.test",
+                    "eks=http://{instnace}.eks.test", "eks=http://{instance}.eks.test,gke=http://a b.test", "EKS=http://a.test"):
+            # A values file, as --set splits on commas.
+            bad_values = work / "platform-bad-templates.json"
+            bad_values.write_text(json.dumps({"deploy": {"backendTemplates": bad}}))
+            result = subprocess.run([HELM, "template", "hopcharlie-platform", str(ROOT / "helm/charts/hopcharlie-platform"), "--namespace", "charlie-platform",
+                                     "-f", str(platform_values), "-f", str(bad_values)], capture_output=True, text=True, encoding="utf-8")
+            assert result.returncode != 0 and "deploy.backendTemplates" in result.stderr, f"accepted {bad!r}"
         # Google ADC for the gcs storage driver (ADR 0041): only the API pod gets
         # the projected token; the gateway and Postgres share the service account.
         gcp_values = work / "platform-gcp.json"

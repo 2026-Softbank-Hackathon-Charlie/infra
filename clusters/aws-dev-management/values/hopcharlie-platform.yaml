@@ -37,6 +37,7 @@
   },
   "deploy": {
     "builder": "codebuild",
+    "backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal",
     "codebuildProject": "hopcharlie-app-build",
     "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com",
     "gkeImageRegistry": "asia-northeast3-docker.pkg.dev/project-b47cdba3-db5b-42a2-9a6/hopcharlie-apps",

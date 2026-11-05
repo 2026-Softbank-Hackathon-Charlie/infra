@@ -137,6 +137,15 @@ spec:
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- with .Values.deploy.backendTemplates }}
+            {{- /* <env>=<template> entries (ADR 0058, platform PR #73). The API refuses a bad value at
+            startup and would not come up, so a value that is not that shape fails rendering here. */}}
+            {{- if not (regexMatch `^[a-z0-9-]+=https?://([a-z0-9.:/_?=&%-]|\{(app|instance|service|port|env)\})+(,[a-z0-9-]+=https?://([a-z0-9.:/_?=&%-]|\{(app|instance|service|port|env)\})+)*$` .) }}
+            {{- fail "deploy.backendTemplates must be <env>=<http:// or https:// template> entries separated by commas, with only {app}, {instance}, {service}, {port} and {env} placeholders" }}
+            {{- end }}
+            # Gateway backend templates per environment; the others read their Service's load balancer.
+            - {name: PLATFORM_APP_BACKEND_TEMPLATES, value: {{ . | quote }}}
+            {{- end }}
           ports:
             - {name: http, containerPort: 8080}
           readinessProbe:
