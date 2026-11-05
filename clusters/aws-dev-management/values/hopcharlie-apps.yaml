@@ -19,7 +19,8 @@
           "resources": {
             "requests": {"memory": "256Mi"},
             "limits": {"memory": "512Mi"}
-          }
+          },
+          "backup": {"enabled": true}
         },
         "s3": {
           "endpoint": "https://s3.ap-northeast-2.amazonaws.com",

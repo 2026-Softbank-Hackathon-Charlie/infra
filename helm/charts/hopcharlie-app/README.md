@@ -18,6 +18,8 @@ HopCharlie 플랫폼이 GitHub에서 배포하는 앱 하나를 그리는 차트
 | (없음) | | `s3` 리소스는 `S3_*` 변수를 넣는다. 버킷은 `<bucketPrefix><namespace>`이고 플랫폼이 만든다(platform ADR 0016). 키는 Secret `profile.s3.credentialsSecret`에서 읽는다 |
 | SealedSecret | `app-s3` | `values.sealedSecrets.s3`. 버킷 키(`accessKey`, `secretKey`). 이때 `profile.s3`는 Secret `app-s3`와 기본 키 이름을 읽어야 한다 |
 | SealedSecret | `app-secrets` | `values.sealedSecrets.app`. 앱 시크릿(platform ADR 0019) |
+| SealedSecret | `app-pgbackup` | `values.sealedSecrets.pgBackup`. 백업 버킷 키(`accessKey`, `secretKey`, platform ADR 0025) |
+| ObjectStore, ScheduledBackup | `<app>-<resource>` | `postgres` 리소스, `values.backup`, `profile.postgres.backup.enabled`가 모두 있을 때. 아래 백업 절 |
 | ResourceQuota, LimitRange, NetworkPolicy | `hopcharlie-app` | `profile.quota`, `limitRange`, `networkPolicy`의 `enabled` |
 
 ## 서비스 계약
@@ -50,9 +52,19 @@ SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict
 
 새 버전이 준비되지 않아도 옛 파드가 계속 받는다. Deployment는 `maxUnavailable: 0`, `maxSurge: 1`이고, `progressDeadlineSeconds`가 지나면 Argo CD가 `Degraded`로 보여 준다.
 
+## Postgres 백업
+
+플랫폼이 `postgres` 리소스가 있는 앱의 기본 인스턴스에 백업 버킷과 그 버킷 전용 키를 만들어 `values.backup`(`bucket`, `path`)과 `values.sealedSecrets.pgBackup`에 넣는다(platform ADR 0025). 환경 프로필의 `profile.postgres.backup.enabled`가 켜져 있으면 차트가 다음을 그린다.
+
+- Cluster의 `plugins`에 Barman Cloud plugin을 WAL 보관자로 넣는다. CNPG가 채우는 기본값 `enabled: true`도 적어서 Argo CD의 비교가 실제 목록과 맞는다.
+- ObjectStore `<app>-<resource>`: `s3://<bucket>/<path>/`, 키는 Secret `app-pgbackup`, 리전은 `profile.s3.region`, gzip 압축, 보존 `retentionPolicy`(기본 7d). sync-wave -1이라 Cluster보다 먼저 생긴다.
+- ScheduledBackup `<app>-<resource>`: `schedule`(기본 매일 UTC 18:00, 한국 시각 03:00), 켜자마자 한 번(`immediate`), Backup은 ScheduledBackup이 소유한다. sync-wave 1이다.
+
+`path`는 앱을 등록할 때마다 새로 정해진다. 같은 이름으로 다시 등록한 앱의 새 DB가 예전 DB의 WAL이 있는 곳에 쓰지 않으므로 Barman의 빈 보관소 검사를 통과한다. 백업을 켜거나 끄면 CNPG가 plugin 컨테이너를 넣거나 빼려고 Postgres 파드를 한 번 다시 만든다. 백업 버킷은 앱을 지워도 남는다.
+
 ## 앱을 지우면 네임스페이스째 지워진다
 
-네임스페이스가 Application의 객체이므로, gitops 파일이 지워져 Application이 지워지면 Argo CD가 네임스페이스와 그 안의 모든 것을 지운다. CNPG의 데이터(PVC)도, 누가 넣어 둔 Secret(예: S3 키)도 함께 사라지고 되돌릴 수 없다. platform ADR 0011의 "앱을 지우면 DB의 데이터도 함께 사라진다"와 같다. 이미 있던 네임스페이스에 배포하면 Argo CD가 그 네임스페이스를 가져가므로, 지울 때 그 안의 것도 함께 지워진다. AppProject가 시스템과 플랫폼 네임스페이스를 막으므로 앱이 `kube-system`, `argocd` 같은 네임스페이스를 가져갈 수는 없다.
+네임스페이스가 Application의 객체이므로, gitops 파일이 지워져 Application이 지워지면 Argo CD가 네임스페이스와 그 안의 모든 것을 지운다. CNPG의 데이터(PVC)도, 누가 넣어 둔 Secret(예: S3 키)도 함께 사라지고 되돌릴 수 없다. 다만 Postgres 백업(platform ADR 0025)은 네임스페이스 밖의 백업 버킷에 있어 남고, 플랫폼도 지우지 않는다. 백업에서 되살릴 수 있고, 필요 없으면 운영자가 지운다. platform ADR 0011의 "앱을 지우면 DB의 데이터도 함께 사라진다"와 같다. 이미 있던 네임스페이스에 배포하면 Argo CD가 그 네임스페이스를 가져가므로, 지울 때 그 안의 것도 함께 지워진다. AppProject가 시스템과 플랫폼 네임스페이스를 막으므로 앱이 `kube-system`, `argocd` 같은 네임스페이스를 가져갈 수는 없다.
 
 ## 테스트
 

@@ -492,6 +492,50 @@ def main():
             assert any({"ipBlock": {"cidr": "10.40.0.0/19"}} in (rule.get("from") or []) for d in policies for rule in d["spec"].get("ingress") or []), "GKE apps admit only the gateway subnets"
         # The schema and the chart refuse sealed values the platform must not write.
         stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
+        # Postgres backups (platform ADR 0025): with the platform's backup bucket and
+        # key, the eks profile gives the Cluster the Barman Cloud plugin, an
+        # ObjectStore at the registration's path and a daily ScheduledBackup. The gke
+        # profile, which does not turn backups on, draws none of them.
+        backed = copy.deepcopy(stateful)
+        backed.pop("profile")
+        backed["values"]["backup"] = {"bucket": "hopcharlie-eks-moimroom---pg", "path": "20261104T082201Z"}
+        backed["values"]["sealedSecrets"]["pgBackup"] = {"accessKey": "AgBiYWNrdXAtYWNjZXNzCg==", "secretKey": "AgBiYWNrdXAtc2VjcmV0Cg=="}
+        backed_file = work / "backed-values.json"
+        backed_file.write_text(json.dumps(backed))
+        docs = render(ROOT / "helm/charts/hopcharlie-app", backed_file, "moimroom", "moimroom", ("-f", eks_profile))
+        for doc in docs:
+            assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+        cluster = next(d for d in docs if d["kind"] == "Cluster")
+        assert cluster["spec"]["plugins"] == [{"name": "barman-cloud.cloudnative-pg.io", "enabled": True, "isWALArchiver": True,
+                                               "parameters": {"barmanObjectName": "moimroom-db", "serverName": "moimroom-db"}}], cluster["spec"]
+        store = next(d for d in docs if d["kind"] == "ObjectStore")
+        assert store["metadata"]["name"] == "moimroom-db" and store["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}
+        assert store["spec"]["configuration"]["destinationPath"] == "s3://hopcharlie-eks-moimroom---pg/20261104T082201Z/"
+        assert "endpointURL" not in store["spec"]["configuration"], store["spec"]["configuration"]
+        assert store["spec"]["configuration"]["s3Credentials"] == {"accessKeyId": {"name": "app-pgbackup", "key": "accessKey"}, "secretAccessKey": {"name": "app-pgbackup", "key": "secretKey"}}
+        assert store["spec"]["instanceSidecarConfiguration"]["env"] == [{"name": "AWS_REGION", "value": "ap-northeast-2"}, {"name": "AWS_DEFAULT_REGION", "value": "ap-northeast-2"}]
+        assert store["spec"]["retentionPolicy"] == "7d"
+        schedule = next(d for d in docs if d["kind"] == "ScheduledBackup")
+        assert schedule["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "1"}
+        assert schedule["spec"] == {"cluster": {"name": "moimroom-db"}, "schedule": "0 0 18 * * *", "method": "plugin",
+                                    "pluginConfiguration": {"name": "barman-cloud.cloudnative-pg.io"}, "immediate": True, "suspend": False, "backupOwnerReference": "self"}, schedule["spec"]
+        key = next(d for d in docs if d["kind"] == "SealedSecret" and d["metadata"]["name"] == "app-pgbackup")
+        assert key["spec"]["encryptedData"] == backed["values"]["sealedSecrets"]["pgBackup"] and key["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}
+        docs = render(ROOT / "helm/charts/hopcharlie-app", backed_file, "moimroom", "moimroom", ("-f", gke_profile))
+        assert not [d for d in docs if d["kind"] in ("ObjectStore", "ScheduledBackup")] and "plugins" not in next(d for d in docs if d["kind"] == "Cluster")["spec"]
+        for name, values_of, profile in (
+            ("a backup bucket without its key", lambda v: v["values"]["sealedSecrets"].pop("pgBackup"), eks_profile),
+            ("a backup key without its bucket", lambda v: v["values"].pop("backup"), eks_profile),
+            ("a backup path that is not one path segment", lambda v: v["values"]["backup"].update(path="a/b"), eks_profile),
+            ("a backup bucket without a path", lambda v: v["values"]["backup"].pop("path"), eks_profile),
+            ("backups without the bucket's region", lambda v: v.update(profile={"s3": {"region": ""}}), eks_profile),
+        ):
+            values = copy.deepcopy(backed)
+            values_of(values)
+            broken = work / "broken-values.json"
+            broken.write_text(json.dumps(values))
+            result = subprocess.run([HELM, "template", "moimroom", str(ROOT / "helm/charts/hopcharlie-app"), "-n", "moimroom", "-f", str(profile), "-f", str(broken)], capture_output=True, text=True)
+            assert result.returncode != 0, f"hopcharlie-app accepts {name}"
         for name, change in (
             ("app without appChecksum", lambda v: v["values"]["sealedSecrets"].pop("appChecksum")),
             ("reserved secret name", lambda v: v["values"]["sealedSecrets"]["app"].update(S3_BUCKET="AgA=")),
