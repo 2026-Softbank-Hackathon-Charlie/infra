@@ -600,13 +600,14 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md](docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md) | 플랫폼 앱 이미지를 AR에도 올려 GKE가 받게 하는 제안 |
 | [docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md](docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md) | GKE sealed-secrets 값 파일·수동 적용·키 백업 절차 |
 | [docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md](docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md) | 플랫폼 API의 GKE 읽기 전용 토큰 kubeconfig 제안 |
+| [docs/adr/0056-render-app-service-contract-in-chart.md](docs/adr/0056-render-app-service-contract-in-chart.md) | 앱 차트의 워커 서비스, 서비스별 메모리와 CPU, DB 연결 변수, Postgres 파드 resources 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044) |
-| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
+| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
 | [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
