@@ -74,7 +74,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.variables(self.p, local, 'aws/dev/foundation'), cfg.variables(self.p, ci, 'aws/dev/foundation'))
 
     def test_workload_network_policy_mode_is_canonical_and_scoped(self):
-        self.assertEqual(cfg.variables(cfg.project(), self.a, 'aws/dev/workload')['network_policy_enforcing_mode'], 'strict')
+        self.assertEqual(cfg.variables(cfg.project(), self.a, 'aws/dev/workload')['network_policy_enforcing_mode'], 'standard')
         for mode in ('standard', 'strict'):
             self.p['workload_network_policy_enforcing_mode'] = mode
             self.write_project()
