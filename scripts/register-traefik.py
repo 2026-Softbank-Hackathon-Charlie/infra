@@ -35,6 +35,8 @@ APPLICATION = 'charlie-workload-traefik'
 FINALIZER = 'resources-finalizer.argocd.argoproj.io'
 # The objects must match what charlie-root renders from these files.
 SOURCES = ['helm/gitops', 'clusters/aws-dev-workload/values/traefik.yaml', 'helm/versions.json']
+TRAEFIK_REPO = 'https://traefik.github.io/charts'
+TRAEFIK_NAMESPACE = 'traefik'
 
 
 class Refused(Exception):
@@ -78,6 +80,40 @@ def pick(docs):
     return project[0], app
 
 
+def project_change(live, rendered, workload):
+    """What applying the rendered AppProject would change, ignoring list order.
+    Returns the problems: anything but adding the Traefik repository and the
+    traefik destination of the workload cluster."""
+    problems = []
+    keys = set(live.get('spec', {})) | set(rendered['spec'])
+    for key in sorted(keys - {'sourceRepos', 'destinations'}):
+        if live.get('spec', {}).get(key) != rendered['spec'].get(key):
+            problems.append(f'spec.{key} differs')
+    repos_live, repos_new = set(live.get('spec', {}).get('sourceRepos', [])), set(rendered['spec'].get('sourceRepos', []))
+    if repos_live - repos_new:
+        problems.append(f'removes source repositories {sorted(repos_live - repos_new)}')
+    if repos_new - repos_live - {TRAEFIK_REPO}:
+        problems.append(f'adds source repositories {sorted(repos_new - repos_live - {TRAEFIK_REPO})}')
+    def dests(project):
+        return {(d.get('server', ''), d.get('name', ''), d.get('namespace', '')) for d in project.get('spec', {}).get('destinations', [])}
+    dests_live, dests_new = dests(live), dests(rendered)
+    if dests_live - dests_new:
+        problems.append(f'removes destinations {sorted(dests_live - dests_new)}')
+    if dests_new - dests_live - {(workload, '', TRAEFIK_NAMESPACE)}:
+        problems.append(f'adds destinations {sorted(dests_new - dests_live - {(workload, "", TRAEFIK_NAMESPACE)})}')
+    notes = live.get('metadata', {}).get('annotations') or {}
+    for key, value in (rendered['metadata'].get('annotations') or {}).items():
+        if notes.get(key) != value:
+            problems.append(f'annotation {key} differs')
+    return problems
+
+
+def check_project(argo, values, project):
+    problems = project_change(argo.get('appproject', PROJECT), project, values['targets']['workload']['endpoint'])
+    require(not problems, f'{PROJECT} would change more than the Traefik repository and destination: ' + '; '.join(problems))
+    print(f'{PROJECT}: only the Traefik repository and the traefik destination are added (or already there)')
+
+
 def render(argo):
     values = argo.get('application', ROOT_APP)['spec']['source']['helm']['valuesObject']
     require(values.get('targets', {}).get('workload', {}).get('endpoint'), f'{ROOT_APP} has no targets.workload')
@@ -113,6 +149,7 @@ def preview(argo, args):
     print(f'{PROJECT} change (kubectl diff):', flush=True)
     diff = subprocess.run([*argo.base, 'diff', '-f', str(OUT / 'project.yaml')])
     require(diff.returncode in (0, 1), 'kubectl diff failed')
+    check_project(argo, values, project)
     if argo.exists('application', APPLICATION):
         print(f'{APPLICATION}: exists')
     else:
@@ -124,7 +161,8 @@ def create(argo, args):
     head, ok = at_main()
     require(ok, f'check out origin/main without local changes in {", ".join(SOURCES)} (now {head[:12]})')
     require(not argo.exists('application', APPLICATION), f'application {APPLICATION} exists; it is not replaced')
-    render(argo)
+    values, project, _ = render(argo)
+    check_project(argo, values, project)
     argo('apply', '--dry-run=server', '-f', str(OUT / 'project.yaml'))
     argo('create', '--dry-run=server', '-f', str(OUT / 'application.yaml'))
     print(argo('apply', '-f', str(OUT / 'project.yaml')).stdout.strip())

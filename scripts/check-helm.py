@@ -161,18 +161,25 @@ def check_traefik(docs):
     assert notes["service.beta.kubernetes.io/aws-load-balancer-name"] == "hopcharlie-apps-eks", notes
     assert notes["service.beta.kubernetes.io/aws-load-balancer-scheme"] == "internal", notes
     assert notes["service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"] == "ip", notes
-    assert "deregistration_delay.timeout_seconds=30" in notes["service.beta.kubernetes.io/aws-load-balancer-target-group-attributes"], notes
+    # Traefik keeps serving for 20 s and drains for 30 s after SIGTERM; the NLB holds a
+    # draining target at least that long and stops new connections once /ping fails.
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-target-group-attributes"] == "deregistration_delay.timeout_seconds=60", notes
+    assert {k.rpartition("/")[2]: v for k, v in notes.items() if "healthcheck" in k} == {
+        "aws-load-balancer-healthcheck-protocol": "http", "aws-load-balancer-healthcheck-port": "8080", "aws-load-balancer-healthcheck-path": "/ping",
+        "aws-load-balancer-healthcheck-interval": "5", "aws-load-balancer-healthcheck-timeout": "3",
+        "aws-load-balancer-healthcheck-healthy-threshold": "2", "aws-load-balancer-healthcheck-unhealthy-threshold": "2"}, notes
     assert svc["spec"]["type"] == "LoadBalancer" and svc["spec"]["loadBalancerSourceRanges"] == ["10.40.0.0/19"], svc["spec"]
     assert [(p["port"], p["targetPort"]) for p in svc["spec"]["ports"]] == [(80, "web")], svc["spec"]["ports"]
     classes = [d for d in docs if d["kind"] == "IngressClass"]
     assert [(c["metadata"]["name"], c["spec"]["controller"]) for c in classes] == [("traefik", "traefik.io/ingress-controller")], classes
-    assert "ingressclass.kubernetes.io/is-default-class" not in (classes[0]["metadata"].get("annotations") or {}) or         classes[0]["metadata"]["annotations"]["ingressclass.kubernetes.io/is-default-class"] == "false", classes
+    assert (classes[0]["metadata"].get("annotations") or {}).get("ingressclass.kubernetes.io/is-default-class", "false") == "false", classes
     args = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["containers"][0]["args"]
     for arg in ("--providers.kubernetesingress.ingressClass=traefik", "--providers.kubernetesingress.ingressendpoint.publishedservice=traefik/traefik",
                 "--entryPoints.web.forwardedHeaders.trustedIPs=10.40.0.0/16", "--entryPoints.web.forwardedHeaders.notAppendXForwardedFor=true",
                 "--entryPoints.web.transport.lifeCycle.requestAcceptGraceTimeout=20s", "--entryPoints.web.transport.lifeCycle.graceTimeOut=30s",
                 "--api.dashboard=false"):
         assert arg in args, arg
+    assert not any("websecure" in a for a in args), args
     assert not any(a.startswith("--providers.kubernetescrd") for a in args), args
     # A host with no app Ingress gets 503 from a Service without endpoints, not
     # Traefik's 404, so the platform's probe of a missing route fails.

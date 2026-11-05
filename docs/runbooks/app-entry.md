@@ -26,7 +26,7 @@ done
 
 ## 1. Traefik 등록
 
-infra PR(ADR 0058의 Traefik 애드온)이 main에 들어간 뒤 실행한다. merge만으로는 클러스터에 아무것도 바뀌지 않는다.
+infra PR(ADR 0058의 Traefik 애드온)이 main에 들어간 뒤 실행한다. merge로 바뀌는 운영 객체는 하나다. 자동 sync인 `charlie-management-hopcharlie-apps`가 AppProject `hopcharlie-apps`에 막는 대상 `!traefik`을 클러스터마다 더한다(앱이 `traefik` 네임스페이스를 쓰지 못하게 하는 것뿐이고 지금 앱에는 영향이 없다). Traefik 자체는 아래 명령으로만 생긴다.
 
 ```bash
 python3 scripts/register-traefik.py preview   # AppProject diff, Application 서버 dry-run
@@ -34,7 +34,7 @@ python3 scripts/register-traefik.py create    # AppProject apply, Application cr
 python3 scripts/register-traefik.py sync      # sync 한 번
 ```
 
-- preview의 AppProject diff는 source 저장소 `https://traefik.github.io/charts`와 대상 네임스페이스 `traefik` 추가뿐이어야 한다(목록 순서 차이는 괜찮다). 다른 차이가 있으면 멈춘다.
+- preview와 create는 live AppProject와 렌더를 비교해, source 저장소 `https://traefik.github.io/charts`와 대상 네임스페이스 `traefik` 추가 말고 다른 차이가 있으면 멈춘다(목록 순서는 보지 않는다).
 - 확인:
 
 ```bash
@@ -46,32 +46,52 @@ aws elbv2 describe-load-balancers --names hopcharlie-apps-eks --query 'LoadBalan
 aws elbv2 describe-target-health --target-group-arn <대상 그룹 ARN>   # pod 2개 healthy
 ```
 
-## 2. 롤링 재시작 시험
+## 2. 롤링 재시작 시험(NLB를 거쳐)
 
-앱을 옮기기 전에 한 번 한다. 첫 설치 pod에는 readiness gate가 없으므로, 재시작 뒤 새 pod에 `target-health.elbv2.k8s.aws/...` readiness gate가 붙었는지도 본다.
+앱을 옮기기 전에, 3단계 PR보다 먼저 한다. NLB는 관리 서브넷(`10.40.0.0/19`)에서만 받으므로 관리 서브넷의 SSM 브리지(`charlie-dev-ssm-bridge`)로 NLB 80을 로컬 포트에 연다. 이미 쓰는 터널과 다른 로컬 포트를 쓴다.
+
+```bash
+NLB=$(aws elbv2 describe-load-balancers --names hopcharlie-apps-eks --query 'LoadBalancers[0].DNSName' --output text)
+BRIDGE=$(aws ec2 describe-instances --filters Name=tag:Name,Values=charlie-dev-ssm-bridge Name=instance-state-name,Values=running \
+  --query 'Reservations[0].Instances[0].InstanceId' --output text)
+aws ssm start-session --target "$BRIDGE" --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"$NLB\"],\"portNumber\":[\"80\"],\"localPortNumber\":[\"18080\"]}"
+```
+
+다른 터미널에서 1초마다 없는 호스트로 요청한다. 503(어느 Ingress에도 없는 호스트의 답)이 아니면 실패로 센다. `000`은 연결 거부, 끊김, 시간 초과다.
+
+```bash
+while true; do
+  c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 -H 'Host: nonexistent.eks.hopcharlie.internal' http://127.0.0.1:18080/)
+  [ "$c" = 503 ] || echo "$(date +%H:%M:%S) FAIL $c"
+  sleep 1
+done
+```
+
+그동안 재시작한다. 첫 설치 pod에는 readiness gate가 없으므로, 재시작 뒤 새 pod에 `target-health.elbv2.k8s.aws/...` readiness gate가 붙었는지도 본다.
 
 ```bash
 kubectl -n traefik rollout restart deploy/traefik
-kubectl -n traefik rollout status deploy/traefik --timeout=5m
+kubectl -n traefik rollout status deploy/traefik --timeout=15m
 kubectl -n traefik get pods -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.readinessGates}{"\n"}{end}'
 ```
 
-끊김 감시의 실패가 0이어야 한다. 이 단계에서는 아직 앱이 Traefik을 거치지 않으므로, Traefik 경로의 끊김은 4단계 뒤 재시작으로 다시 본다.
+실패가 0이어야 한다. 실패가 있으면 `ports.web.transport.lifeCycle.requestAcceptGraceTimeout`을 30에서 40초로 올리고, `deployment.terminationGracePeriodSeconds`와 등록 해제 지연을 그보다 길게 맞춘 뒤 다시 잰다. 앱 전환(4단계) 뒤에도 같은 시험을 앱 호스트로 한 번 더 한다. Traefik pod가 바뀔 때 그 pod를 지나던 docker-doom `/websockify` 연결은 끊긴다(ADR 0058).
 
 ## 3. 내부 DNS와 앱 Ingress
 
 다음 infra PR(워크로드 Terraform의 `hopcharlie.internal`, 앱 차트 Ingress, eks 프로필)이 들어가면 main의 Terraform 자동 적용과 Argo CD 자동 sync가 적용한다.
 
-- 확인: `kubectl -n docker-doom get ingress`의 ADDRESS가 NLB 이름이다. Application `docker-doom-eks`, `moimroom-eks`가 Synced, Healthy다. 게이트웨이 로그의 기본 앱 백엔드 `shop.eks.hopcharlie.internal` 오류가 DNS 실패에서 404로 바뀐다(DNS, NLB, Traefik이 게이트웨이 pod에서 닿는다는 뜻).
-- Traefik을 거치는 시험(관리 서브넷의 SSM 브리지로 NLB 80을 로컬에 연다):
+- 확인: `kubectl -n docker-doom get ingress`의 ADDRESS가 NLB 이름이다. Application `docker-doom-eks`, `moimroom-eks`가 Synced, Healthy다. 게이트웨이 로그의 기본 앱 백엔드 `shop.eks.hopcharlie.internal` 오류가 DNS 실패에서 503으로 바뀐다(DNS, NLB, Traefik이 게이트웨이 pod에서 닿는다는 뜻).
+- Traefik을 거치는 시험(2단계의 SSM 포트 포워딩, 로컬 포트 18080):
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: docker-doom.eks.hopcharlie.internal' http://127.0.0.1:<로컬 포트>/vnc.html
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: docker-doom.eks.hopcharlie.internal' 'http://127.0.0.1:<로컬 포트>/a%2Fb'   # 400이 아니어야 한다
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: docker-doom.eks.hopcharlie.internal' http://127.0.0.1:18080/vnc.html
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: docker-doom.eks.hopcharlie.internal' 'http://127.0.0.1:18080/a%2Fb'   # 400이 아니어야 한다
 curl -s -o /dev/null -w '%{http_code}\n' --max-time 2 --http1.1 -H 'Host: docker-doom.eks.hopcharlie.internal' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: binary' \
-  http://127.0.0.1:<로컬 포트>/websockify                                                                  # 101
+  http://127.0.0.1:18080/websockify                                                                  # 101
 ```
 
 ## 4. 플랫폼 틀과 앱 전환
