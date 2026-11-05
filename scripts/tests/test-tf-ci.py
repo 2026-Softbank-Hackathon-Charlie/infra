@@ -40,7 +40,7 @@ else:
     if os.environ.get("FAKE_RAW_OUTPUT") and action != "show":
         print(os.environ["FAKE_RAW_OUTPUT"])
     if os.environ.get("FAKE_FAIL") == directory.name + ":" + action:
-        sys.exit(2)
+        sys.exit(1)
     if "TF_VAR_aws_account_id" in os.environ:
         assert os.environ["TF_VAR_aws_account_id"] == "123456789012"
         assert os.environ["TF_VAR_aws_region"] == "ap-northeast-2"
@@ -52,6 +52,9 @@ else:
     if action == "plan":
         output = next(arg.removeprefix("-out=") for arg in args if arg.startswith("-out="))
         Path(output).write_text("saved plan for " + str(directory))
+        if "-detailed-exitcode" in args:
+            statuses = json.loads(os.environ.get("FAKE_PLAN_STATUSES", "{}"))
+            sys.exit(statuses.get(directory.name, 2))
     elif action == "show":
         print(os.environ.get("FAKE_PLAN_JSON", '{"format_version":"1.2","resource_changes":[]}'))
     elif action == "apply":
@@ -132,6 +135,7 @@ class TerraformCITest(unittest.TestCase):
             saved = next(arg.removeprefix("-out=") for arg in plan if arg.startswith("-out="))
             self.assertEqual(apply[-1], saved)
             self.assertIn("-lock-timeout=5m", plan)
+            self.assertIn("-detailed-exitcode", plan)
             self.assertIn("-lock-timeout=5m", apply)
         self.assertIn("skip: aws/dev/management (scaffold)", result.stdout)
         self.assertIn("skip: aws/dev/workload (scaffold)", result.stdout)
@@ -341,6 +345,40 @@ class TerraformCITest(unittest.TestCase):
         result = self.run_script("plan")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[1] for call in self.calls("terraform")], ["init", "plan", "init", "plan", "show"])
+        self.assert_no_plans()
+
+    def test_unchanged_stacks_never_apply(self):
+        self.env["FAKE_PLAN_STATUSES"] = json.dumps({"aws": 0, "foundation": 0})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[1] for call in self.calls("terraform")], ["init", "plan", "init", "plan"])
+        self.assertIn("skip: bootstrap/aws (no changes)", result.stdout)
+        self.assertIn("skip: aws/dev/foundation (no changes)", result.stdout)
+        self.assert_no_plans()
+
+    def test_only_changed_stacks_apply(self):
+        for stack in STACKS[2:]:
+            (self.directory(stack) / ".scaffold").unlink()
+        self.env["FAKE_PLAN_STATUSES"] = json.dumps({"aws": 0, "management": 0})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        applies = [call for call in self.calls("terraform") if call[1] == "apply"]
+        self.assertEqual([call[0] for call in applies], [f"-chdir={self.directory(STACKS[1])}", f"-chdir={self.directory(STACKS[3])}"])
+        self.assert_no_plans()
+
+    def test_plan_mode_accepts_mixed_noop_and_changed_stacks(self):
+        self.env["FAKE_PLAN_STATUSES"] = json.dumps({"aws": 0})
+        result = self.run_script("plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(call[1] == "apply" for call in self.calls("terraform")))
+        self.assertEqual(self.calls("terraform")[-1][1], "show")
+        self.assert_no_plans()
+
+    def test_unexpected_plan_status_fails_before_apply(self):
+        self.env["FAKE_PLAN_STATUSES"] = json.dumps({"aws": 3})
+        result = self.run_script()
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertEqual([call[1] for call in self.calls("terraform")], ["init", "plan"])
         self.assert_no_plans()
 
     def test_preflight_fails_before_any_stack_runs(self):

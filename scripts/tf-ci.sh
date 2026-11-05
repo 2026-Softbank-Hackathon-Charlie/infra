@@ -99,7 +99,18 @@ for stack in "${enabled_stacks[@]}"; do
     -backend-config="$work/$stack/backend.json"
 
   plan_file="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/charlie-tfplan.XXXXXX")"
-  terraform -chdir="$dir" plan -input=false -lock-timeout=5m -var-file="$work/$stack/inputs.tfvars.json" -out="$plan_file"
+  plan_status=0
+  terraform -chdir="$dir" plan -input=false -detailed-exitcode -lock-timeout=5m -var-file="$work/$stack/inputs.tfvars.json" -out="$plan_file" || plan_status=$?
+  case "$plan_status" in
+    0)
+      printf 'skip: %s (no changes)\n' "$stack"
+      rm -f "$plan_file"
+      plan_file=''
+      continue
+      ;;
+    2) ;;
+    *) exit "$plan_status" ;;
+  esac
   if [[ "$stack" == aws/dev/foundation ]]; then
     terraform -chdir="$dir" show -json "$plan_file" | python3 "$REPO_ROOT/scripts/check-foundation-plan.py"
   fi

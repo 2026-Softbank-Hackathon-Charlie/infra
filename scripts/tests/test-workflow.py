@@ -18,7 +18,8 @@ class WorkflowGate(unittest.TestCase):
         job = self.workflow['jobs']['deploy']
         expression = job['if'].replace('github.event_name', 'event').replace('github.ref', 'ref').replace('inputs.action', 'action').replace('&&', 'and').replace('||', 'or')
         for event, ref, action in product(('push', 'pull_request', 'workflow_dispatch'), ('refs/heads/main', 'refs/heads/feature'), ('plan', 'apply', '', 'destroy')):
-            self.assertEqual(eval(expression, {'__builtins__': {}}, dict(event=event, ref=ref, action=action)), event == 'workflow_dispatch' and ref == 'refs/heads/main' and action in ('plan', 'apply'))
+            expected = ref == 'refs/heads/main' and (event == 'push' or (event == 'workflow_dispatch' and action in ('plan', 'apply')))
+            self.assertEqual(eval(expression, {'__builtins__': {}}, dict(event=event, ref=ref, action=action)), expected)
         self.assertEqual(job['needs'], 'check')
         self.assertFalse(job['concurrency']['cancel-in-progress'])
         self.assertNotIn('concurrency', self.workflow)
@@ -29,7 +30,15 @@ class WorkflowGate(unittest.TestCase):
         self.assertEqual(inputs['stack']['default'], 'bootstrap')
         self.assertEqual(inputs['stack']['options'], ['bootstrap', 'foundation', 'management', 'management-scaleout', 'workload', 'all-runtime'])
         run = job['steps'][-1]
-        self.assertEqual(run['env'], {'TF_ACTION': '${{ inputs.action }}', 'TF_STACK': '${{ inputs.stack }}'})
+        self.assertEqual(run['env'], {
+            'TF_ACTION': "${{ github.event_name == 'push' && 'apply' || inputs.action }}",
+            'TF_STACK': "${{ github.event_name == 'push' && 'all-runtime' || inputs.stack }}",
+        })
+        for event, action, stack in product(('push', 'workflow_dispatch'), ('plan', 'apply', ''), ('bootstrap', 'workload', '')):
+            for key, push_value, input_value in (('TF_ACTION', 'apply', action), ('TF_STACK', 'all-runtime', stack)):
+                value = run['env'][key][3:-3].replace('github.event_name', 'event').replace('inputs.action', 'action').replace('inputs.stack', 'stack').replace('&&', 'and').replace('||', 'or')
+                resolved = eval(value, {'__builtins__': {}}, dict(event=event, action=action, stack=stack))
+                self.assertEqual(resolved, push_value if event == 'push' else input_value)
         self.assertEqual(run['run'], 'bash scripts/tf-ci.sh "$TF_ACTION" "$TF_STACK"')
         for name, check in self.workflow['jobs'].items():
             if name != 'deploy':
