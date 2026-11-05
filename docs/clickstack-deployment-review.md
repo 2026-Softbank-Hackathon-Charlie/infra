@@ -3,7 +3,7 @@
 - 날짜: 2026-11-04
 - 브랜치: feat/clickstack-observability
 - 기준 main: 68123c6
-- 승인: 새 브랜치에서 A 로컬 구현·검증 진행. 실제 클러스터 조회·Secret 생성·배포는 미승인/미실행.
+- 승인: A 로컬 구현·검증과 2026-11-05 관리 EKS의 한정 읽기 점검(B) 수행. Secret 값 조회·자격 증명 생성·클러스터 변경·배포(C)는 미승인/미실행.
 - 결정: [ADR 0040](adr/0040-adopt-clickstack-for-hackathon-observability.md)
 - 계획: [구현·배포 계획](plans/clickstack-implementation.md)
 
@@ -89,7 +89,7 @@ B/C에서 인증서 SAN은 실제 service DNS와 일치하도록 하고, 각 URI
 
 로컬 계약 검사, Helm lint/render, 기본 Secret 값 거부, CRD 구조, digest, 수동 GitOps·기존 앱 불변, agent/gateway config와 합성 payload 연결을 검사한다. 전체 Helm 회귀 검사에는 기존 앱·GKE·CNPG 계약도 포함한다.
 
-로컬 Docker daemon을 사용할 수 없어 컨테이너 실행 기반의 Collector config 검증은 하지 못했다. 실제 TLS/인증·OTTL·schema migration·DB 기동·MongoDB8 호환성·HyperDX 로그인/source/차트·영속 큐 복구는 C의 제한 배포 관문이다. Secret 값을 발급하거나 API server에 접근해서 검증하지 않았다.
+로컬 Docker daemon을 사용할 수 없어 컨테이너 실행 기반의 Collector config 검증은 하지 못했다. 실제 TLS/인증·OTTL·schema migration·DB 기동·MongoDB8 호환성·HyperDX 로그인/source/차트·영속 큐 복구는 C의 제한 배포 관문이다. A 단계에서는 Secret 값을 발급하거나 API server에 접근해 검증하지 않았다. B의 한정 읽기 점검 결과는 아래에 별도로 기록한다.
 
 본문의 속성 키 제거와 credential 패턴 로그 제외는 보조 필터다. 모든 민감정보를 탐지한다는 보장은 없으며 검증된 데모 namespace/합성 데이터부터 사용한다. CI/Argo/Events adapter·실제 앱 SDK·GKE/온프레미스 연결은 후속 작업으로 남긴다. remote gateway endpoint는 ConfigMap 참조이며 REPLACE 같은 가짜 운영 DNS를 넣지 않았다.
 
@@ -112,4 +112,43 @@ UI 확인은 승인 후 service/clickstack의 app3000/API8000 포트를 실제 �
 - 전체 make helm-check 통과: 기존 bootstrap/GKE·기본 addon·플랫폼·ApplicationSet·CNPG 회귀 포함. 이후의 국소 설정/검사 변경은 ClickStack 15개 검사로 재검증했다.
 - Helm strict lint와 git diff --check 통과. make inventory-check는 400개 문서화 파일로 통과했고 문서 상대 링크·Python 문법을 확인했다. 원래 작업 트리의 캐시 예외를 새 worktree 검증에서 제외할 필요가 없었다.
 - 합성 smoke 명령 기본 실행은 payload만 구성하며 네트워크 전송을 하지 않는 것을 확인했다.
-- 운영 자격 증명 생성·클러스터 접근·컨테이너 기동·실제 배포는 하지 않았다. Docker daemon 미가용으로 런타임 검증은 남아 있다.
+- A 단계에서 운영 자격 증명 생성·클러스터 접근·컨테이너 기동·실제 배포는 하지 않았다. Docker daemon 미가용으로 런타임 검증은 남아 있다.
+
+## B 관리 EKS 사전점검 — 2026-11-05
+
+사용자는 관리 EKS의 자원·스토리지·관련 CRD/operator·Prometheus 서비스 정보를 읽기 전용으로 점검하는 범위를 승인했다. Secret API 조회, Pod 로그/exec, 리소스 변경은 수행하지 않았다. 기존 AWS 로그인 갱신 후 account525091405886 / ap-northeast-2 / charlie-dev-management를 확인했다. 임시 SSM 연결과 Prometheus 포워딩만 사용했으며 점검 후 해당 연결을 정리한다.
+
+원본 전체 API 응답은 보관하지 않았다. 필요한 자원/메타데이터만 추린 보고서는 Git 제외 `.generated/clickstack/management-preflight.json`에 권한0600으로 저장했다. API 조회 오류는 없었다. Secret 값·환경변수 값은 보고서에 포함하지 않는다.
+
+### 실제 상태
+
+| 항목 | 결과 |
+| --- | --- |
+| 노드 | m7i-flex.large / amd64 2대, 양쪽 Ready, taint·unschedulable 없음 |
+| 현재 활성 Pod | 34개, Pending 없음 |
+| allocatable CPU | 합계3.86코어 |
+| 기존 CPU requests | 합계2.50코어 |
+| CPU requests 기준 여유 | 합계1.36코어, 노드별0.69/0.67 |
+| 메모리 requests 기준 여유 | 합계약10.05Gi |
+| 실제 사용량 표본 | CPU 노드별100m/218m(5%/11%), 메모리2562Mi/2220Mi(36%/31%) |
+| StorageClass | gp3: EBS CSI, 암호화, WaitForFirstConsumer, 확장 허용 |
+| 기존 관측 PVC | Prometheus20Gi·Grafana5Gi·Alertmanager2Gi 모두 Bound |
+| 기존 관련 CRD/operator | ClickHouse·MongoDB·OTel 관련 CRD 및 Deployment 없음 |
+| 관측 workload | Prometheus·Grafana·Alertmanager·관련 exporter/operator 모두 Ready |
+| Prometheus | monitoring-prometheus:9090 ClusterIP, ready endpoint1개, /-/ready HTTP200 |
+
+Prometheus 서비스 DNS `monitoring-prometheus.observability.svc:9090`은 fixture와 일치한다. 확인한 HTTP 연결은 관리용 port-forward 경로이며, 아직 존재하지 않는 HyperDX Pod에서의 DNS·NetworkPolicy·로그인/source 동작까지 검증한 것은 아니다.
+
+### CPU 배치 관문 — 현재 값 그대로 C로 진행하지 않음
+
+중앙 앱·DB 선언·operator에 명시된 CPU requests는 약1.41코어, 관리 gateway0.10 및 노드 agent2개0.20을 더하면 약1.71코어다. 현재 여유1.36보다 **최소0.35코어 부족**하다. MongoDB 등의 operator 생성 기본값·init/probe 요청량이나 Pod-level admission 기본값은 추가될 수 있어, 이 계산은 최종 필요량의 상한이 아니다.
+
+이는 CPU의 실제 사용률 과부하가 아니라 scheduler 예약량 부족이다. 메모리가 남더라도 CPU request 조건을 만족하지 못한 Pod는 Pending이 될 수 있다. 현재 코드의 리소스를 그대로 모두 배포 가능한 상태라고 판정하지 않는다.
+
+다음 단계는 새 구성의 자원 요청 조정 또는 관리 클러스터 CPU 용량 확보안을 별도 계획으로 확정하는 것이다. 이번 B 승인만으로 기존 앱 requests 축소·Pod 이동·노드 증설·Terraform apply·새 Secret·부분 설치를 하지 않는다. 자원 조정 시 원본 권장값과 실제 동작·여유를 검증하며, CPU 사용률이 낮다는 이유만으로 requests를 무조건 낮추지 않는다.
+
+### 스토리지·미확인 범위
+
+35Gi는 새 볼륨 요청량 제안이다. EBS는 동적 생성하므로 StorageClass/PVC 상태만으로 계정 quota·실제 provision 성공·추가 비용까지 보장할 수 없다. 신규 PVC는 만들지 않았다.
+
+참조 Secret 존재/값, 새 RBAC 이름 충돌·API 권한 결과, Argo Application 정책/연결, HyperDX runtime, workload/GCP/온프레미스는 이번 한정 조회에 포함하지 않았다. 기존 CRD·operator 없음은 확인했지만 이들 미확인 항목까지 완료한 것으로 확대하지 않는다. C 실행 요청 전 자원 방안과 정확한 변경·권한 범위를 다시 정리한다.

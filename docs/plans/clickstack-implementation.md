@@ -1,7 +1,7 @@
 # ClickStack 구현·배포 계획
 
 - 날짜: 2026-11-04
-- 상태: A 로컬 구현·검증 승인 후 수행. B/C 실제 조회·배포 미승인/미실행
+- 상태: A 로컬 구현·검증 완료. 2026-11-05 관리 EKS 한정 B 조회 완료, CPU 예약량 부족 확인. C 배포 미승인/미실행
 - 분류: 영향이 크거나 불확실한 작업. GitOps 계약, CRD/operator/RBAC, Secret, PVC, 앱 계측과 멀티클라우드 연결에 걸친다.
 - 기준: [ADR 0040](../adr/0040-adopt-clickstack-for-hackathon-observability.md), [아키텍처 제안](../clickstack-architecture.md), [ADR 0018](../adr/0018-stage-minimal-management-monitoring.md), [ADR 0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)
 
@@ -178,3 +178,7 @@ A 첫 관문에서 Secret reference schema/runtime와 HyperDX 실험적 기능�
 중앙 Collector는 공식 standalone 이미지의 설정 순서를 보존하기 위해 범용 subchart 대신 작은 Deployment로 작성했다. 기존 설정 이름과 고정 이미지의 호환성을 위해 agent/gateway의 rewriteDeprecatedComponentNames를 껐다. MongoDB는 신규 8.0.17 digest를 선택했고 실제 조합은 C에서 검증한다. 변경 결과·미완료·실행 전 관문은 [배포 전 검토](../clickstack-deployment-review.md)에 기록한다.
 
 chart·GitOps·수집 검사 간 참조가 밀접하므로 구현은 검증 가능한 하나의 통합 변경으로 묶는다. 앱 저장소 변경은 하지 않았다. 운영 비밀값 생성·Secret 저장·클러스터 API 호출·이미지 push·인프라 배포는 수행하지 않았다.
+
+## B 실행 결과 — 2026-11-05
+
+사용자는 관리 EKS의 자원·스토리지·관련 CRD/operator·Prometheus 서비스 읽기 점검을 명시적으로 승인했다. Secret API·로그·exec·리소스 변경 없이 수행했다. 노드2대 Ready·Pending0·기존 관측 정상과 Prometheus 준비 응답200을 확인했다. CPU requests 여유1.36코어에 비해 새 구성 명시값이 약1.71코어여서 최소0.35코어 부족하다. 실제 사용률 과부하와는 구분한다. 상세 근거와 조회 제외 범위는 [배포 전 검토](../clickstack-deployment-review.md)에 기록했다. 자원 확보/조정 계획을 확정하기 전 C 설치로 진행하지 않는다. 기존 A 코드 자원·노드·Secret은 변경하지 않았다.
