@@ -797,6 +797,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | 파일 | 역할 |
 | --- | --- |
 | [docs/adr/0047-run-management-scaleout-through-ci.md](docs/adr/0047-run-management-scaleout-through-ci.md) | 노드 증설의 CI 실행 결정 |
+| [docs/adr/0049-allow-platform-gcs-bucket-discovery.md](docs/adr/0049-allow-platform-gcs-bucket-discovery.md) | 플랫폼 GCS 소유 확인을 위한 프로젝트 버킷 목록 권한 보완안 |
 | [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
 | [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
 | [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |

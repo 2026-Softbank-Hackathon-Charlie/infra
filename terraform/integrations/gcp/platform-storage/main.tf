@@ -23,9 +23,11 @@ locals {
     "storage.objects.delete",
     "storage.objects.list",
   ]
-  # IAM Conditions cannot narrow service accounts or HMAC keys, so these cover
-  # the whole project (ADR 0041). The driver touches only its own accounts.
+  # Identity operations and bucket discovery need project-level permissions.
+  # Listing proves project ownership in the gcs driver (ADR 0049); mutations
+  # still use the prefix-conditioned bucket role above.
   identity_permissions = [
+    "storage.buckets.list",
     "iam.serviceAccounts.create",
     "iam.serviceAccounts.delete",
     "iam.serviceAccounts.get",
@@ -83,7 +85,7 @@ resource "google_project_iam_custom_role" "identities" {
   project     = var.project_id
   role_id     = "charliePlatformAppIdentities"
   title       = "HopCharlie platform app identities"
-  description = "App service accounts and their HMAC keys, project-wide (infra ADR 0041)."
+  description = "App service accounts, HMAC keys and bucket discovery, project-wide (infra ADR 0049)."
   permissions = local.identity_permissions
 }
 

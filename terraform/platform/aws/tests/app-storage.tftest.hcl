@@ -79,6 +79,15 @@ run "app_storage_contract" {
     error_message = "Environment eks must point at its Sealed Secrets certificate and name the bucket prefix, IAM path and boundary that this stack allows."
   }
   assert {
+    condition = one([for e in yamldecode(local.host_files["envs.yaml"]).environments : e if e.name == "gke"]).sealedSecretsCert == "/config/sealed-secrets/gke.pem" && one([for e in yamldecode(local.host_files["envs.yaml"]).environments : e if e.name == "gke"]).storage == {
+      driver       = "gcs"
+      project      = "project-b47cdba3-db5b-42a2-9a6"
+      bucketPrefix = "hopcharlie-gke-"
+      region       = "asia-northeast3"
+    }
+    error_message = "Environment gke must use its sealing certificate and the existing Seoul GCS app-storage identity contract."
+  }
+  assert {
     condition     = aws_ssm_parameter.host_file["envs.yaml"].insecure_value == local.host_files["envs.yaml"] && !strcontains(local.host_files["envs.yaml"], "$${") && !strcontains(local.host_files["envs.yaml"], "\r")
     error_message = "The envs.yaml parameter must be the rendered file, with every placeholder filled and LF line endings."
   }
