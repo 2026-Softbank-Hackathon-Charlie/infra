@@ -1,0 +1,20 @@
+{
+  "spec": {
+    "serviceAccountTemplate": {
+      "metadata": {
+        "annotations": {
+          "iam.gke.io/gcp-service-account": "charlie-app-db-backup@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com"
+        }
+      }
+    },
+    "storage": {"size": "4Gi"},
+    "plugins": [
+      {
+        "name": "barman-cloud.cloudnative-pg.io",
+        "enabled": true,
+        "isWALArchiver": true,
+        "parameters": {"barmanObjectName": "moimroom-db-gke", "serverName": "moimroom-db-gke"}
+      }
+    ]
+  }
+}

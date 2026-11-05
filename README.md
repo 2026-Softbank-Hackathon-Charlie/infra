@@ -613,6 +613,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044) |
+| [clusters/gcp-dev-workload/moimroom-db-backup.yaml](clusters/gcp-dev-workload/moimroom-db-backup.yaml) | GKE 운영 moimroom DB의 ObjectStore와 ScheduledBackup, 손으로 적용(ADR 0057) |
+| [clusters/gcp-dev-workload/moimroom-db-backup-patch.json](clusters/gcp-dev-workload/moimroom-db-backup-patch.json) | 같은 DB의 Cluster에 넣는 Workload Identity annotation, plugin, 4Gi 디스크(ADR 0057) |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
@@ -770,6 +772,14 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/versions.tf](terraform/integrations/gcp/app-images/versions.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/tests/access.tftest.hcl](terraform/integrations/gcp/app-images/tests/access.tftest.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl](terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/backend.hcl.example](terraform/integrations/gcp/app-db-backup/backend.hcl.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/main.tf](terraform/integrations/gcp/app-db-backup/main.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/outputs.tf](terraform/integrations/gcp/app-db-backup/outputs.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/terraform.tfvars.example](terraform/integrations/gcp/app-db-backup/terraform.tfvars.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/variables.tf](terraform/integrations/gcp/app-db-backup/variables.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/versions.tf](terraform/integrations/gcp/app-db-backup/versions.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl](terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
 
 ## AWS↔GKE 앱 사설 경로 (Tailscale)
 
@@ -866,6 +876,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 
 - [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
 - [docs/adr/0050-let-migrations-own-app-database-topology.md](docs/adr/0050-let-migrations-own-app-database-topology.md)
+- [docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md](docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md)
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)

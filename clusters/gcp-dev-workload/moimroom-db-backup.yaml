@@ -1,0 +1,53 @@
+# Backups of the live moimroom database on GKE, charlie-apps/moimroom-db-gke
+# (infra ADR 0057). That Cluster was made by hand for the 2026-11-05
+# migration, so no chart draws these; an operator applies this file with
+# kubectl and patches the Cluster with moimroom-db-backup-patch.json. The
+# bucket and the Google service account come from
+# terraform/integrations/gcp/app-db-backup. Same as the app chart's backups
+# (platform ADR 0025) except for the credentials: GKE Workload Identity, as
+# the PoC's backups (ADR 0031), instead of a key.
+#
+# The path ends with the Cluster's creation time, so a Cluster made again
+# under the same name writes elsewhere and Barman's empty-archive check
+# passes.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: moimroom-db-gke
+  namespace: charlie-apps
+spec:
+  retentionPolicy: "7d"
+  configuration:
+    destinationPath: "gs://charlie-414068132732-app-db-backup/charlie-apps/20261105T125317Z/"
+    googleCredentials:
+      gkeEnvironment: true
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    # charlie-apps has a quota on CPU limits; the node has little CPU left.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: moimroom-db-gke
+  namespace: charlie-apps
+spec:
+  cluster:
+    name: moimroom-db-gke
+  # Six fields, UTC: 03:00 KST. One backup as soon as it is applied.
+  schedule: "0 0 18 * * *"
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  immediate: true
+  suspend: false
+  backupOwnerReference: self

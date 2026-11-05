@@ -10,6 +10,9 @@
 3. DB/API namespace의 기존 default-deny·DNS·Kubernetes API·CNPG·백업 허용 정책을 확인한다. 새 차트의 Egress allow만 먼저 설치하면 기존 정책이 없는 클라이언트를 격리할 수 있다. 노드 여유도 확인한다(standalone 합계 9 Pods, proxy 요청 각각 50m/128Mi, operator 각각 50m/128Mi; 측정값 아님). 고정 버전의 proxy/init 기본값은 **privileged**다. 전용 namespace의 Pod Security 허용을 별도 검토·승인하고, 정책이 막으면 앱 namespace의 보안을 낮추거나 우회하지 않는다.
 4. source·target의 양방향 `externalClusters`·replica topology, replication CA/client cert/key와 source 앱 비밀번호를 운영자가 준비한다. 엔진은 Secret을 복사하지 않는다. target은 `pg_is_in_recovery()=true`여야 하고 Plan의 `target.manifest`는 **생략**한다.
 5. 앱의 Argo self-heal이 `/spec/replica`를 되돌리지 않도록 합의된 동기화 제어·GitOps 반영/재개 절차를 준비한다. HTTP gateway 외부 writer(배치·직접 SQL 등)는 운영자가 중지한다. 현재 엔진 fence는 gateway 쓰기 hold이며 SQL 쓰기 주체 전체를 차단하지 않는다. 이전 도중 앱 업그레이드는 하지 않는다.
+6. 원본 Cluster에 백업(Barman Cloud plugin, platform ADR 0025와 [ADR0057](../adr/0057-back-up-gke-moimroom-db-with-workload-identity.md))이 켜져 있으면 WAL 보관이 되는지 확인한다. CNPG는 원본을 강등할 때 마지막 WAL을 보관해야 demotion token을 내므로, 보관이 막혀 있으면 엔진은 원본을 펜싱하고 쓰기를 붙잡은 채 `halted`로 멈춘다(migration-engine ADR 0008, 자동 원복 없음). 둘 다 확인하고, 하나라도 아니면 이전을 시작하지 않는다.
+   - `kubectl get cluster <원본> -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")].status}'`가 `True`. plugin이 없어도 True이므로 `spec.plugins`에 `isWALArchiver: true`가 있는지도 본다.
+   - 오브젝트 스토어의 `<경로>/<Cluster 이름>/wals/`에 최근 10분 안에 올라간 WAL 파일이 있다(`aws s3 ls --recursive` 또는 `gcloud storage ls -l`). `archive_timeout`이 5분이라 쓰기가 있으면 5분마다 올라간다.
 
 SQL 계정은 DB CONNECT, schema USAGE, 검증할 전체 행/컬럼 SELECT와 조회 함수 EXECUTE가 필요하다. RLS 등으로 일부 행만 보는 계정이면 검증 결과를 신뢰할 수 없다. superuser·replication 계정을 엔진에 줄 필요는 없지만, 현재 앱 계정의 적합성은 실제 grants와 함께 확인한다. 원본 파일 저장소 이전과 앱별 gateway scope 수정은 별도 과제다.
 
