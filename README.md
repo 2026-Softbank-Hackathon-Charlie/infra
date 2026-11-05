@@ -580,6 +580,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
+| [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |
 
 ### GitHub에서 배포하는 앱
 
@@ -613,6 +614,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
 | [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
 | [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
+| [helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml](helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml) | 플랫폼 API가 만드는 Job을 AI 실행기(라벨, ServiceAccount, 이미지, 볼륨)로 한정하는 ValidatingAdmissionPolicy (`platform.aiRunner.enabled`) |
 | [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
 | [helm/charts/hopcharlie-app/Chart.yaml](helm/charts/hopcharlie-app/Chart.yaml) | 앱 chart 메타데이터 |
 | [helm/charts/hopcharlie-app/values.yaml](helm/charts/hopcharlie-app/values.yaml) | gitops 파일 형식과 환경 프로필 기본값 |
