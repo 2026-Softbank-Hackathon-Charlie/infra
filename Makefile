@@ -41,6 +41,7 @@ helm-check:
 ci-test:
 	@$(PYTHON) scripts/tests/test-project-config.py
 	@$(PYTHON) scripts/tests/test-terraform-verify.py
+	@$(PYTHON) scripts/tests/test-management-scaleout-plan.py
 	@$(PYTHON) scripts/tests/test-tf-ci.py
 	@$(PYTHON) scripts/tests/test-workflow.py
 	@$(PYTHON) scripts/tests/test-eks-access.py

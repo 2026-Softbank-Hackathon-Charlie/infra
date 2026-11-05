@@ -13,7 +13,12 @@ on:
         description: '실행 범위. all-runtime은 두 EKS를 포함하며 의존 stack을 자동 생성하지 않음'
         type: choice
         default: bootstrap
-        options: [bootstrap, foundation, management, workload, all-runtime]
+        options: [bootstrap, foundation, management, management-scaleout, workload, all-runtime]
+      expected_sha:
+        description: 'management-scaleout 전용: 승인한 main merge commit SHA (40 hex)'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -155,6 +160,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Verify approved scaleout commit before AWS authentication
+        if: inputs.stack == 'management-scaleout'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXECUTION_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXECUTION_SHA" == "$EXPECTED_SHA" ]]
       - name: Validate deployment settings
         id: settings
         shell: bash

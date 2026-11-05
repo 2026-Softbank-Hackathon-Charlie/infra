@@ -789,11 +789,22 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl](terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 | [terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py](terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
 
+## 관리 EKS 노드 추가 CI
+
+`management-scaleout`은 관리 2a 노드 그룹 1→2대 증설만 허용하는 일회성 수동 선택이다. 기본 배포 동작은 바꾸지 않는다. main의 승인 merge SHA를 `expected_sha`로 지정해야 하며, 자세한 실행 순서는 아래 계획을 따른다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0047-run-management-scaleout-through-ci.md](docs/adr/0047-run-management-scaleout-through-ci.md) | 노드 증설의 CI 실행 결정 |
+| [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
+| [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
+| [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |
+
 ## AWS-GCP DB migration preparation
 
 DB network and temporary-access code; disabled examples require separate deployment approval.
 
-- [docs/adr/0047-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0047-connect-cloud-databases-with-scoped-migration-access.md)
+- [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)

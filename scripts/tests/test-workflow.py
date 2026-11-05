@@ -27,7 +27,7 @@ class WorkflowGate(unittest.TestCase):
         self.assertEqual(inputs['action']['default'], 'plan')
         self.assertEqual(inputs['action']['options'], ['plan', 'apply'])
         self.assertEqual(inputs['stack']['default'], 'bootstrap')
-        self.assertEqual(inputs['stack']['options'], ['bootstrap', 'foundation', 'management', 'workload', 'all-runtime'])
+        self.assertEqual(inputs['stack']['options'], ['bootstrap', 'foundation', 'management', 'management-scaleout', 'workload', 'all-runtime'])
         run = job['steps'][-1]
         self.assertEqual(run['env'], {'TF_ACTION': '${{ inputs.action }}', 'TF_STACK': '${{ inputs.stack }}'})
         self.assertEqual(run['run'], 'bash scripts/tf-ci.sh "$TF_ACTION" "$TF_STACK"')
@@ -37,6 +37,16 @@ class WorkflowGate(unittest.TestCase):
         self.assertEqual(job['permissions']['id-token'], 'write')
         settings = next(s for s in job['steps'] if s.get('id') == 'settings')
         self.assertIn('--deploy-context', settings['run'])
+
+    def test_scaleout_commit_gate_precedes_aws_authentication(self):
+        steps = self.workflow['jobs']['deploy']['steps']
+        gate = next(s for s in steps if s.get('name') == 'Verify approved scaleout commit before AWS authentication')
+        auth = next(s for s in steps if s.get('uses', '').startswith('aws-actions/configure-aws-credentials'))
+        self.assertLess(steps.index(gate), steps.index(auth))
+        self.assertEqual(gate['if'], "inputs.stack == 'management-scaleout'")
+        for expected, actual, ok in (("a" * 40, "a" * 40, True), ("a" * 40, "b" * 40, False), ("", "a" * 40, False), ("$(false)", "a" * 40, False)):
+            result = subprocess.run(['bash', '-e', '-c', gate['run']], env=dict(os.environ, EXPECTED_SHA=expected, EXECUTION_SHA=actual), capture_output=True)
+            self.assertEqual(result.returncode == 0, ok)
 
     def test_runner_context_is_not_used_in_workflow_or_job_env(self):
         # GitHub resolves these fields before runner context is available.

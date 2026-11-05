@@ -1,6 +1,6 @@
 # AWS↔GCP DB 연결과 임시 이전 권한
 
-관련: [ADR0047](../adr/0047-connect-cloud-databases-with-scoped-migration-access.md), [infra #47](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/47).
+관련: [ADR0048](../adr/0048-connect-cloud-databases-with-scoped-migration-access.md), [infra #47](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/47).
 이 문서는 **설치 전 코드 준비**다. 아래 실행은 클러스터·tailnet·Secret 변경 승인을 받은 운영자만 수행한다. 기본 예제는 모두 꺼져 있으며 웹앱 라우터와 기존 DB를 수정하지 않는다.
 
 ## 1. 실행 전 확인

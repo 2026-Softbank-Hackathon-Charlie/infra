@@ -37,6 +37,8 @@ if tool == "aws":
 else:
     directory = Path(args[0].removeprefix("-chdir="))
     action = args[1]
+    if os.environ.get("FAKE_RAW_OUTPUT") and action != "show":
+        print(os.environ["FAKE_RAW_OUTPUT"])
     if os.environ.get("FAKE_FAIL") == directory.name + ":" + action:
         sys.exit(2)
     if "TF_VAR_aws_account_id" in os.environ:
@@ -45,7 +47,7 @@ else:
     for arg in args:
         if arg.startswith("-var-file="):
             inputs = json.loads(Path(arg.split("=", 1)[1]).read_text())
-            assert inputs["aws_account_id"] == "123456789012"
+            assert inputs["aws_account_id"] == os.environ["FAKE_ACCOUNT"]
             assert inputs["project"] == "charlie"
     if action == "plan":
         output = next(arg.removeprefix("-out=") for arg in args if arg.startswith("-out="))
@@ -65,7 +67,7 @@ class TerraformCITest(unittest.TestCase):
         self.root = Path(self.temp.name)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("common.sh", "tf-ci.sh", "check-foundation-plan.py", "project-config.py", "tf-stack.sh"):
+        for name in ("common.sh", "tf-ci.sh", "check-foundation-plan.py", "check-management-scaleout-plan.py", "project-config.py", "tf-stack.sh"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
         shutil.copytree(ROOT / "config", self.root / "config", ignore=shutil.ignore_patterns("account.local.json"))
         for stack in (*STACKS, "account/aws", "modules/eks"):
@@ -181,6 +183,71 @@ class TerraformCITest(unittest.TestCase):
                 self.assertTrue(all(c[0] == f"-chdir={self.directory(stack)}" for c in calls))
                 self.assertEqual(sum(c[1] == "apply" for c in calls), 1)
                 self.assert_no_plans()
+
+    def scaleout_env(self):
+        self.env.update(AWS_ACCOUNT_ID="525091405886", FAKE_ACCOUNT="525091405886",
+                        TF_STATE_BUCKET="charlie-tfstate-525091405886-ap-northeast-2",
+                        EKS_OPERATOR_PRINCIPAL_ARN="arn:aws:iam::525091405886:role/operator")
+        (self.directory(STACKS[2]) / ".scaffold").unlink(missing_ok=True)
+
+    def test_scaleout_rejects_plan_before_apply_and_hides_raw_output(self):
+        self.scaleout_env()
+        self.env['FAKE_PLAN_JSON'] = '{"secret":"never-print-scaleout-raw-data"}'
+        self.env['FAKE_RAW_OUTPUT'] = 'never-print-scaleout-raw-data'
+        result = self.run_script("apply", "management-scaleout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("never-print-scaleout-raw-data", result.stdout + result.stderr)
+        self.assertEqual([c[1] for c in self.calls("terraform")], ["init", "plan", "show"])
+        self.assert_no_plans()
+
+    def test_scaleout_noop_never_calls_apply(self):
+        self.scaleout_env()
+        import runpy
+        fixture = runpy.run_path(str(ROOT / "scripts/tests/test-management-scaleout-plan.py"))['fixture']
+        self.env['FAKE_PLAN_JSON'] = json.dumps(fixture(False))
+        result = self.run_script("apply", "management-scaleout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("already at 2a=2/2c=1", result.stdout)
+        self.assertEqual([c[1] for c in self.calls("terraform")], ["init", "plan", "show"])
+        self.assert_no_plans()
+
+    def test_scaleout_applies_only_the_verified_saved_plan(self):
+        self.scaleout_env()
+        import runpy
+        fixtures = runpy.run_path(str(ROOT / "scripts/tests/test-management-scaleout-plan.py"))
+        plan = fixtures['fixture']()
+        self.env['FAKE_PLAN_JSON'] = json.dumps(plan)
+        self.env['FAKE_RAW_OUTPUT'] = 'never-print-terraform-output'
+        # Test sandbox only: use the fingerprint of synthetic data, never a runtime override.
+        guard_path = self.root / "scripts/check-management-scaleout-plan.py"
+        original = fixtures['guard'].APPROVED_DRIFT_HASH
+        guard_path.write_text(guard_path.read_text().replace(original, fixtures['fingerprint'](plan)))
+        result = self.run_script("apply", "management-scaleout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls("terraform")
+        self.assertEqual([c[1] for c in calls], ["init", "plan", "show", "apply"])
+        saved = next(a.split('=', 1)[1] for a in calls[1] if a.startswith('-out='))
+        self.assertEqual(calls[-1][-1], saved)
+        self.assertNotIn('never-print-terraform-output', result.stdout + result.stderr)
+        self.assert_no_plans()
+
+    def test_scaleout_init_and_plan_errors_cleanup_without_exposing_output(self):
+        self.scaleout_env()
+        for stage, expected_calls in (("init", ["init"]), ("plan", ["init", "plan"])):
+            with self.subTest(stage=stage):
+                self.log.unlink(missing_ok=True)
+                self.env['FAKE_FAIL'] = 'management:' + stage
+                self.env['FAKE_RAW_OUTPUT'] = 'never-print-failed-stage'
+                result = self.run_script("apply", "management-scaleout")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('never-print-failed-stage', result.stdout + result.stderr)
+                self.assertEqual([c[1] for c in self.calls("terraform")], expected_calls)
+                self.assert_no_plans()
+
+    def test_scaleout_wrong_account_fails_before_auth(self):
+        result = self.run_script("apply", "management-scaleout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_selected_eks_requires_operator_and_unknown_targets_fail(self):
         (self.directory(STACKS[2]) / ".scaffold").unlink()
