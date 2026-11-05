@@ -12,6 +12,11 @@
             "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "ip"
           }
         },
+        "ingress": {
+          "enabled": true,
+          "className": "traefik",
+          "hostSuffix": "eks.hopcharlie.internal"
+        },
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "gp3",
