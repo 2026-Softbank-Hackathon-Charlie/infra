@@ -151,7 +151,7 @@ def check_gke_image_settings(platform_values, work):
 
 def check_system_network_policy():
     chart = ROOT / "helm/charts/cluster-baseline"
-    expected = {"kube-system", "observability", "cnpg-system", "cert-manager"}
+    expected = {"kube-system", "observability", "cnpg-system", "cert-manager", "traefik"}
     with tempfile.TemporaryDirectory(prefix="charlie-system-policy-") as temp:
         work = Path(temp)
         projects = render(ROOT / "helm/gitops", ROOT / "helm/gitops/ci/targets-values.yaml", "charlie-addons", "argocd")
@@ -161,7 +161,7 @@ def check_system_network_policy():
             docs = render(chart, values_path, "baseline", namespace)
             policies = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "system-compatibility"]
             assert {d["metadata"]["namespace"] for d in policies} == (expected if purpose == "workload" else set()), purpose
-            assert len(policies) == (4 if purpose == "workload" else 0)
+            assert len(policies) == (len(expected) if purpose == "workload" else 0)
             for policy in policies:
                 assert policy["spec"] == {"podSelector": {}, "policyTypes": ["Ingress", "Egress"], "ingress": [{}], "egress": [{}]}, policy
             project = next(d for d in projects if d["kind"] == "AppProject" and d["metadata"]["name"] == f"charlie-addons-{purpose}")
@@ -183,6 +183,47 @@ def check_system_network_policy():
             result = subprocess.run([HELM, "template", "baseline", str(chart), "-f", str(values)], capture_output=True, text=True)
             assert result.returncode != 0 and "systemCompatibilityNamespaces" in result.stderr, result.stderr
     print("System NetworkPolicy checks passed: exact namespaces, management opt-out, unchanged app policies, AppProject permissions and unsafe input rejection.")
+
+
+def check_traefik(docs):
+    """The shared app entry of the workload cluster (ADR 0058): one internal NLB with a
+    fixed name that Argo CD never deletes, an IngressClass apps must ask for by name,
+    and no CRD provider, dashboard or public TLS port."""
+    services = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Service"}
+    assert sorted(services) == ["traefik", "traefik-no-route"], sorted(services)
+    svc = services["traefik"]
+    notes = svc["metadata"]["annotations"]
+    assert notes["argocd.argoproj.io/sync-options"] == "Delete=false,Prune=false", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-name"] == "hopcharlie-apps-eks", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-scheme"] == "internal", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"] == "ip", notes
+    # Traefik keeps serving for 20 s and drains for 30 s after SIGTERM; the NLB holds a
+    # draining target at least that long and stops new connections once /ping fails.
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-target-group-attributes"] == "deregistration_delay.timeout_seconds=60", notes
+    assert {k.rpartition("/")[2]: v for k, v in notes.items() if "healthcheck" in k} == {
+        "aws-load-balancer-healthcheck-protocol": "http", "aws-load-balancer-healthcheck-port": "8080", "aws-load-balancer-healthcheck-path": "/ping",
+        "aws-load-balancer-healthcheck-interval": "5", "aws-load-balancer-healthcheck-timeout": "3",
+        "aws-load-balancer-healthcheck-healthy-threshold": "2", "aws-load-balancer-healthcheck-unhealthy-threshold": "2"}, notes
+    assert svc["spec"]["type"] == "LoadBalancer" and svc["spec"]["loadBalancerSourceRanges"] == ["10.40.0.0/19"], svc["spec"]
+    assert [(p["port"], p["targetPort"]) for p in svc["spec"]["ports"]] == [(80, "web")], svc["spec"]["ports"]
+    classes = [d for d in docs if d["kind"] == "IngressClass"]
+    assert [(c["metadata"]["name"], c["spec"]["controller"]) for c in classes] == [("traefik", "traefik.io/ingress-controller")], classes
+    assert (classes[0]["metadata"].get("annotations") or {}).get("ingressclass.kubernetes.io/is-default-class", "false") == "false", classes
+    args = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["containers"][0]["args"]
+    for arg in ("--providers.kubernetesingress.ingressClass=traefik", "--providers.kubernetesingress.ingressendpoint.publishedservice=traefik/traefik",
+                "--entryPoints.web.forwardedHeaders.trustedIPs=10.40.0.0/16", "--entryPoints.web.forwardedHeaders.notAppendXForwardedFor=true",
+                "--entryPoints.web.transport.lifeCycle.requestAcceptGraceTimeout=20s", "--entryPoints.web.transport.lifeCycle.graceTimeOut=30s",
+                "--api.dashboard=false"):
+        assert arg in args, arg
+    assert not any("websecure" in a for a in args), args
+    assert not any(a.startswith("--providers.kubernetescrd") for a in args), args
+    # A host with no app Ingress gets 503 from a Service without endpoints, not
+    # Traefik's 404, so the platform's probe of a missing route fails.
+    assert "--providers.kubernetesingress.allowEmptyServices=true" in args, args
+    catch_all = [d for d in docs if d["kind"] == "Ingress"]
+    assert [(d["metadata"]["name"], d["spec"]) for d in catch_all] == [("traefik-no-route", {
+        "ingressClassName": "traefik", "defaultBackend": {"service": {"name": "traefik-no-route", "port": {"number": 80}}}})], catch_all
+    assert services["traefik-no-route"]["spec"]["selector"] == {"hopcharlie.dev/no-route": "none"}
 
 
 def main():
@@ -229,6 +270,14 @@ def main():
                         if "chart" in source:
                             pin = VERSIONS["charts"][source["chart"]]
                             assert source["repoURL"] == pin["repo"] and source["targetRevision"] == pin["version"]
+                            # Only Traefik skips its CRDs (ADR 0058: the CRD provider is off).
+                            assert source["helm"].get("skipCrds", False) == (source["chart"] == "traefik"), app["metadata"]["name"]
+                    labels = app["spec"]["syncPolicy"].get("managedNamespaceMetadata", {}).get("labels")
+                    if app["metadata"]["name"] == "charlie-workload-traefik":
+                        assert app["spec"]["destination"]["namespace"] == "traefik"
+                        assert labels == {"elbv2.k8s.aws/pod-readiness-gate-inject": "enabled"}, labels
+                    else:
+                        assert labels is None, app["metadata"]["name"]
         for purpose in ("management", "workload"):
             values_root = ROOT / f"clusters/aws-dev-{purpose}/values"
             baseline_ns = "charlie-platform" if purpose == "management" else "charlie-apps"
@@ -247,12 +296,14 @@ def main():
                     chart_dir.mkdir(parents=True)
                     helm("pull", name, "--repo", pin["repo"], "--version", pin["version"], "--untar", "--untardir", chart_dir)
                 chart = chart_dir / name
-                namespace = "observability" if name in {"kube-prometheus-stack", "loki", "opentelemetry-collector"} else "kube-system"
+                namespace = "observability" if name in {"kube-prometheus-stack", "loki", "opentelemetry-collector"} else "traefik" if name == "traefik" else "kube-system"
                 release = "monitoring" if name == "kube-prometheus-stack" else name
                 extra = ("--set", f"clusterName=charlie-dev-{purpose}", "--set", "region=ap-northeast-2", "--set", "vpcId=vpc-0123456789abcdef0") if name == "aws-load-balancer-controller" else ()
                 docs = render(chart, values_root / f"{name}.yaml", release, namespace, extra)
                 check_project(docs, projects[purpose], namespace)
                 seen.update(check_images(docs))
+                if name == "traefik":
+                    check_traefik(docs)
         # GKE sealed-secrets (ADR 0043): applied by hand, not Argo. It must keep
         # its own key, never renew it, and unseal in every namespace.
         docs = render(work / "charts/sealed-secrets/sealed-secrets", ROOT / "clusters/gcp-dev-workload/values/sealed-secrets.yaml", "sealed-secrets-gcp", "charlie-apps")

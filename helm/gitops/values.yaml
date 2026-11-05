@@ -17,7 +17,8 @@
       "metrics-server",
       "kube-prometheus-stack",
       "sealed-secrets",
-      "argo-rollouts"
+      "argo-rollouts",
+      "traefik"
     ]
   },
   "observability": {

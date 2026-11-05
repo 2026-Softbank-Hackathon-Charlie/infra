@@ -131,7 +131,8 @@
               "kube-prometheus-stack",
               "sealed-secrets",
               "argo-rollouts",
-              "opentelemetry-collector"
+              "opentelemetry-collector",
+              "traefik"
             ]
           }
         }

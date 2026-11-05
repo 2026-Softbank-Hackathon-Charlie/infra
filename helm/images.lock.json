@@ -31,6 +31,7 @@
     "docker.io/grafana/loki:3.6.12": "sha256:2483b71b28b15dee230f85512cae2b20c4b5f6e98a6eabe686cbccfa5ea3ba4a",
     "docker.io/bitnami/sealed-secrets-controller:0.40.0": "sha256:b1ff382e9300dc9e74991f3177b18cafc06ce43b5c21349c86adbdd1d1c177d3",
     "quay.io/argoproj/argo-rollouts:v1.10.0": "sha256:187630ba722846bb8e079630364d3c29c8246a256be95785fd957b088f621c4e",
+    "docker.io/traefik:v3.7.16": "sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65",
     "docker.io/library/postgres:17.11-alpine": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "public.ecr.aws/aws-cli/aws-cli:2.31.0": "sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487",
     "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.1": "sha256:923c267ec29636db3bee20f993d0ec4973fa22998e1adad37da79e4d32b5bc07",

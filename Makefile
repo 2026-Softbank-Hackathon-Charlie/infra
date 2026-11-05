@@ -54,6 +54,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-headlamp-google-config.py
 	@$(PYTHON) scripts/tests/test-argocd-gcp.py
 	@$(PYTHON) scripts/tests/test-app-routing.py
+	@$(PYTHON) scripts/tests/test-register-traefik.py
 	@$(PYTHON) scripts/tests/test-db-network.py
 	@$(PYTHON) scripts/tests/test-db-network-assets.py
 	@$(PYTHON) scripts/tests/test-db-migration-access.py

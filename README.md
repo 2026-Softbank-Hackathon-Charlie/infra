@@ -603,6 +603,11 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0056-render-app-service-contract-in-chart.md](docs/adr/0056-render-app-service-contract-in-chart.md) | 앱 차트의 워커 서비스, 서비스별 메모리와 CPU, DB 연결 변수, Postgres 파드 resources 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
+| [docs/adr/0058-share-one-app-entry-per-workload-cluster.md](docs/adr/0058-share-one-app-entry-per-workload-cluster.md) | 워크로드 EKS의 앱 진입점을 Traefik과 내부 NLB 하나로 모으는 제안, GKE 후속 작업 |
+| [docs/runbooks/app-entry.md](docs/runbooks/app-entry.md) | 앱 진입점 등록, 롤링 재시작 시험, 전환, 앱 NLB 정리, NLB 재생성과 되돌리기 |
+| [scripts/register-traefik.py](scripts/register-traefik.py) | root sync 없이 워크로드 AppProject 변경과 Traefik Application만 미리 보기, 생성, sync. AppProject가 Traefik 저장소와 대상 말고 바뀌면 멈춤 |
+| [scripts/tests/test-register-traefik.py](scripts/tests/test-register-traefik.py) | 위 스크립트의 AppProject 변경 검사 오프라인 테스트 |
+| [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
