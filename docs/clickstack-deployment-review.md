@@ -4,7 +4,7 @@
 - 브랜치: feat/clickstack-monitoring-preparation
 - 기준 main: d56b207 (PR #63 머지, 원래 A 구현 기준 68123c6)
 - 승인: A 로컬 구현·검증과 2026-11-05 관리 EKS의 한정 읽기 점검(B) 수행. Secret 값 조회·자격 증명 생성·클러스터 변경·배포(C)는 미승인/미실행.
-- 결정: [ADR 0048](adr/0048-adopt-clickstack-for-hackathon-observability.md)
+- 결정: [ADR 0050](adr/0050-adopt-clickstack-for-hackathon-observability.md)
 - 계획: [구현·배포 계획](plans/clickstack-implementation.md)
 
 ## 구현 결과
@@ -168,3 +168,10 @@ Prometheus 서비스 DNS `monitoring-prometheus.observability.svc:9090`은 fixtu
 - Terraform fmt/config-check, inventory 435개, diff 공백 및 변경한 Python 구문 검사 통과. Terraform 코드 자체는 이 PR에서 수정하지 않았다.
 - Docker daemon은 접근 가능한 실행 상태가 아니므로 DB/operator/HyperDX 컨테이너 런타임 검증은 수행하지 않았다. 기존 C 단계의 실제 로그인·수신·영속성 검증 관문을 유지한다.
 - 승인 범위와 실제 수행: 로컬 구현·검증·PR 준비 및 기존 승인 범위의 관리 nodegroup metadata 조회만 수행. Secret 조회/생성, Pod 로그/exec, live dry-run, CI 수동 배포와 Argo sync는 하지 않았다.
+
+## 2026-11-05 관리 노드 증설 완료
+
+- CI plan [41991039778](https://github.com/2026-Softbank-Hackathon-Charlie/infra/actions/runs/41991039778), apply [41991786700](https://github.com/2026-Softbank-Hackathon-Charlie/infra/actions/runs/41991786700) 모두 성공했다. 실행 SHA는 159a34b30336ecc00b69debcc91890ec77d820eb이다.
+- 08:16 UTC 확인에서 관리 2a 2대·2c 1대, 3대 모두 Ready이며 기존 workload Ready 부족/Pending이 없었다. CPU allocatable 합계5.79, requests2.68, 여유3.11코어다. 이전의 1.36코어 여유 수치는 증설 전 기록이다.
+- 이 결과는 ClickStack 설치·Secret 생성 완료가 아니다. 신규 operator 생성 Pod/init 요청과 실제 배치·런타임 검증은 여전히 C 관문이다.
+- 최신 main(919d7f3)의 다른 프로젝트 변경을 보존하며 미병합 ClickStack ADR을 0050으로 정리했다. 실제 CI 부트스트랩은 별도 [C 계획](plans/clickstack-management-deployment.md)과 제안 ADR0051의 승인 대상이다.

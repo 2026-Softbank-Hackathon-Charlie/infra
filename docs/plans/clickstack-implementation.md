@@ -3,7 +3,7 @@
 - 날짜: 2026-11-04
 - 상태: A 로컬 구현·검증 완료. 2026-11-05 관리 EKS 한정 B 조회 완료, CPU 예약량 부족 확인. C 배포 미승인/미실행
 - 분류: 영향이 크거나 불확실한 작업. GitOps 계약, CRD/operator/RBAC, Secret, PVC, 앱 계측과 멀티클라우드 연결에 걸친다.
-- 기준: [ADR 0048](../adr/0048-adopt-clickstack-for-hackathon-observability.md), [아키텍처 제안](../clickstack-architecture.md), [ADR 0018](../adr/0018-stage-minimal-management-monitoring.md), [ADR 0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)
+- 기준: [ADR 0050](../adr/0050-adopt-clickstack-for-hackathon-observability.md), [아키텍처 제안](../clickstack-architecture.md), [ADR 0018](../adr/0018-stage-minimal-management-monitoring.md), [ADR 0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)
 
 ## 1. 목표와 승인 단위
 
@@ -173,7 +173,7 @@ A 첫 관문에서 Secret reference schema/runtime와 HyperDX 실험적 기능�
 
 ## A 수행 기록
 
-사용자 승인: “새로운 브랜치 만들어서 진행해줘.” 최신 main 68123c6 기준 격리 worktree의 feat/clickstack-observability에서 수행했다. 이전 작업 트리의 변경은 보존했다. main의 번호 충돌로 ADR0048을 사용하며 기존 ADR0020을 덮어쓰지 않았다.
+사용자 승인: “새로운 브랜치 만들어서 진행해줘.” 최신 main 68123c6 기준 격리 worktree의 feat/clickstack-observability에서 수행했다. 이전 작업 트리의 변경은 보존했다. main의 번호 충돌로 ADR0050을 사용하며 기존 ADR0020을 덮어쓰지 않았다.
 
 중앙 Collector는 공식 standalone 이미지의 설정 순서를 보존하기 위해 범용 subchart 대신 작은 Deployment로 작성했다. 기존 설정 이름과 고정 이미지의 호환성을 위해 agent/gateway의 rewriteDeprecatedComponentNames를 껐다. MongoDB는 신규 8.0.17 digest를 선택했고 실제 조합은 C에서 검증한다. 변경 결과·미완료·실행 전 관문은 [배포 전 검토](../clickstack-deployment-review.md)에 기록한다.
 
@@ -185,6 +185,10 @@ chart·GitOps·수집 검사 간 참조가 밀접하므로 구현은 검증 가�
 
 ## 2026-11-05 모니터링 준비 재개
 
-사용자는 PR #63을 직접 merge한 후 모니터링 준비 재개를 요청했다. 기존 A 승인 범위 안에서 최신 main d56b207 기반 새 `feat/clickstack-monitoring-preparation` 브랜치에 기존 ClickStack 코드만 가져왔다. main에 포함된 노드 증설·CI 코드, 플랫폼 최신 이미지, self-hosted runner 및 strict network policy 코드는 보존했다. 초기 미병합 ADR0040은 현재 main 번호 충돌을 피해 ADR0048로 옮겼다. 기존 worktree의 사용자 변경과 미완료 CI 계획 초안은 그대로 두었다.
+사용자는 PR #63을 직접 merge한 후 모니터링 준비 재개를 요청했다. 기존 A 승인 범위 안에서 최신 main d56b207 기반 새 `feat/clickstack-monitoring-preparation` 브랜치에 기존 ClickStack 코드만 가져왔다. main에 포함된 노드 증설·CI 코드, 플랫폼 최신 이미지, self-hosted runner 및 strict network policy 코드는 보존했다. 초기 미병합 ADR0040은 현재 main 번호 충돌을 피해 ADR0050로 옮겼다. 기존 worktree의 사용자 변경과 미완료 CI 계획 초안은 그대로 두었다.
 
 조회한 PR #63은 MERGED이며 CI 이력에는 merge 후 push 검사만 확인했다. 관리 2a nodegroup은 ACTIVE지만 min/desired/max는 여전히 1이다. 이는 합계 노드 3대 증설 완료가 아니므로 과거 CPU 용량 관문을 해소했다고 판정하지 않는다. 실제 배포는 로컬 apply가 아니라 main의 명시적 CI 수동 실행 및 Argo CD의 승인된 수동 sync 경로를 사용한다. 이번 준비에서 CI 배포·Secret 생성·클러스터 변경은 실행하지 않는다. 기존 A 구현의 새 설계 선택 없이 최신 main 정합성·동일 계약 검증과 PR 준비를 진행한다.
+
+## 2026-11-05 C 개발 계획 검토
+
+PR #64 정리를 수행하며 최신 main919d7f3과 관리 노드3대 Ready 결과를 반영했다. ClickStack 결정 문서는 번호 충돌을 피해 ADR0050으로 정리했다. [C 설치 계획](clickstack-management-deployment.md) 및 제안 ADR0051은 새 에이전트 독립 리뷰 GREEN 판정까지 받았으며, 신규 CI/bootstrap 구현과 실제 실행은 사용자 승인 대기다. C 권한을 기존 A 승인으로 확대하지 않는다.
