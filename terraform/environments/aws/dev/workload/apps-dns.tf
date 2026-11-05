@@ -43,3 +43,12 @@ resource "aws_route53_record" "eks_apps" {
     evaluate_target_health = false
   }
 }
+
+# More than one match (a renamed Service whose old NLB is not deleted yet, or a leaked
+# NLB) also leaves the record out; warn instead of picking one.
+check "eks_apps_entry_nlb" {
+  assert {
+    condition     = length(data.aws_lbs.eks_apps_entry.arns) == 1
+    error_message = "Found ${length(data.aws_lbs.eks_apps_entry.arns)} NLBs of Service traefik/traefik, not one, so *.eks.${local.apps_zone} is not managed. See docs/runbooks/app-entry.md."
+  }
+}
