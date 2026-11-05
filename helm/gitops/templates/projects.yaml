@@ -25,6 +25,12 @@ spec:
       namespace: kube-system
     - server: {{ $target.endpoint | quote }}
       namespace: observability
+    {{- if eq $purpose "workload" }}
+    - server: {{ $target.endpoint | quote }}
+      namespace: cnpg-system
+    - server: {{ $target.endpoint | quote }}
+      namespace: cert-manager
+    {{- end }}
     - server: {{ $target.endpoint | quote }}
       namespace: {{ if eq $purpose "management" }}charlie-platform{{ else }}charlie-apps{{ end }}
   clusterResourceWhitelist:

@@ -1,5 +1,7 @@
 """Canonical inputs and deployment rejection contracts; no AWS access."""
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -70,6 +72,45 @@ class ConfigTests(unittest.TestCase):
         self.p['foundation']['vpc_cidr'] = '10.80.0.0/16'
         self.assertEqual(cfg.variables(self.p, ci, 'aws/dev/foundation')['nat_gateway_mode'], 'single')
         self.assertEqual(cfg.variables(self.p, local, 'aws/dev/foundation'), cfg.variables(self.p, ci, 'aws/dev/foundation'))
+
+    def test_workload_network_policy_mode_is_canonical_and_scoped(self):
+        self.assertEqual(cfg.variables(cfg.project(), self.a, 'aws/dev/workload')['network_policy_enforcing_mode'], 'strict')
+        for mode in ('standard', 'strict'):
+            self.p['workload_network_policy_enforcing_mode'] = mode
+            self.write_project()
+            p = cfg.project()
+            self.assertEqual(cfg.variables(p, self.a, 'aws/dev/workload')['network_policy_enforcing_mode'], mode)
+            for stack in cfg.STACKS:
+                if stack != 'aws/dev/workload':
+                    self.assertNotIn('network_policy_enforcing_mode', cfg.variables(p, self.a, stack))
+        for mode in ('STRICT', 'disabled', '', None, True, []):
+            self.p['workload_network_policy_enforcing_mode'] = mode
+            self.write_project()
+            with self.subTest(mode=mode), self.assertRaisesRegex(cfg.ConfigError, 'network policy'):
+                cfg.project()
+
+    def test_prepare_forwards_workload_mode_in_local_and_ci_paths(self):
+        os.environ.update(AWS_ACCOUNT_ID=self.a['aws_account_id'], EKS_OPERATOR_PRINCIPAL_ARN=self.a['operator_principal_arn'])
+        for mode in ('strict', 'standard'):
+            self.p['workload_network_policy_enforcing_mode'] = mode
+            self.write_project()
+            for ci in (False, True):
+                for stack in ('aws/dev/workload', 'aws/dev/management'):
+                    output = self.root / 'prepared' / mode / str(ci) / stack
+                    args = ['project-config.py', 'prepare', '--stack', stack, '--output-dir', str(output)] + (['--ci'] if ci else [])
+                    with self.subTest(mode=mode, ci=ci, stack=stack), patch.object(sys, 'argv', args), contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(cfg.main(), 0)
+                        variables = json.loads((output / 'inputs.tfvars.json').read_text())
+                        if stack == 'aws/dev/workload':
+                            self.assertEqual(variables['network_policy_enforcing_mode'], mode)
+                        else:
+                            self.assertNotIn('network_policy_enforcing_mode', variables)
+        self.p['workload_network_policy_enforcing_mode'] = 'disabled'
+        self.write_project()
+        rejected = self.root / 'rejected'
+        with patch.object(sys, 'argv', ['project-config.py', 'prepare', '--ci', '--stack', 'aws/dev/workload', '--output-dir', str(rejected)]), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(cfg.main(), 1)
+            self.assertFalse(rejected.exists())
 
     def test_immutable_oidc_prefix_is_forwarded_without_removing_ids(self):
         prefix = 'repo:2026-Softbank-Hackathon-Charlie@350278309/infra@1442353250'

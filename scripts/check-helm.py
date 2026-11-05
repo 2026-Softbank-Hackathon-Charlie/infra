@@ -113,7 +113,44 @@ def check_gke_image_settings(platform_values, work):
         assert result.returncode != 0 and message in result.stderr, result.stderr
 
 
+def check_system_network_policy():
+    chart = ROOT / "helm/charts/cluster-baseline"
+    expected = {"kube-system", "observability", "cnpg-system", "cert-manager"}
+    with tempfile.TemporaryDirectory(prefix="charlie-system-policy-") as temp:
+        work = Path(temp)
+        projects = render(ROOT / "helm/gitops", ROOT / "helm/gitops/ci/targets-values.yaml", "charlie-addons", "argocd")
+        for purpose in ("management", "workload"):
+            values_path = ROOT / f"clusters/aws-dev-{purpose}/values/baseline.yaml"
+            namespace = "charlie-platform" if purpose == "management" else "charlie-apps"
+            docs = render(chart, values_path, "baseline", namespace)
+            policies = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "system-compatibility"]
+            assert {d["metadata"]["namespace"] for d in policies} == (expected if purpose == "workload" else set()), purpose
+            assert len(policies) == (4 if purpose == "workload" else 0)
+            for policy in policies:
+                assert policy["spec"] == {"podSelector": {}, "policyTypes": ["Ingress", "Egress"], "ingress": [{}], "egress": [{}]}, policy
+            project = next(d for d in projects if d["kind"] == "AppProject" and d["metadata"]["name"] == f"charlie-addons-{purpose}")
+            destinations = {d["namespace"] for d in project["spec"]["destinations"]}
+            assert "*" not in destinations and not any("sandbox" in d for d in destinations), destinations
+            assert (expected <= destinations) if purpose == "workload" else not ({"cnpg-system", "cert-manager"} & destinations)
+            check_project(docs, project, namespace)
+            # Opting into system compatibility must leave application/DB rules identical.
+            values = json.loads(values_path.read_text())
+            values.setdefault("networkPolicy", {})["systemCompatibilityNamespaces"] = []
+            disabled = work / f"{purpose}.json"
+            disabled.write_text(json.dumps(values))
+            assert [d for d in docs if d not in policies] == render(chart, disabled, "baseline", namespace)
+        defaults = render(chart, chart / "values.yaml")
+        assert not any(d["metadata"]["name"] == "system-compatibility" for d in defaults)
+        for invalid in (["charlie-apps"], ["charlie-db"], ["sandbox-test"], ["*"], ["kube-system", "kube-system"]):
+            values = work / "invalid.json"
+            values.write_text(json.dumps({"networkPolicy": {"systemCompatibilityNamespaces": invalid}}))
+            result = subprocess.run([HELM, "template", "baseline", str(chart), "-f", str(values)], capture_output=True, text=True)
+            assert result.returncode != 0 and "systemCompatibilityNamespaces" in result.stderr, result.stderr
+    print("System NetworkPolicy checks passed: exact namespaces, management opt-out, unchanged app policies, AppProject permissions and unsafe input rejection.")
+
+
 def main():
+    check_system_network_policy()
     assert helm("version", "--short").startswith("v" + VERSIONS["helm"]), "Use the pinned Helm version"
     fixture = json.loads((ROOT / "helm/gitops/ci/targets-values.yaml").read_text())
     # Render the staged configuration and the OTel-enabled variant.

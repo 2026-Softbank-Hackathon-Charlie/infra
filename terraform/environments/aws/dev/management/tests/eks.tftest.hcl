@@ -35,6 +35,10 @@ variables {
 run "foundation_contract" {
   command = apply
   assert {
+    condition     = module.eks.network_policy_enforcing_mode == "standard"
+    error_message = "The management cluster must default to standard network policy enforcement."
+  }
+  assert {
     condition     = output.target.id == "aws-dev-management" && output.target.subnet_ids_by_az == data.terraform_remote_state.foundation.outputs.management_subnet_ids_by_az && output.target.argocd_role_arn == data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["management"] && output.target.ssm_bridge_instance_id == "i-0123456789abcdef0" && output.target.additional_operator_principal_arns == var.additional_operator_principal_arns
     error_message = "Consume only the correct foundation target contract, without cross-root state."
   }

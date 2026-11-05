@@ -102,3 +102,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "network_policy_enforcing_mode" {
+  description = "VPC CNI startup enforcement mode; strict requires policies before Pod startup."
+  type        = string
+  default     = "standard"
+  validation {
+    condition     = contains(["standard", "strict"], var.network_policy_enforcing_mode)
+    error_message = "Network policy enforcing mode must be standard or strict."
+  }
+}
