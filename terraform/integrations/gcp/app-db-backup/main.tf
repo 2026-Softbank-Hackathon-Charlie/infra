@@ -11,6 +11,11 @@ resource "google_storage_bucket" "backups" {
   public_access_prevention    = "enforced"
   force_destroy               = false
 
+  # Deleted objects stay recoverable for 7 days (the GCS default, pinned).
+  soft_delete_policy {
+    retention_duration_seconds = 604800
+  }
+
   # Barman owns backup and WAL retention; no lifecycle rule deletes objects.
   lifecycle {
     prevent_destroy = true
@@ -32,7 +37,9 @@ resource "google_service_account_iam_member" "clusters" {
 
 resource "google_storage_bucket_iam_member" "backups" {
   for_each = toset([
-    "roles/storage.objectAdmin",
+    # Objects only: create, read, list and delete (Barman's retention), but
+    # not the objects' IAM, unlike objectAdmin.
+    "roles/storage.objectUser",
     # Native GCS backup clients read bucket metadata before uploading.
     "roles/storage.legacyBucketReader",
   ])

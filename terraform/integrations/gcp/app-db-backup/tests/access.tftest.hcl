@@ -21,6 +21,10 @@ run "private_bucket_in_the_region" {
     condition     = length(google_storage_bucket.backups.lifecycle_rule) == 0
     error_message = "Barman owns retention; no lifecycle rule may delete backups."
   }
+  assert {
+    condition     = google_storage_bucket.backups.soft_delete_policy[0].retention_duration_seconds == 604800
+    error_message = "Keep deleted objects recoverable for 7 days."
+  }
 }
 run "only_the_named_clusters_act_as_the_account" {
   command = plan
@@ -36,7 +40,7 @@ run "only_the_named_clusters_act_as_the_account" {
 run "objects_of_its_bucket_only" {
   command = plan
   assert {
-    condition     = toset([for m in google_storage_bucket_iam_member.backups : m.role]) == toset(["roles/storage.objectAdmin", "roles/storage.legacyBucketReader"]) && alltrue([for m in google_storage_bucket_iam_member.backups : m.bucket == "charlie-test-app-db-backup" && m.member == "serviceAccount:charlie-app-db-backup@charlie-test-project.iam.gserviceaccount.com"])
+    condition     = toset([for m in google_storage_bucket_iam_member.backups : m.role]) == toset(["roles/storage.objectUser", "roles/storage.legacyBucketReader"]) && alltrue([for m in google_storage_bucket_iam_member.backups : m.bucket == "charlie-test-app-db-backup" && m.member == "serviceAccount:charlie-app-db-backup@charlie-test-project.iam.gserviceaccount.com"])
     error_message = "The account may use objects of this bucket only; no project role."
   }
 }

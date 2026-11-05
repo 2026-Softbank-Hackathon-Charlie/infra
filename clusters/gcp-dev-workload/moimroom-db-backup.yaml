@@ -1,7 +1,13 @@
 # Backups of the live moimroom database on GKE, charlie-apps/moimroom-db-gke
 # (infra ADR 0057). That Cluster was made by hand for the 2026-11-05
-# migration, so no chart draws these; an operator applies this file with
-# kubectl and patches the Cluster with moimroom-db-backup-patch.json. The
+# migration, so no chart draws these and no base manifest of the Cluster is in
+# this repository (it is in the migration-engine repository's test record
+# 2026-11-05-moimroom-eks-to-gke/moimroom-db-gke.yaml). An operator applies
+# this file and patches the live Cluster:
+#   kubectl apply -f clusters/gcp-dev-workload/moimroom-db-backup.yaml
+#   kubectl -n charlie-apps patch cluster moimroom-db-gke --type merge \
+#     --patch-file clusters/gcp-dev-workload/moimroom-db-backup-patch.json
+# The
 # bucket and the Google service account come from
 # terraform/integrations/gcp/app-db-backup. Same as the app chart's backups
 # (platform ADR 0025) except for the credentials: GKE Workload Identity, as
@@ -43,8 +49,10 @@ metadata:
 spec:
   cluster:
     name: moimroom-db-gke
-  # Six fields, UTC: 03:00 KST. One backup as soon as it is applied.
-  schedule: "0 0 18 * * *"
+  # Six fields, UTC: 03:10 KST, ten minutes after the EKS replica's 03:00.
+  # A backup of that replica waits until this primary switches WAL segments,
+  # which this backup does. One backup as soon as it is applied.
+  schedule: "0 10 18 * * *"
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
