@@ -4,13 +4,8 @@
       "cluster": {},
       "profile": {
         "publicService": {
-          "type": "LoadBalancer",
-          "port": 80,
-          "annotations": {
-            "service.beta.kubernetes.io/aws-load-balancer-type": "external",
-            "service.beta.kubernetes.io/aws-load-balancer-scheme": "internal",
-            "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "ip"
-          }
+          "type": "ClusterIP",
+          "port": 80
         },
         "ingress": {
           "enabled": true,
@@ -42,7 +37,7 @@
             "pods": "20",
             "persistentvolumeclaims": "4",
             "requests.storage": "20Gi",
-            "services.loadbalancers": "1"
+            "services.loadbalancers": "0"
           }
         },
         "limitRange": {

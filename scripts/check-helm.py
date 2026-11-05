@@ -453,7 +453,12 @@ def main():
             gitops_file = yaml.safe_load(ci.read_text())
             public = any(s.get("public") for s in gitops_file["values"]["services"])
             for extra in ((), ("-f", eks_profile)):
-                docs = render(ROOT / "helm/charts/hopcharlie-app", ci, gitops_file["namespace"], gitops_file["namespace"], extra)
+                source = ci
+                if extra:
+                    # Argo CD passes the gitops file, which has no profile, and the environment's profile.
+                    source = work / ("eks-" + ci.name)
+                    source.write_text(json.dumps({k: v for k, v in gitops_file.items() if k != "profile"}))
+                docs = render(ROOT / "helm/charts/hopcharlie-app", source, gitops_file["namespace"], gitops_file["namespace"], extra)
                 for doc in docs:
                     assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
                 profile = json.loads(eks_profile.read_text())["profile"] if extra else gitops_file.get("profile", {})
@@ -480,9 +485,14 @@ def main():
                         buckets = [e["value"] for e in container["env"] if e["name"] == "S3_BUCKET"]
                         assert buckets == (["hopcharlie-eks-" + gitops_file["namespace"]] if any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or []) else []), buckets
                 if extra:
-                    # The gateway reaches every app's internal load balancer on port 80.
-                    ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
+                    # No app load balancer on eks (ADR 0058): the public Service is a ClusterIP on
+                    # port 80 behind the shared entry, and the quota allows no LoadBalancer.
+                    assert not any(d["kind"] == "Service" and d["spec"]["type"] != "ClusterIP" for d in docs), "eks apps get no load balancer"
+                    assert not any(d["kind"] == "Service" and d["metadata"].get("annotations") for d in docs), "eks Services carry no load balancer annotations"
+                    ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and f"{gitops_file['values']['app']}-" + next((s["name"] for s in gitops_file["values"]["services"] if s.get("public")), "") == d["metadata"]["name"]]
                     assert ports == ([80] if public else []), ports
+                    quota = next(d for d in docs if d["kind"] == "ResourceQuota")
+                    assert quota["spec"]["hard"]["services.loadbalancers"] == "0", quota["spec"]["hard"]
                     # The shared entry (ADR 0058): the public service's route on Traefik at
                     # <instance>.eks.hopcharlie.internal, the platform's eks backend host.
                     svc_name = next((f"{gitops_file['values']['app']}-{s['name']}" for s in gitops_file["values"]["services"] if s.get("public")), None)
