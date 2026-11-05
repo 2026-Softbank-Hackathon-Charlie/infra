@@ -813,8 +813,6 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [clusters/aws-dev-management/values/clickstack.yaml](clusters/aws-dev-management/values/clickstack.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [clusters/aws-dev-management/values/otel-gateway.yaml](clusters/aws-dev-management/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [clusters/aws-dev-workload/values/otel-gateway.yaml](clusters/aws-dev-workload/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/adr/0051-bootstrap-management-clickstack-from-ci.md](docs/adr/0051-bootstrap-management-clickstack-from-ci.md) | CI 부트스트랩 권한·실행 경로 제안 |
-| [docs/plans/clickstack-management-deployment.md](docs/plans/clickstack-management-deployment.md) | 실제 관리 ClickStack 설치 계획·승인 범위 |
 | [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |

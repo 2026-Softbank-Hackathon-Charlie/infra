@@ -174,4 +174,3 @@ Prometheus 서비스 DNS `monitoring-prometheus.observability.svc:9090`은 fixtu
 - CI plan [41991039778](https://github.com/2026-Softbank-Hackathon-Charlie/infra/actions/runs/41991039778), apply [41991786700](https://github.com/2026-Softbank-Hackathon-Charlie/infra/actions/runs/41991786700) 모두 성공했다. 실행 SHA는 159a34b30336ecc00b69debcc91890ec77d820eb이다.
 - 08:16 UTC 확인에서 관리 2a 2대·2c 1대, 3대 모두 Ready이며 기존 workload Ready 부족/Pending이 없었다. CPU allocatable 합계5.79, requests2.68, 여유3.11코어다. 이전의 1.36코어 여유 수치는 증설 전 기록이다.
 - 이 결과는 ClickStack 설치·Secret 생성 완료가 아니다. 신규 operator 생성 Pod/init 요청과 실제 배치·런타임 검증은 여전히 C 관문이다.
-- 최신 main(919d7f3)의 다른 프로젝트 변경을 보존하며 미병합 ClickStack ADR을 0050으로 정리했다. 실제 CI 부트스트랩은 별도 [C 계획](plans/clickstack-management-deployment.md)과 제안 ADR0051의 승인 대상이다.

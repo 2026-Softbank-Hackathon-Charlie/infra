@@ -188,7 +188,3 @@ chart·GitOps·수집 검사 간 참조가 밀접하므로 구현은 검증 가�
 사용자는 PR #63을 직접 merge한 후 모니터링 준비 재개를 요청했다. 기존 A 승인 범위 안에서 최신 main d56b207 기반 새 `feat/clickstack-monitoring-preparation` 브랜치에 기존 ClickStack 코드만 가져왔다. main에 포함된 노드 증설·CI 코드, 플랫폼 최신 이미지, self-hosted runner 및 strict network policy 코드는 보존했다. 초기 미병합 ADR0040은 현재 main 번호 충돌을 피해 ADR0050로 옮겼다. 기존 worktree의 사용자 변경과 미완료 CI 계획 초안은 그대로 두었다.
 
 조회한 PR #63은 MERGED이며 CI 이력에는 merge 후 push 검사만 확인했다. 관리 2a nodegroup은 ACTIVE지만 min/desired/max는 여전히 1이다. 이는 합계 노드 3대 증설 완료가 아니므로 과거 CPU 용량 관문을 해소했다고 판정하지 않는다. 실제 배포는 로컬 apply가 아니라 main의 명시적 CI 수동 실행 및 Argo CD의 승인된 수동 sync 경로를 사용한다. 이번 준비에서 CI 배포·Secret 생성·클러스터 변경은 실행하지 않는다. 기존 A 구현의 새 설계 선택 없이 최신 main 정합성·동일 계약 검증과 PR 준비를 진행한다.
-
-## 2026-11-05 C 개발 계획 검토
-
-PR #64 정리를 수행하며 최신 main919d7f3과 관리 노드3대 Ready 결과를 반영했다. ClickStack 결정 문서는 번호 충돌을 피해 ADR0050으로 정리했다. [C 설치 계획](clickstack-management-deployment.md) 및 제안 ADR0051은 새 에이전트 독립 리뷰 GREEN 판정까지 받았으며, 신규 CI/bootstrap 구현과 실제 실행은 사용자 승인 대기다. C 권한을 기존 A 승인으로 확대하지 않는다.
