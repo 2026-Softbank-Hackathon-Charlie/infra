@@ -137,7 +137,7 @@ jobs:
           [[ "$TERRAFORM_RESULT" == success && "$HELM_RESULT" == success && "$SCRIPTS_RESULT" == success ]]
   deploy:
     needs: check
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'plan' || inputs.action == 'apply')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.action == 'plan' || inputs.action == 'apply')))
     runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 120
     concurrency:
@@ -193,6 +193,6 @@ jobs:
           allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
       - name: Run selected Terraform stack
         env:
-          TF_ACTION: ${{ inputs.action }}
-          TF_STACK: ${{ inputs.stack }}
+          TF_ACTION: ${{ github.event_name == 'push' && 'apply' || inputs.action }}
+          TF_STACK: ${{ github.event_name == 'push' && 'all-runtime' || inputs.stack }}
         run: bash scripts/tf-ci.sh "$TF_ACTION" "$TF_STACK"

@@ -8,7 +8,7 @@
 
 기존 CI는 Terraform 검증·mock test·Helm·스크립트 검사를 순차 실행하며 Terraform init을 총 11회 수행했다.
 사용자는 CI 대기 시간 개선을 요청하고 검토한 개발 계획을 승인했다. 실제 GitHub 소요 시간과 runner 사용 분 변화는 아직 측정하지 않았다.
-검사 범위와 수동 main 배포 조건, 적용 순서, state 잠금과 foundation 삭제 guard를 유지해야 한다.
+검사 병렬화 도입 당시에는 검사 범위와 수동 main 배포 조건, 적용 순서, state 잠금과 foundation 삭제 guard를 유지했다. 현재 main 머지/push의 자동 apply 조건은 [ADR 0008](0008-select-terraform-stack-and-action.md)을 따른다.
 
 ## 검토한 대안
 
