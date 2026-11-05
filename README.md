@@ -802,7 +802,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 
 ## ClickStack 관측 구성
 
-해커톤 구현 기준과 실제 배포 전 검토는 ADR0040과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
+해커톤 구현 기준과 실제 배포 전 검토는 ADR0048과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
 
 | 파일 | 역할 |
 | --- | --- |
@@ -810,7 +810,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [clusters/aws-dev-management/values/clickstack.yaml](clusters/aws-dev-management/values/clickstack.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [clusters/aws-dev-management/values/otel-gateway.yaml](clusters/aws-dev-management/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [clusters/aws-dev-workload/values/otel-gateway.yaml](clusters/aws-dev-workload/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/adr/0040-adopt-clickstack-for-hackathon-observability.md](docs/adr/0040-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/adr/0048-adopt-clickstack-for-hackathon-observability.md](docs/adr/0048-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |

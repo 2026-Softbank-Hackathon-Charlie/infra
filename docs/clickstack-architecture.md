@@ -1,7 +1,7 @@
 # ClickStack 멀티클라우드 관측 아키텍처 제안
 
 - 날짜: 2026-11-04
-- 관련 결정: [ADR 0040](adr/0040-adopt-clickstack-for-hackathon-observability.md)
+- 관련 결정: [ADR 0048](adr/0048-adopt-clickstack-for-hackathon-observability.md)
 - 상태: 문서 제안. 실제 조회·설치·네트워크·자격 증명 변경 미실행.
 - 목적: 이번 주 배포·실행 오류 조사 데모 완성. 비교 PoC 대신 ClickStack을 개발 기준으로 사용.
 

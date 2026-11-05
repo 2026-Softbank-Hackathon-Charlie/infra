@@ -3,7 +3,7 @@
 - 날짜: 2026-11-04
 - 상태: A 로컬 구현·검증 완료. 2026-11-05 관리 EKS 한정 B 조회 완료, CPU 예약량 부족 확인. C 배포 미승인/미실행
 - 분류: 영향이 크거나 불확실한 작업. GitOps 계약, CRD/operator/RBAC, Secret, PVC, 앱 계측과 멀티클라우드 연결에 걸친다.
-- 기준: [ADR 0040](../adr/0040-adopt-clickstack-for-hackathon-observability.md), [아키텍처 제안](../clickstack-architecture.md), [ADR 0018](../adr/0018-stage-minimal-management-monitoring.md), [ADR 0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)
+- 기준: [ADR 0048](../adr/0048-adopt-clickstack-for-hackathon-observability.md), [아키텍처 제안](../clickstack-architecture.md), [ADR 0018](../adr/0018-stage-minimal-management-monitoring.md), [ADR 0019](../adr/0019-use-chart-managed-prometheus-scrape-token.md)
 
 ## 1. 목표와 승인 단위
 
@@ -15,7 +15,7 @@
 - **B: 명시적 사전 조회.** A의 렌더링과 변경 요약을 제시한 뒤 대상·조회 권한·정보 범위를 승인받는다. 기존 승인과 겹치는 범위는 재요청하지 않지만 새 DB/operator·Pod 로그·exec·다른 클라우드는 이전 모니터링 승인으로 간주하지 않는다.
 - **C: 대상별 실행.** 사전 조회와 실제 렌더링 결과로 Pod/PVC/권한/네트워크/비용을 확정하고, 자격 증명 생성과 수동 sync의 정확한 범위를 별도로 승인받는다.
 
-사용자의 이번 요청은 계획과 리뷰다. A 승인 전 코드·설정 구현을 시작하지 않는다. B/C에는 별도의 실행 승인이 필요하며 이 문서의 계획 승인은 그 실행을 포함하지 않는다.
+최초 계획·리뷰 시점에는 A 승인 전 코드·설정 구현을 보류했다. 이후 A 구현 승인과 관리 EKS 한정 B 조회 승인을 받아 해당 단계만 수행했다. B/C에는 별도의 실행 승인이 필요하며 이 문서의 계획 승인은 그 실행을 포함하지 않는다.
 
 ## 2. 현재 확인한 코드와 새 발견
 
@@ -173,7 +173,7 @@ A 첫 관문에서 Secret reference schema/runtime와 HyperDX 실험적 기능�
 
 ## A 수행 기록
 
-사용자 승인: “새로운 브랜치 만들어서 진행해줘.” 최신 main 68123c6 기준 격리 worktree의 feat/clickstack-observability에서 수행했다. 이전 작업 트리의 변경은 보존했다. main의 번호 충돌로 ADR0040을 사용하며 기존 ADR0020을 덮어쓰지 않았다.
+사용자 승인: “새로운 브랜치 만들어서 진행해줘.” 최신 main 68123c6 기준 격리 worktree의 feat/clickstack-observability에서 수행했다. 이전 작업 트리의 변경은 보존했다. main의 번호 충돌로 ADR0048을 사용하며 기존 ADR0020을 덮어쓰지 않았다.
 
 중앙 Collector는 공식 standalone 이미지의 설정 순서를 보존하기 위해 범용 subchart 대신 작은 Deployment로 작성했다. 기존 설정 이름과 고정 이미지의 호환성을 위해 agent/gateway의 rewriteDeprecatedComponentNames를 껐다. MongoDB는 신규 8.0.17 digest를 선택했고 실제 조합은 C에서 검증한다. 변경 결과·미완료·실행 전 관문은 [배포 전 검토](../clickstack-deployment-review.md)에 기록한다.
 
@@ -182,3 +182,9 @@ chart·GitOps·수집 검사 간 참조가 밀접하므로 구현은 검증 가�
 ## B 실행 결과 — 2026-11-05
 
 사용자는 관리 EKS의 자원·스토리지·관련 CRD/operator·Prometheus 서비스 읽기 점검을 명시적으로 승인했다. Secret API·로그·exec·리소스 변경 없이 수행했다. 노드2대 Ready·Pending0·기존 관측 정상과 Prometheus 준비 응답200을 확인했다. CPU requests 여유1.36코어에 비해 새 구성 명시값이 약1.71코어여서 최소0.35코어 부족하다. 실제 사용률 과부하와는 구분한다. 상세 근거와 조회 제외 범위는 [배포 전 검토](../clickstack-deployment-review.md)에 기록했다. 자원 확보/조정 계획을 확정하기 전 C 설치로 진행하지 않는다. 기존 A 코드 자원·노드·Secret은 변경하지 않았다.
+
+## 2026-11-05 모니터링 준비 재개
+
+사용자는 PR #63을 직접 merge한 후 모니터링 준비 재개를 요청했다. 기존 A 승인 범위 안에서 최신 main d56b207 기반 새 `feat/clickstack-monitoring-preparation` 브랜치에 기존 ClickStack 코드만 가져왔다. main에 포함된 노드 증설·CI 코드, 플랫폼 최신 이미지, self-hosted runner 및 strict network policy 코드는 보존했다. 초기 미병합 ADR0040은 현재 main 번호 충돌을 피해 ADR0048로 옮겼다. 기존 worktree의 사용자 변경과 미완료 CI 계획 초안은 그대로 두었다.
+
+조회한 PR #63은 MERGED이며 CI 이력에는 merge 후 push 검사만 확인했다. 관리 2a nodegroup은 ACTIVE지만 min/desired/max는 여전히 1이다. 이는 합계 노드 3대 증설 완료가 아니므로 과거 CPU 용량 관문을 해소했다고 판정하지 않는다. 실제 배포는 로컬 apply가 아니라 main의 명시적 CI 수동 실행 및 Argo CD의 승인된 수동 sync 경로를 사용한다. 이번 준비에서 CI 배포·Secret 생성·클러스터 변경은 실행하지 않는다. 기존 A 구현의 새 설계 선택 없이 최신 main 정합성·동일 계약 검증과 PR 준비를 진행한다.

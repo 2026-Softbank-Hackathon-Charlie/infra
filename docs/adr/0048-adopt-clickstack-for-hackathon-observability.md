@@ -1,14 +1,14 @@
-# 0040. 해커톤의 멀티클라우드 관측 플랫폼으로 ClickStack 사용
+# 0048. 해커톤의 멀티클라우드 관측 플랫폼으로 ClickStack 사용
 
 - 날짜: 2026-11-04
-- 상태: 채택 — ClickStack 개발 방향과 A 로컬 구현·검증 승인. 실제 클러스터 조회·자격 증명 생성·배포는 미승인/미실행
+- 상태: 채택 — ClickStack 개발 방향과 A 로컬 구현·검증 승인. 관리 EKS 한정 B 조회 승인·수행. 신규 자격 증명 생성·ClickStack 배포 C는 미승인/미실행
 - 관련 ADR: [0018 기본 모니터링 설치](0018-stage-minimal-management-monitoring.md), [0019 Prometheus 토큰](0019-use-chart-managed-prometheus-scrape-token.md)
 
 ## 배경과 제약
 
 이번 프로젝트는 이번 주 안에 동작하는 결과를 만드는 해커톤이다. AWS·GCP·온프레미스 Kubernetes에 배포되는 앱의 배포·실행 오류를 중앙에서 조사하고, 향후 AI 기반 원인 설명에 연결한다. OpenTelemetry로 수집 경계를 표준화하고 자체 호스팅한다.
 
-사용자는 비교를 계속하기보다 ClickStack으로 개발하는 방향과 HyperDX에서 Prometheus까지 조회하는 구성을 요청했다. 이번 개발 기준은 ClickStack으로 고정한다. LGTM 비교 PoC와 Loki 복귀를 기본 개발 절차로 두지 않는다. 기존 Grafana 설치 비용은 선정 근거가 아니다. 작업 중 LGTM을 권고한 초안은 미채택 제안이었다. 최신 main의 ADR 0020은 별도 결정에 사용되어 새 번호 0040으로 기록한다.
+사용자는 비교를 계속하기보다 ClickStack으로 개발하는 방향과 HyperDX에서 Prometheus까지 조회하는 구성을 요청했다. 이번 개발 기준은 ClickStack으로 고정한다. LGTM 비교 PoC와 Loki 복귀를 기본 개발 절차로 두지 않는다. 기존 Grafana 설치 비용은 선정 근거가 아니다. 작업 중 LGTM을 권고한 초안은 미채택 제안이었다. 최신 main의 ADR 0040~0047은 다른 결정에 사용되어 새 번호 0048로 기록한다.
 
 확인한 기존 결과는 2026-11-03 관리 클러스터 Prometheus/Grafana 메트릭 수집이다. 이번 문서 작성에서는 실환경을 재점검하지 않았다. GCP·온프레미스 연결·수집 완료는 미확인이다. 저장소 OTel 설정의 관리 출력은 Loki/Prometheus이고 workload 로그 범위는 charlie-apps이며 traces는 양쪽 모두 null이다. ClickStack·앱 계측·전 클라우드 수집이 이미 구현되었다고 간주하지 않는다.
 

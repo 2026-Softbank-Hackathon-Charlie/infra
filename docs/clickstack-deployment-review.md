@@ -1,10 +1,10 @@
 # ClickStack A 단계 구현 결과와 배포 전 확인 사항
 
 - 날짜: 2026-11-04
-- 브랜치: feat/clickstack-observability
-- 기준 main: 68123c6
+- 브랜치: feat/clickstack-monitoring-preparation
+- 기준 main: d56b207 (PR #63 머지, 원래 A 구현 기준 68123c6)
 - 승인: A 로컬 구현·검증과 2026-11-05 관리 EKS의 한정 읽기 점검(B) 수행. Secret 값 조회·자격 증명 생성·클러스터 변경·배포(C)는 미승인/미실행.
-- 결정: [ADR 0040](adr/0040-adopt-clickstack-for-hackathon-observability.md)
+- 결정: [ADR 0048](adr/0048-adopt-clickstack-for-hackathon-observability.md)
 - 계획: [구현·배포 계획](plans/clickstack-implementation.md)
 
 ## 구현 결과
@@ -19,7 +19,7 @@
 
 ## 최신 main과의 정합성
 
-이전 작업 트리의 ADR 0020 번호는 main의 GKE/Headlamp 문서가 이미 사용하므로 0040을 새로 사용했다. 기존 문서는 덮어쓰지 않았다. GKE 앱 namespace 권한/Admission/ApplicationSet도 수정하지 않았다.
+초기 작업의 ADR 번호는 최신 main에서 다른 결정에 사용하므로 미병합 ClickStack 결정을 0048로 옮겼다. 기존 문서는 덮어쓰지 않았다. GKE 앱 namespace 권한/Admission/ApplicationSet도 수정하지 않았다.
 
 [ADR 0037](adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md)의 Tailscale 경로는 관리 AWS→GKE 앱 TCP80 범위다. OTLP4318·Prometheus9090의 연결이나 승인으로 간주하지 않으며 라우터·정책·Terraform을 변경하지 않았다. 실제 원격 관측 연결은 B/C에서 별도로 확정한다.
 
@@ -152,3 +152,19 @@ Prometheus 서비스 DNS `monitoring-prometheus.observability.svc:9090`은 fixtu
 35Gi는 새 볼륨 요청량 제안이다. EBS는 동적 생성하므로 StorageClass/PVC 상태만으로 계정 quota·실제 provision 성공·추가 비용까지 보장할 수 없다. 신규 PVC는 만들지 않았다.
 
 참조 Secret 존재/값, 새 RBAC 이름 충돌·API 권한 결과, Argo Application 정책/연결, HyperDX runtime, workload/GCP/온프레미스는 이번 한정 조회에 포함하지 않았다. 기존 CRD·operator 없음은 확인했지만 이들 미확인 항목까지 완료한 것으로 확대하지 않는다. C 실행 요청 전 자원 방안과 정확한 변경·권한 범위를 다시 정리한다.
+
+## 2026-11-05 재개 시 현재 상태
+
+- PR #63 merge SHA: d56b2076264803ebe0d6559044cb40974a0eaa18. 최신 main의 증설 CI 코드는 포함됐지만 조회한 실행 이력에는 수동 증설 실행이 없다.
+- 실제 2a 노드 그룹: ACTIVE, min/desired/max=1, health issue 없음. 따라서 노드 증설과 ClickStack 배포를 완료했다고 표현하지 않는다.
+- 준비 브랜치는 최신 main의 플랫폼 이미지와 권한·네트워크 결정을 보존한다. 관측 구성은 계속 기본 비활성화 및 새 앱 수동 sync다.
+- 실제 C 단계 전에: 지정 SHA로 management-scaleout CI plan/apply와 노드 3대 Ready·Pod별 배치 공간을 확인하고, 신규 operator/RBAC·Secret·PVC 및 Argo 앱 등록/sync 범위를 승인받아야 한다. 공개 endpoint나 다른 클라우드는 1차 설치에 포함하지 않는다.
+- 최초 설치 후 DB 인증/마이그레이션, HyperDX 로그인과 Prometheus source, TLS/OTLP 수신, 로그↔trace 및 재시작 후 영속성을 실제 확인해야 한다. Helm render나 PR 검사 통과로 이 항목을 완료 처리하지 않는다.
+
+### 재개 후 로컬 검증
+
+- 최신 main과 합친 상태에서 실제 고정 operator/OTel chart를 사용한 ClickStack 계약 15개 통과.
+- 전체 `make helm-check` 통과: 기존 bootstrap/GitOps/baseline/addon/플랫폼/ApplicationSet/CNPG 및 최신 system NetworkPolicy 검사 포함.
+- Terraform fmt/config-check, inventory 435개, diff 공백 및 변경한 Python 구문 검사 통과. Terraform 코드 자체는 이 PR에서 수정하지 않았다.
+- Docker daemon은 접근 가능한 실행 상태가 아니므로 DB/operator/HyperDX 컨테이너 런타임 검증은 수행하지 않았다. 기존 C 단계의 실제 로그인·수신·영속성 검증 관문을 유지한다.
+- 승인 범위와 실제 수행: 로컬 구현·검증·PR 준비 및 기존 승인 범위의 관리 nodegroup metadata 조회만 수행. Secret 조회/생성, Pod 로그/exec, live dry-run, CI 수동 배포와 Argo sync는 하지 않았다.
