@@ -1,7 +1,7 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:fd69bf6@sha256:5f3983c494347ab02877a1d36c5e96c71232527245d64dfa6c4012837be2e8d7",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:c4cceba@sha256:91d6aced819fda8de20aa99bc16a6d5d4ad4fba854df80f8ad0c029eb37ef671",
     "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:dd74f9f@sha256:af0da528a886a53e21b91b790bc4de1786214cae5803064c3febd486fcb77931",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
