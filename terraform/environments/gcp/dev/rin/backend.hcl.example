@@ -1,0 +1,2 @@
+# Existing GCS bucket; versions.tf fixes the independent gcp/dev/rin prefix.
+bucket = "charlie-tfstate-project-b47cdba3-db5b-42a2-9a6"
