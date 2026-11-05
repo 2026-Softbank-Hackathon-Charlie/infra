@@ -15,7 +15,7 @@
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "gp3",
-          "storageSize": "1Gi",
+          "storageSize": "4Gi",
           "resources": {
             "requests": {"memory": "256Mi"},
             "limits": {"memory": "512Mi"}
