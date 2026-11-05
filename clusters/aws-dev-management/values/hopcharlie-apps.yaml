@@ -103,5 +103,14 @@
         }
       }
     }
+  },
+  "platform": {
+    "aiRunner": {
+      "enabled": true,
+      "imagePrefixes": [
+        "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:",
+        "public.ecr.aws/aws-cli/aws-cli:"
+      ]
+    }
   }
 }

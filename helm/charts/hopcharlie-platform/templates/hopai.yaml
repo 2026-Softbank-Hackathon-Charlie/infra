@@ -28,8 +28,8 @@ data:
     get hopai/kube-eks > /config/eks.yaml
     get hopai/kube-gke > /config/gke.yaml
     key="$(get hopai/anthropic-api-key)"
-    # the first agent entry of name:role:token,...
-    tok="$(get platform-tokens | tr ',' '\n' | awk -F: '$2=="agent"{print $3; exit}')"
+    # the first agent entry of name:role:token,... (the token may contain ':')
+    tok="$(get platform-tokens | tr ',' '\n' | awk -F: '$2=="agent"{sub(/^[^:]*:[^:]*:/, ""); print; exit}')"
     [ -n "$tok" ] || { echo "no agent token in platform-tokens" >&2; exit 1; }
     printf 'ANTHROPIC_API_KEY=%s\nPLATFORM_TOKEN=%s\n' "$key" "$tok" > /config/hopai.env
     echo "fetched hopai settings"
