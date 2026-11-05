@@ -64,7 +64,7 @@ def send(endpoint, ca_file, token, logs, traces, connect_address=None):
         raise ValueError('OTLP_AUTH_TOKEN is required in the environment')
     context = ssl.create_default_context(cafile=ca_file)
     handler = LoopbackHTTPS(context, connect_address) if connect_address else urllib.request.HTTPSHandler(context=context)
-    opener = urllib.request.build_opener(NoRedirect(), handler)
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(), handler) if connect_address else urllib.request.build_opener(NoRedirect(), handler)
     for path, data in (('logs', logs), ('traces', traces)):
         request = urllib.request.Request(endpoint.rstrip('/') + '/v1/' + path,
                                          data=json.dumps(data).encode(), method='POST',

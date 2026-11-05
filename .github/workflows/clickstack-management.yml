@@ -27,6 +27,7 @@ permissions:
   contents: read
 jobs:
   bootstrap-contracts:
+    if: github.event_name != 'workflow_dispatch' || inputs.action != 'cleanup-access'
     runs-on: [self-hosted, hopcharlie, linux, x64]
     timeout-minutes: 15
     steps:
@@ -57,6 +58,7 @@ jobs:
           "$test_env/venv/bin/python" -m pip install --only-binary=:all: --require-hashes -r scripts/clickstack-bootstrap-requirements.txt
           "$test_env/venv/bin/python" scripts/tests/test-clickstack-management.py
           "$test_env/venv/bin/python" scripts/tests/test-eks-access.py
+          make helm-check inventory-check config-check PYTHON="$test_env/venv/bin/python"
       - name: Remove synthetic-test clients
         if: always()
         env:
@@ -72,7 +74,7 @@ jobs:
                   shutil.rmtree(path)
   bootstrap:
     needs: bootstrap-contracts
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'cleanup-access' || needs.bootstrap-contracts.result == 'success')
     runs-on: [self-hosted, hopcharlie, linux, x64]
     timeout-minutes: 90
     concurrency:

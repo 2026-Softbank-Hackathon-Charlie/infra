@@ -126,6 +126,8 @@
 ### C 로컬 구현 검증 결과
 
 - C 합성 테스트26개 및 기존 eks-access 테스트7개 통과: preflight 무변경, 잘못된 context/SHA/계정 거부, Secret create-only/부분 재시도/owner 불일치, 임시 mapping 소유권·attempt, 단계 실패 시 다음 sync 차단, cleanup 실패, multi-source revision, strict loopback TLS와 redirect 차단 포함.
-- 기존 ClickStack 계약15개 및 전체 Helm 검사 통과. inventory467개·fmt/config·Python 구문·diff 검사 통과.
+- 기존 ClickStack 계약15개 및 전체 Helm 검사 통과. inventory468개·fmt/config·Python 구문·diff 검사 통과.
 - 실제 임시 EKS mapping·운영 Secret·Argo operation은 호출하지 않았다. DB/operator 이미지 조합과 live 경로는 실행 승인 후 검증 대상이다. 실제 브라우저 조작 및 queue backlog 복구는 이번 자동 확인 범위 밖이다.
 - 새 PR/push workflow는 AWS 인증 없이 client binary 버전/체크섬 및 합성 계약을 검증한다. preflight/deploy/cleanup 수동 CI는 실행 승인 전 호출하지 않는다.
+
+cleanup-access는 chart/Helm 회귀 검사가 실패하거나 외부 chart 다운로드가 불가능해도 별도로 실행할 수 있도록 해당 검사 job을 건너뛴다. main/SHA/confirm/owner 검증과 고정 Python 의존성 검증은 유지한다. preflight/deploy는 합성 계약 및 전체 Helm/inventory/config 검사 성공을 요구한다.

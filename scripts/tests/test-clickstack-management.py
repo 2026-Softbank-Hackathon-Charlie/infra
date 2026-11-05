@@ -318,7 +318,8 @@ class WorkflowTests(unittest.TestCase):
     def test_only_manual_main_can_get_oidc_and_cleanup_always(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/clickstack-management.yml').read_text())
         job = workflow['jobs']['bootstrap'];steps = job['steps']
-        self.assertEqual(job['if'], "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", job['if'])
+        self.assertIn("inputs.action == 'cleanup-access' || needs.bootstrap-contracts.result == 'success'", job['if'])
         self.assertEqual(job['concurrency'], {'group': 'charlie-terraform-apply', 'cancel-in-progress': False})
         guard = next(i for i,s in enumerate(steps) if s.get('name') == 'Reject unapproved context before AWS authentication')
         auth = next(i for i,s in enumerate(steps) if s.get('uses', '').startswith('aws-actions/configure-aws-credentials'))
@@ -365,7 +366,8 @@ class LocalTLS(unittest.TestCase):
             thread = threading.Thread(target=server.serve_forever, daemon=True);thread.start()
             try:
                 endpoint = f'https://collector.observability.svc:{server.server_port}'
-                smoke.send(endpoint, str(directory/'ca.crt'), 'synthetic-only', {}, {}, connect_address='127.0.0.1')
+                with patch.dict(os.environ, {'HTTPS_PROXY': 'http://unapproved.invalid:3128', 'https_proxy': 'http://unapproved.invalid:3128'}):
+                    smoke.send(endpoint, str(directory/'ca.crt'), 'synthetic-only', {}, {}, connect_address='127.0.0.1')
                 self.assertEqual(len(captured), 2)
                 with self.assertRaises(Exception):
                     smoke.send(endpoint.replace('collector.', 'wrong.'), str(directory/'ca.crt'), 'synthetic-only', {}, {}, connect_address='127.0.0.1')
