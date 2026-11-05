@@ -1,0 +1,12 @@
+{{- if .Values.enabled }}
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: hopcharlie-db-network-{{ .Values.clusterId }}
+spec:
+  statefulSet:
+    pod:
+      tailscaleContainer:
+        resources:
+          {{- toYaml .Values.proxyResources | nindent 10 }}
+{{- end }}

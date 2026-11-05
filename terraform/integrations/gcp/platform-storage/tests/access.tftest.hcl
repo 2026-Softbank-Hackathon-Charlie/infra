@@ -49,8 +49,8 @@ run "bucket_permissions_are_limited_to_app_buckets" {
     error_message = "The platform empties and deletes app buckets; it does not read or write app files."
   }
   assert {
-    condition     = length(google_project_iam_member.identities.condition) == 0 && length([for p in google_project_iam_custom_role.identities.permissions : p if !startswith(p, "iam.serviceAccounts.") && !startswith(p, "storage.hmacKeys.")]) == 0
-    error_message = "Project-wide permissions are only service accounts and HMAC keys."
+    condition     = length(google_project_iam_member.identities.condition) == 0 && contains(google_project_iam_custom_role.identities.permissions, "storage.buckets.list") && length([for p in google_project_iam_custom_role.identities.permissions : p if !startswith(p, "iam.serviceAccounts.") && !startswith(p, "storage.hmacKeys.") && p != "storage.buckets.list"]) == 0 && !contains(google_project_iam_custom_role.buckets.permissions, "storage.buckets.list")
+    error_message = "Only bucket discovery is added project-wide; bucket changes and object access keep their app-prefix condition."
   }
   assert {
     condition     = length(setintersection(toset(google_project_iam_custom_role.identities.permissions), toset(["iam.serviceAccounts.actAs", "iam.serviceAccounts.getAccessToken", "iam.serviceAccountKeys.create", "iam.serviceAccounts.setIamPolicy", "resourcemanager.projects.setIamPolicy"]))) == 0

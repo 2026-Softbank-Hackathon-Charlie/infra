@@ -1,0 +1,3 @@
+# Merge after local egress Services, catalog and credentials are ready.
+api:
+  dsnHostSuffixes: .ts.net,.hopcharlie-db-network.svc.cluster.local

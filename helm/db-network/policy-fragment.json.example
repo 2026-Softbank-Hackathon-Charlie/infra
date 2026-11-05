@@ -1,0 +1,105 @@
+{
+  "tagOwners": {
+    "tag:hop-db-operator-management": [
+      "autogroup:admin"
+    ],
+    "tag:hop-db-operator-eks": [
+      "autogroup:admin"
+    ],
+    "tag:hop-db-operator-gke": [
+      "autogroup:admin"
+    ],
+    "tag:hop-db-client-management": [
+      "tag:hop-db-operator-management"
+    ],
+    "tag:hop-db-client-eks": [
+      "tag:hop-db-operator-eks"
+    ],
+    "tag:hop-db-eks": [
+      "tag:hop-db-operator-eks"
+    ],
+    "tag:hop-db-client-gke": [
+      "tag:hop-db-operator-gke"
+    ],
+    "tag:hop-db-gke": [
+      "tag:hop-db-operator-gke"
+    ]
+  },
+  "grants": [
+    {
+      "src": [
+        "tag:hop-db-client-eks"
+      ],
+      "dst": [
+        "tag:hop-db-gke"
+      ],
+      "ip": [
+        "tcp:5432"
+      ]
+    },
+    {
+      "src": [
+        "tag:hop-db-client-gke"
+      ],
+      "dst": [
+        "tag:hop-db-eks"
+      ],
+      "ip": [
+        "tcp:5432"
+      ]
+    },
+    {
+      "src": [
+        "tag:hop-db-client-management"
+      ],
+      "dst": [
+        "tag:hop-db-eks",
+        "tag:hop-db-gke"
+      ],
+      "ip": [
+        "tcp:5432"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "src": "tag:hop-db-client-eks",
+      "accept": [
+        "tag:hop-db-gke:5432"
+      ],
+      "deny": [
+        "tag:hop-db-gke:5433"
+      ]
+    },
+    {
+      "src": "tag:hop-db-client-gke",
+      "accept": [
+        "tag:hop-db-eks:5432"
+      ],
+      "deny": [
+        "tag:hop-db-eks:5433"
+      ]
+    },
+    {
+      "src": "tag:hop-db-client-management",
+      "accept": [
+        "tag:hop-db-eks:5432",
+        "tag:hop-db-gke:5432"
+      ]
+    },
+    {
+      "src": "tag:charlie-aws-router",
+      "deny": [
+        "tag:hop-db-eks:5432",
+        "tag:hop-db-gke:5432"
+      ]
+    },
+    {
+      "src": "tag:charlie-gcp-router",
+      "deny": [
+        "tag:hop-db-eks:5432",
+        "tag:hop-db-gke:5432"
+      ]
+    }
+  ]
+}

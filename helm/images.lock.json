@@ -42,7 +42,7 @@
     "quay.io/jetstack/cert-manager-cainjector:v1.21.3": "sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f",
     "quay.io/jetstack/cert-manager-startupapicheck:v1.21.3": "sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1",
     "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:eea0cc4": "sha256:02621a204f64d765fdb3d887340b2e19e12f08342485d5dd527bc5a59fc8eeb5",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:7568769": "sha256:08908ad9f08b79b3b89c14682eb99bf618e0d8babba1bb2251d6a5d4c47e2d69"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:fd69bf6": "sha256:5f3983c494347ab02877a1d36c5e96c71232527245d64dfa6c4012837be2e8d7",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:dd74f9f": "sha256:af0da528a886a53e21b91b790bc4de1786214cae5803064c3febd486fcb77931"
   }
 }

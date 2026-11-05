@@ -20,6 +20,12 @@ environments:
     displayName: GCP GKE
     region: asia-northeast3
     kubeContext: gke-hopcharlie
+    sealedSecretsCert: /config/sealed-secrets/gke.pem
+    storage:
+      driver: gcs
+      project: project-b47cdba3-db5b-42a2-9a6
+      bucketPrefix: hopcharlie-gke-
+      region: asia-northeast3
   - name: eks
     provider: aws
     displayName: AWS EKS

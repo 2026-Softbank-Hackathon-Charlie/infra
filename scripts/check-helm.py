@@ -252,13 +252,18 @@ def main():
             check_project(docs, projects["management"], "charlie-platform")
             seen.update(check_images(docs))
             if not ingress:
-                assert not any(d["metadata"]["name"] == "hopcharlie-gcp-adc" for d in docs), "No Google ADC without gcp values"
+                configured_gcp = json.loads(platform_values.read_text()).get("gcp", {})
+                adc_maps = [d for d in docs if d["metadata"]["name"] == "hopcharlie-gcp-adc"]
+                assert bool(adc_maps) == bool(configured_gcp.get("tokenAudience")), "Google ADC follows the configured storage identity"
+                if adc_maps:
+                    assert json.loads(adc_maps[0]["data"]["adc.json"]) == configured_gcp["credentialConfig"]
         check_gke_image_settings(platform_values, work)
         # Google ADC for the gcs storage driver (ADR 0041): only the API pod gets
         # the projected token; the gateway and Postgres share the service account.
         gcp_values = work / "platform-gcp.json"
         adc = {"type": "external_account", "audience": "//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
                "subject_token_type": "urn:ietf:params:oauth:token-type:jwt", "token_url": "https://sts.googleapis.com/v1/token",
+               "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/platform-storage@charlie-test-project.iam.gserviceaccount.com:generateAccessToken",
                "credential_source": {"file": "/var/run/secrets/gcp/token"}}
         audience = "https://iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks"
         gcp_values.write_text(json.dumps({"gcp": {"credentialConfig": adc, "tokenAudience": audience}}))
@@ -277,7 +282,7 @@ def main():
             else:
                 assert not tokens and "GOOGLE_APPLICATION_CREDENTIALS" not in env, d["metadata"]["name"]
         half = work / "platform-gcp-half.json"
-        half.write_text(json.dumps({"gcp": {"credentialConfig": adc}}))
+        half.write_text(json.dumps({"gcp": {"credentialConfig": adc, "tokenAudience": ""}}))
         result = subprocess.run([HELM, "template", "hopcharlie-platform", str(ROOT / "helm/charts/hopcharlie-platform"), "--namespace", "charlie-platform", "-f", str(platform_values), "-f", str(half)], capture_output=True, text=True, encoding="utf-8")
         assert result.returncode != 0 and "go together" in result.stderr, "gcp values come in pairs"
         google_values = work / "headlamp-gke-google.json"
