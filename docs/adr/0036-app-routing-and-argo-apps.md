@@ -1,7 +1,7 @@
 # 0036. GitHub 앱을 앱 ApplicationSet, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig로 연다
 
 - 날짜: 2026-11-04
-- 상태: 제안
+- 상태: 제안. 일부 대체됨: [ADR 0058](0058-share-one-app-entry-per-workload-cluster.md)(게이트웨이가 앱별 내부 NLB로 보내는 경로)
 - 관련 ADR: [ADR 0002](0002-require-approval-for-privileged-operations.md), [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md), [ADR 0017](0017-adopt-existing-helm-resources-in-argocd.md), [ADR 0021](0021-configure-platform-github-app-deploy.md), [ADR 0023](0023-deploy-github-apps-with-applicationset.md), platform 저장소 ADR 0011(GitHub 앱 배포), ADR 0012(게이트웨이 호스트 라우팅), ADR 0015(브랜치 인스턴스)
 
 ## 배경과 제약
