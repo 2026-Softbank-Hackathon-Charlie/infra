@@ -17,6 +17,7 @@ HopCharlie 플랫폼이 GitHub에서 배포하는 앱 하나를 그리는 차트
 | (없음) | | `s3` 리소스는 `S3_*` 변수를 넣는다. 버킷은 `<bucketPrefix><namespace>`이고 플랫폼이 만든다(platform ADR 0016). 키는 Secret `profile.s3.credentialsSecret`에서 읽는다 |
 | SealedSecret | `app-s3` | `values.sealedSecrets.s3`. 버킷 키(`accessKey`, `secretKey`). 이때 `profile.s3`는 Secret `app-s3`와 기본 키 이름을 읽어야 한다 |
 | SealedSecret | `app-secrets` | `values.sealedSecrets.app`. 앱 시크릿(platform ADR 0019) |
+| Ingress | `<app>-<service>` | 공개 서비스, `profile.ingress.enabled`. 클래스 `profile.ingress.className`, 호스트 `<namespace>.<hostSuffix>`(eks: `<instance>.eks.hopcharlie.internal`), 경로 `/`에서 공개 Service의 `http` 포트로. 클러스터의 공용 진입점이 받는다(infra ADR 0058) |
 | ResourceQuota, LimitRange, NetworkPolicy | `hopcharlie-app` | `profile.quota`, `limitRange`, `networkPolicy`의 `enabled` |
 
 SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict 범위로 봉인한 값이다. 이름과 네임스페이스가 다르면 열리지 않는다. sync-wave -1이라 Argo CD는 컨트롤러가 Secret을 만든 뒤에 Deployment를 바꾼다. Secret은 컨트롤러가 만들고 SealedSecret이 소유하므로 Argo CD가 지우지 않는다. 같은 이름이면 `env`가 `envFrom`보다 이긴다. 플랫폼이 시크릿과 같은 이름을 `env`에서 빼고 gitops 파일을 쓰며, 남아 있으면 차트가 렌더링을 실패시킨다.

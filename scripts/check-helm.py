@@ -422,6 +422,14 @@ def main():
                     # The gateway reaches every app's internal load balancer on port 80.
                     ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
                     assert ports == ([80] if public else []), ports
+                    # The shared entry (ADR 0058): the public service's route on Traefik at
+                    # <instance>.eks.hopcharlie.internal, the platform's eks backend host.
+                    svc_name = next((f"{gitops_file['values']['app']}-{s['name']}" for s in gitops_file["values"]["services"] if s.get("public")), None)
+                    routes = [(d["metadata"]["name"], d["spec"]) for d in docs if d["kind"] == "Ingress"]
+                    assert routes == ([(svc_name, {"ingressClassName": "traefik", "rules": [{"host": f"{gitops_file['namespace']}.eks.hopcharlie.internal", "http": {"paths": [
+                        {"path": "/", "pathType": "Prefix", "backend": {"service": {"name": svc_name, "port": {"name": "http"}}}}]}}]})] if public else []), routes
+                else:
+                    assert not any(d["kind"] == "Ingress" for d in docs), "the chart's default profile has no Ingress"
         # GKE apps (ADR 0039): an internal passthrough load balancer that keeps the
         # gateway's source address for the NetworkPolicy, reached over the Tailscale
         # routers (ADR 0037). Buckets are GCS through its S3-compatible API (ADR 0040).
@@ -444,6 +452,8 @@ def main():
                     assert env == (expected if has_s3 else {}), env
             for doc in docs:
                 assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+            # GKE has no shared entry yet (ADR 0058): no Ingress there.
+            assert not any(d["kind"] == "Ingress" for d in docs), "gke apps get no Ingress yet"
             for svc in (d for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"):
                 assert svc["spec"]["externalTrafficPolicy"] == "Local", svc["spec"]
                 assert svc["metadata"]["annotations"] == {"networking.gke.io/load-balancer-type": "Internal"}, svc["metadata"]["annotations"]

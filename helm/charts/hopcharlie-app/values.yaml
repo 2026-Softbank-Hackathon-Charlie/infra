@@ -59,6 +59,14 @@ profile:
     port: 0
     annotations: {}
 
+  # An Ingress for the public service on the cluster's shared app entry
+  # (infra ADR 0058): host <namespace>.<hostSuffix>, which the platform's
+  # backend template gives the gateway, e.g. eks.hopcharlie.internal.
+  ingress:
+    enabled: false
+    className: ""
+    hostSuffix: ""
+
   # Names of Secrets in the namespace for pulling the images.
   imagePullSecrets: []
 

@@ -606,6 +606,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/runbooks/app-entry.md](docs/runbooks/app-entry.md) | 앱 진입점 등록, 롤링 재시작 시험, 전환, 앱 NLB 정리, NLB 재생성과 되돌리기 |
 | [scripts/register-traefik.py](scripts/register-traefik.py) | root sync 없이 워크로드 AppProject 변경과 Traefik Application만 미리 보기, 생성, sync. AppProject가 Traefik 저장소와 대상 말고 바뀌면 멈춤 |
 | [scripts/tests/test-register-traefik.py](scripts/tests/test-register-traefik.py) | 위 스크립트의 AppProject 변경 검사 오프라인 테스트 |
+| [terraform/environments/aws/dev/workload/apps-dns.tf](terraform/environments/aws/dev/workload/apps-dns.tf) | 앱 진입점 내부 이름: VPC에 연결한 private zone `hopcharlie.internal`과 Traefik NLB를 가리키는 `*.eks.hopcharlie.internal`(NLB가 없으면 레코드 없이 plan) |
 | [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
@@ -627,6 +628,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-app/templates/namespace.yaml](helm/charts/hopcharlie-app/templates/namespace.yaml) | 앱 네임스페이스와 Pod Security label |
 | [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
 | [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
+| [helm/charts/hopcharlie-app/templates/ingress.yaml](helm/charts/hopcharlie-app/templates/ingress.yaml) | 공개 서비스의 공용 진입점 Ingress, 호스트 `<instance>.<hostSuffix>`(ADR 0058) |
 | [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
 | [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
 | [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
