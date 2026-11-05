@@ -44,6 +44,7 @@ deniedNamespaces:
   - kube-public
   - kube-system
   - observability
+  - traefik
 
 # The platform API's ServiceAccount. The deploy executor
 # (helm/charts/hopcharlie-platform, deploy.builder) refreshes the

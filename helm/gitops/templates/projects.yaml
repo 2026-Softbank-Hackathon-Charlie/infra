@@ -16,6 +16,7 @@ spec:
     - https://grafana.github.io/helm-charts
     - https://bitnami.github.io/sealed-secrets
     - https://argoproj.github.io/argo-helm
+    - https://traefik.github.io/charts
   destinations:
     {{- if $.Values.headlamp.enabled }}
     - server: {{ $target.endpoint | quote }}
@@ -30,6 +31,9 @@ spec:
       namespace: cnpg-system
     - server: {{ $target.endpoint | quote }}
       namespace: cert-manager
+    # The shared app entry (ADR 0058).
+    - server: {{ $target.endpoint | quote }}
+      namespace: traefik
     {{- end }}
     - server: {{ $target.endpoint | quote }}
       namespace: {{ if eq $purpose "management" }}charlie-platform{{ else }}charlie-apps{{ end }}
