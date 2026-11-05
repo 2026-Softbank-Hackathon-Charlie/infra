@@ -216,6 +216,9 @@ def check_traefik(docs):
                 "--api.dashboard=false"):
         assert arg in args, arg
     assert not any("websecure" in a for a in args), args
+    spread = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["topologySpreadConstraints"]
+    assert [(s["topologyKey"], s["maxSkew"], s["whenUnsatisfiable"], s.get("nodeTaintsPolicy"), s.get("matchLabelKeys")) for s in spread] == [
+        ("kubernetes.io/hostname", 1, "DoNotSchedule", "Honor", ["pod-template-hash"])], spread
     assert not any(a.startswith("--providers.kubernetescrd") for a in args), args
     # A host with no app Ingress gets 503 from a Service without endpoints, not
     # Traefik's 404, so the platform's probe of a missing route fails.
