@@ -195,3 +195,14 @@
 ### 검증·계획 대비 변경·ADR
 
 검토는 예정대로 읽기 전용으로 수행했으며 코드·클러스터 설정 변경과 실제 sync는 없다. 비교 산출물은 `.generated/argocd-preparation/difference-review.json`에 비밀값 없이 보존했다. 기존 문서 PR #9에 결과를 추가하며 새 ADR은 필요하지 않다. ADR 0017의 실제 sync 미실행 경계를 유지한다.
+
+## 플랫폼 앱 인수 실행 결과 — 2026-11-03
+
+플랫폼 담당(조서현)이 팀 Slack에서 알린 뒤 `charlie-management-hopcharlie-platform` 하나만 Argo CD로 넘겨받았다. root, baseline, LBC, 워크로드 Application은 건드리지 않았다.
+
+- 사전 확인: infra main으로 렌더링한 차트와 운영 리소스를 서버 측 dry-run(`kubectl diff --server-side`)으로 비교했다. 바뀌는 것은 API, 게이트웨이, 콘솔 Deployment와 `hopcharlie-fetch-settings` ConfigMap뿐이었다. PVC, Service, Ingress, NetworkPolicy, PostgreSQL은 그대로였다. PostgreSQL이 바뀌던 원인은 #25에서 고쳤다.
+- 실행: Application에 sync operation(ServerSideApply) 하나를 요청했다. 결과는 `Succeeded`, API와 게이트웨이는 `platform:efeb509`, 콘솔은 `console:8deb471`로 바뀌었고 PostgreSQL pod는 재시작되지 않았다.
+- sync 뒤 PostgreSQL StatefulSet만 OutOfSync로 남았다. API 서버가 `volumeClaimTemplates`에 기본값(apiVersion, kind, volumeMode, status)을 채워서 생기는 차이라, 이 필드를 `ignoreDifferences`로 비교에서 빼고 `RespectIgnoreDifferences=true`를 켰다. root 템플릿([applications.yaml](../../helm/gitops/templates/applications.yaml))에도 같은 설정을 넣어 root sync 뒤에도 유지된다.
+- 이 Application에만 자동 sync(prune false, selfHeal true)를 켰다. 결과는 `Synced`, `Healthy`다. 이후 infra main의 플랫폼, 콘솔 이미지 커밋(ADR 0025)은 사람 없이 반영된다.
+- 운영 확인: `api.hopcharlie.dev/healthz` 200, API 명세에 배포와 webhook 경로가 있음, 서명 없는 webhook 요청은 401, 콘솔 `version.txt`는 frontend `8deb471`.
+- 이제 플랫폼은 Helm으로 upgrade하지 않는다. Helm release 기록은 남아 있지만, 리소스는 Argo CD가 관리한다.
