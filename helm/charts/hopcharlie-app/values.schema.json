@@ -124,6 +124,15 @@
             "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
           }
         },
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "className": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" },
+            "hostSuffix": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)?$" }
+          }
+        },
         "imagePullSecrets": { "type": "array", "items": { "type": "string" } },
         "resources": { "type": "object" },
         "progressDeadlineSeconds": { "type": "integer", "minimum": 10 },

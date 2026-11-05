@@ -20,6 +20,7 @@ HopCharlie 플랫폼이 GitHub에서 배포하는 앱 하나를 그리는 차트
 | SealedSecret | `app-secrets` | `values.sealedSecrets.app`. 앱 시크릿(platform ADR 0019) |
 | SealedSecret | `app-pgbackup` | `values.sealedSecrets.pgBackup`. 백업 버킷 키(`accessKey`, `secretKey`, platform ADR 0025) |
 | ObjectStore, ScheduledBackup | `<app>-<resource>` | `postgres` 리소스, `values.backup`, `profile.postgres.backup.enabled`가 모두 있을 때. 아래 백업 절 |
+| Ingress | `<app>-<service>` | 공개 서비스, `profile.ingress.enabled`. 클래스 `profile.ingress.className`, 호스트 `<namespace>.<hostSuffix>`(eks: `<instance>.eks.hopcharlie.internal`), 경로 `/`에서 공개 Service의 `http` 포트로. 클러스터의 공용 진입점이 받는다(infra ADR 0058) |
 | ResourceQuota, LimitRange, NetworkPolicy | `hopcharlie-app` | `profile.quota`, `limitRange`, `networkPolicy`의 `enabled` |
 
 ## 서비스 계약
