@@ -42,6 +42,7 @@
   - merge하면 Argo CD가 모든 앱 Application을 다시 그린다. 2026-11-05 렌더링 비교에서 docker-doom은 바뀌는 것이 없고, moimroom은 `moimroom-web`에 DB 변수 6개가 더해지며 `moimroom-db` Cluster에 resources가 생긴다.
   - `moimroom-web`은 파드 템플릿이 바뀌어 한 번 롤링 재시작한다(새 파드가 준비된 뒤 옛 파드가 내려감).
   - CNPG는 resources가 바뀐 `moimroom-db-1`을 한 번 다시 시작한다. 단일 인스턴스라 그동안 EKS DB 연결이 끊긴다. 지금 EKS DB는 이전 토폴로지의 복제본이므로 이전 담당자와 맞춘 시각에 merge한다.
+  - `RespectIgnoreDifferences=true`로 sync하면 Argo CD는 무시하는 세 필드(`spec.replica`, `spec.externalClusters`, `spec.certificates`)의 live 값을 읽어 desired에 넣고 apply한다. 그래서 이전 뒤 첫 apply가 그 값을 `kubectl.kubernetes.io/last-applied-configuration`에 남긴다. 또 Argo CD가 값을 읽은 뒤 이전 엔진이 `spec.replica`를 patch하면, 이어지는 apply가 읽어 둔 옛 값을 다시 쓸 수 있다. 이 변경의 sync를 포함해, Cluster를 바꾸는 sync는 이전 단계가 돌고 있지 않을 때만 한다.
   - 차트가 플랫폼보다 먼저 바뀌므로 그 사이에 `platform.yaml`의 `env`에 `PGHOST` 같은 이름을 쓴 앱은 schema 거부로 sync가 실패한다. 지금 운영 앱(moimroom, docker-doom)은 그런 이름을 쓰지 않는다.
 - 필요한 후속 작업 및 검증:
   1. 이 변경을 먼저 merge하고 platform의 서비스 계약 PR을 merge한다. 반대 순서이면 플랫폼이 쓴 `memory`, `cpu`, `port` 없는 서비스를 지금 차트의 schema가 거부한다.

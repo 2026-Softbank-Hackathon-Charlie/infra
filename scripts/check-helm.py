@@ -448,7 +448,8 @@ def main():
             ("unknown sealed key", lambda v: v["values"]["sealedSecrets"].update(db={})),
             ("profile reading another Secret", lambda v: v["profile"]["s3"].update(credentialsSecret="other")),
             ("env name that is also a secret", lambda v: v["values"]["services"][0]["env"].update(HOST_CODE="plain")),
-            ("public service without a port", lambda v: v["values"]["services"][1].update(public=True)),
+            # web stops being public first, so only the missing port is wrong.
+            ("public service without a port", lambda v: (v["values"]["services"][0].update(public=False), v["values"]["services"][1].update(public=True))),
             ("health check without a port", lambda v: v["values"]["services"][1].update(healthCheck="/healthz")),
             ("database variable in env", lambda v: v["values"]["services"][1]["env"].update(PGHOST="db")),
             ("database variable as a secret", lambda v: v["values"]["sealedSecrets"]["app"].update(PGPASSWORD="AgA=")),
