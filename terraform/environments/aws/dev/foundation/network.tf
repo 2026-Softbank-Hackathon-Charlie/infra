@@ -121,6 +121,23 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[each.key].id
 }
 
+# Regional S3 traffic (ECR image layers, app buckets, Loki, CNPG backups) uses this
+# free Gateway endpoint instead of the per-GB NAT path. The default endpoint policy
+# allows all S3 requests; IAM and bucket policies still decide access.
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.shared.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  tags              = merge(local.network_tags, { Name = "${local.network_name}-s3" })
+}
+
+resource "aws_vpc_endpoint_route_table_association" "s3" {
+  for_each = local.private_subnets
+
+  vpc_endpoint_id = aws_vpc_endpoint.s3.id
+  route_table_id  = aws_route_table.private[each.key].id
+}
+
 # Attach these additional groups in the future EKS stacks. They are not node
 # groups, do not replace EKS-managed SGs, and do not expose application ingress.
 resource "aws_security_group" "management_api_source" {
