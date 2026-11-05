@@ -91,5 +91,26 @@
     "spec": {
       "loadBalancerSourceRanges": ["10.40.0.0/19"]
     }
-  }
+  },
+  "extraObjects": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {"name": "traefik-no-route"},
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {"hopcharlie.dev/no-route": "none"},
+        "ports": [{"name": "http", "port": 80, "targetPort": 80}]
+      }
+    },
+    {
+      "apiVersion": "networking.k8s.io/v1",
+      "kind": "Ingress",
+      "metadata": {"name": "traefik-no-route"},
+      "spec": {
+        "ingressClassName": "traefik",
+        "defaultBackend": {"service": {"name": "traefik-no-route", "port": {"number": 80}}}
+      }
+    }
+  ]
 }

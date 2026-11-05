@@ -41,6 +41,7 @@ python3 scripts/register-traefik.py sync      # sync 한 번
 kubectl -n traefik get deploy,pods,svc,pdb -o wide
 kubectl get ns traefik --show-labels            # elbv2.k8s.aws/pod-readiness-gate-inject=enabled
 kubectl get ingressclass traefik
+kubectl -n traefik get ingress traefik-no-route   # ADDRESS가 NLB 이름(Traefik이 status를 씀)
 aws elbv2 describe-load-balancers --names hopcharlie-apps-eks --query 'LoadBalancers[0].[State.Code,Scheme,DNSName]'
 aws elbv2 describe-target-health --target-group-arn <대상 그룹 ARN>   # pod 2개 healthy
 ```
@@ -75,7 +76,7 @@ curl -s -o /dev/null -w '%{http_code}\n' --max-time 2 --http1.1 -H 'Host: docker
 
 ## 4. 플랫폼 틀과 앱 전환
 
-platform PR #73이 들어간 이미지가 infra에 고정된 뒤, `deploy.backendTemplate`을 켜는 PR이 들어간다(API pod가 다시 시작한다).
+platform PR #73이 들어간 이미지가 infra에 고정된 뒤, `deploy.backendTemplates`(`PLATFORM_APP_BACKEND_TEMPLATES`)를 켜는 PR이 들어간다(API pod가 다시 시작한다).
 
 ```bash
 charlie deploy docker-doom --redeploy
@@ -100,7 +101,7 @@ Service `traefik/traefik`을 지웠다 다시 만들거나 이름 annotation이 
 ## 되돌리기
 
 - Traefik 등록: Service에 `Delete=false`가 있으므로 Application을 지워도 NLB가 남는다. 앱이 아직 Traefik을 쓰지 않을 때만 `kubectl -n argocd delete application charlie-workload-traefik` 뒤 `kubectl -n traefik delete svc traefik`로 NLB까지 지운다.
-- 앱 전환 뒤: 5단계 전이면 앱 NLB가 아직 있으므로, `deploy.backendTemplate`을 비우는 PR 뒤 재배포하면 게이트웨이가 앱 NLB로 돌아간다.
+- 앱 전환 뒤: 5단계 전이면 앱 NLB가 아직 있으므로, `deploy.backendTemplates`를 비우는 PR 뒤 재배포하면 게이트웨이가 앱 NLB로 돌아간다.
 
 ## 실행 기록
 

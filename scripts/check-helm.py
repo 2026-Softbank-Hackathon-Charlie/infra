@@ -153,9 +153,9 @@ def check_traefik(docs):
     """The shared app entry of the workload cluster (ADR 0058): one internal NLB with a
     fixed name that Argo CD never deletes, an IngressClass apps must ask for by name,
     and no CRD provider, dashboard or public TLS port."""
-    services = [d for d in docs if d["kind"] == "Service"]
-    assert len(services) == 1, [d["metadata"]["name"] for d in services]
-    svc = services[0]
+    services = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Service"}
+    assert sorted(services) == ["traefik", "traefik-no-route"], sorted(services)
+    svc = services["traefik"]
     notes = svc["metadata"]["annotations"]
     assert notes["argocd.argoproj.io/sync-options"] == "Delete=false,Prune=false", notes
     assert notes["service.beta.kubernetes.io/aws-load-balancer-name"] == "hopcharlie-apps-eks", notes
@@ -174,6 +174,13 @@ def check_traefik(docs):
                 "--api.dashboard=false"):
         assert arg in args, arg
     assert not any(a.startswith("--providers.kubernetescrd") for a in args), args
+    # A host with no app Ingress gets 503 from a Service without endpoints, not
+    # Traefik's 404, so the platform's probe of a missing route fails.
+    assert "--providers.kubernetesingress.allowEmptyServices=true" in args, args
+    catch_all = [d for d in docs if d["kind"] == "Ingress"]
+    assert [(d["metadata"]["name"], d["spec"]) for d in catch_all] == [("traefik-no-route", {
+        "ingressClassName": "traefik", "defaultBackend": {"service": {"name": "traefik-no-route", "port": {"number": 80}}}})], catch_all
+    assert services["traefik-no-route"]["spec"]["selector"] == {"hopcharlie.dev/no-route": "none"}
 
 
 def main():

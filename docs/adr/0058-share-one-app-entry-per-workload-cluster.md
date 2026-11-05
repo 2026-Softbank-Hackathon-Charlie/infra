@@ -13,7 +13,7 @@
 - 워크로드 EKS에 앱용 내부 NLB가 2개 있다(moimroom, docker-doom). 서울 리전에서 NLB 하나는 트래픽과 관계없이 월 약 16달러이고, 브랜치 인스턴스도 하나씩 받는다.
 - docker-doom의 첫 배포는 5분 22초였다. 빌드 1분 58초, gitops 커밋 3초, Argo CD Healthy까지 15초, NLB가 실제로 답하기까지 3분 6초다. 목표인 5분을 넘었다. 다른 환경으로 옮길 때도 대상 환경의 로드밸런서를 같은 만큼 기다린다.
 - 게이트웨이는 `httputil.ProxyRequest.SetURL`로 백엔드 주소의 호스트를 Host 헤더로 보낸다. 백엔드 주소만 호스트 이름으로 바꾸면 클러스터 안에서 호스트로 앱을 나눌 수 있다. 게이트웨이 코드는 바꾸지 않는다.
-- 플랫폼에는 백엔드 주소의 틀(`PLATFORM_APP_BACKEND_TEMPLATE`)이 이미 있다. 틀이 모든 환경에 하나라서 eks만 먼저 옮기려면 환경마다 틀을 정해야 한다(platform PR #73).
+- 플랫폼에는 백엔드 주소의 틀(`PLATFORM_APP_BACKEND_TEMPLATE`)이 이미 있다. 틀이 모든 환경에 하나라서 eks만 먼저 옮기려면 환경마다 틀을 정해야 한다(platform PR #73의 `PLATFORM_APP_BACKEND_TEMPLATES`).
 - 관리 EKS의 CoreDNS는 `forward . /etc/resolv.conf`로 VPC resolver에 묻는다. VPC `vpc-04b7c6a79ad46fcdc`(`10.40.0.0/16`)는 DNS 지원과 DNS 호스트 이름이 켜져 있다. Route 53 hosted zone은 아직 없다.
 - Argo CD는 Ingress의 `status.loadBalancer`가 채워져야 Healthy로 본다. 진입점 컨트롤러가 Ingress status를 쓰지 않으면 배포가 `PLATFORM_ARGOCD_TIMEOUT`(10분)까지 기다리다 실패한다.
 - 워크로드 EKS의 앱이 아닌 애드온은 `charlie-root`가 그리는 Application이고 자동 sync가 없다. `charlie-root`는 sync하지 않는다([ADR 0036](0036-app-routing-and-argo-apps.md)).
@@ -36,6 +36,7 @@
 1. 진입점: Traefik 차트 `42.1.2`(Traefik `v3.7.16`, 이미지 digest 고정)를 워크로드 EKS의 `traefik` 네임스페이스에 Argo CD 애드온 `charlie-workload-traefik`으로 둔다. `charlie-root`의 렌더와 같은 객체를 [scripts/register-traefik.py](../../scripts/register-traefik.py)가 만들고(AppProject 변경은 diff를 보고 apply, Application은 resources finalizer를 달고 자동 sync 없이 create), sync 한 번을 요청한다. root는 sync하지 않는다.
    - 쓰지 않는 것은 끈다. CRD provider와 차트의 CRD 25개(`skipCrds`), 대시보드, 443 포트 노출.
    - IngressClass `traefik`은 기본 클래스가 아니고, Traefik은 그 클래스를 명시한 Ingress만 읽는다(`providers.kubernetesIngress.ingressClass`). Ingress status에 NLB 주소를 쓴다(`publishedService`).
+   - 어느 Ingress에도 없는 호스트는 `traefik-no-route` Ingress의 `defaultBackend`(우선순위가 가장 낮은 규칙)로 가고, endpoint가 없는 Service라서 503을 받는다(`allowEmptyServices`). Traefik 기본값인 404였다면 `healthCheck`가 없는 앱의 배포 확인이 앱 Ingress가 없는데도 통과한다(플랫폼은 502, 503, 504만 실패로 본다).
 2. NLB: Traefik Service 하나가 내부 NLB 하나를 받는다. 대상은 pod IP, 이름은 `hopcharlie-apps-eks`(고정, 바꾸지 않는다. 바꾸면 컨트롤러가 NLB를 새로 만들고 DNS 이름이 바뀐다), cross-zone 켬, 등록 해제 지연 30초, 출발지는 관리 서브넷 `10.40.0.0/19`(게이트웨이와 플랫폼 API)만 연다. Service에 `argocd.argoproj.io/sync-options: Delete=false,Prune=false`를 달아 Application을 지우거나 prune해도 NLB가 남는다.
 3. 무중단:
    - `traefik` 네임스페이스에 `elbv2.k8s.aws/pod-readiness-gate-inject=enabled`(Application의 `managedNamespaceMetadata`)를 단다. 새 pod는 NLB 대상이 healthy가 된 뒤 Ready가 되므로, 롤링 업데이트가 NLB에 등록되지 않은 pod로 넘어가지 않는다.
@@ -44,7 +45,7 @@
 4. 헤더와 시간 제한: `forwardedHeaders.trustedIPs: 10.40.0.0/16`과 `notAppendXForwardedFor`로 앱은 지금처럼 게이트웨이가 보낸 `X-Forwarded-For`, `X-Forwarded-Proto`(https), `X-Forwarded-Host`(`<instance>.hopcharlie.dev`)를 본다. 요청 읽기 시간 제한은 두지 않고(`readTimeout: 0`, 긴 업로드와 WebSocket), 백엔드 유휴 연결은 30초 뒤 닫는다(`serversTransport.forwardingTimeouts.idleConnTimeout`).
 5. 내부 DNS(다음 PR): Route 53 private hosted zone `hopcharlie.internal`을 VPC에 연결하고 `*.eks.hopcharlie.internal`을 공용 NLB의 alias로 둔다. 워크로드 Terraform root에 두고, NLB는 컨트롤러 태그로 찾아 없으면 레코드를 만들지 않는다(plan이 실패하지 않는다).
 6. 앱 차트(다음 PR): 공개 서비스마다 Ingress `<app>-<service>`(클래스 `traefik`, 호스트 `<instance>.eks.hopcharlie.internal`)를 그린다. AppProject `hopcharlie-apps`에 Ingress를 허용한다. EKS에서는 Traefik pod 주소가 기존 `gatewayFrom`(`10.40.0.0/16`) 안이라 NetworkPolicy를 바꾸지 않는다.
-7. 플랫폼: `deploy.backendTemplate`으로 `PLATFORM_APP_BACKEND_TEMPLATE=eks=http://{instance}.eks.hopcharlie.internal`을 넘긴다. platform PR #73이 들어간 이미지가 infra에 고정된 뒤에만 켠다. 옛 이미지는 이 값을 모든 환경의 틀로 읽는다. `gke`와 `onprem`은 지금처럼 LoadBalancer 주소를 읽는다.
+7. 플랫폼: 플랫폼 차트 값 `deploy.backendTemplates`로 `PLATFORM_APP_BACKEND_TEMPLATES=eks=http://{instance}.eks.hopcharlie.internal`을 넘긴다(새 변수라 옛 이미지는 무시한다). 차트가 값의 형식을 검사해 틀린 값은 렌더링에서 실패한다. platform PR #73이 들어간 이미지가 고정된 뒤에 켜야 효과가 있다. `gke`와 `onprem`은 지금처럼 LoadBalancer 주소를 읽는다.
 8. 전환 순서: docker-doom을 재배포해 게이트웨이 eks 백엔드를 `http://docker-doom.eks.hopcharlie.internal`로 바꾼다(배포 실행기가 새 주소가 답한 뒤에만 바꾼다). moimroom은 배포가 활성 gke 쓰기 백엔드를 지키는 플랫폼 수정이 들어간 뒤 한 번 재배포한다. 게이트웨이의 어떤 백엔드도 `elb.amazonaws.com`이 아니게 된 뒤에 eks 프로필의 공개 Service를 `ClusterIP`로, quota `services.loadbalancers`를 0으로 바꾼다. 그때 컨트롤러가 앱 NLB를 지운다.
 9. 이름 보호: `traefik`을 앱 ApplicationSet의 `deniedNamespaces`(와 같은 목록을 유지하는 GKE `protectedNamespaces` 값), 플랫폼의 예약 앱 이름(platform PR #73), 워크로드 strict NetworkPolicy 호환 목록에 넣는다.
 
