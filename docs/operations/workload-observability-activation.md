@@ -118,3 +118,8 @@ KPS에는 위 세 항목의 임시 Helm parameters가 있다. 이 PR이 머지�
 고정 버전의 감시 범위 근거: [Prometheus Operator v0.94.1 Alertmanager informer](https://github.com/prometheus-operator/prometheus-operator/blob/v0.94.1/pkg/alertmanager/operator.go#L228). `alertmanagerConfigNamespaces`는 Secret/ConfigMap metadata 감시 범위를 결정하며 CNPG PodMonitor의 cross-namespace discovery와는 별개다.
 
 최종 runtime 검증: 새 Operator Pod의 cache 동기화 완료, Forbidden/오류 부재, 재시작 0을 확인했다. 전체 관측 Pod는 Ready이며 workload queue2Gi·Prometheus10Gi PVC는 Bound다. 마지막 namespace 점검은 docker-doom/moimroom/moimroom-mig 세 개이며 진행 중 Job은 없었다. 이는 시점 점검이므로 C3 merge 직전에 다시 확인한다.
+
+
+## C3 최종 머지 검토 (2026-11-07)
+
+[확정 C3 계획](../plans/workload-observability-c3.md)은 독립 리뷰 GREEN을 받았다. 실제 live profile·GitOps SHA55ea56a 기준으로 Deployment3/Namespace3/CNPG inheritedMetadata2와 신규 CA CM3·관측 NP5·PodMonitor2를 확인했고, 기존 env/image/요청량·DB topology·credential 리소스는 불변이다. 사용자에게 migration 미진행을 확인받았다. CPU 여유360m 대비 동시 앱 surge150m/192Mi/3Pod를 확인해 증설 없이 진행한다. 최신 main10361ee 병합 후 전체 Helm·관측·inventory 검사가 통과했다. 아직 앱 활성화는 실행하지 않았으며, #119 사용자 merge로 실제 rollout·소유 로그 전송이 시작된다. KPS 수렴·한정 rollback을 포함한 명시 범위는 C3 계획을 따른다. 최초 retained 로그가 replay될 수 있다. HyperDX401과 SDK 미배포는 별도 미완료다.
