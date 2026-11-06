@@ -17,6 +17,28 @@
 
 SQL 계정은 DB CONNECT, schema USAGE, 검증할 전체 행/컬럼 SELECT와 조회 함수 EXECUTE가 필요하다. RLS 등으로 일부 행만 보는 계정이면 검증 결과를 신뢰할 수 없다. superuser·replication 계정을 엔진에 줄 필요는 없지만, 현재 앱 계정의 적합성은 실제 grants와 함께 확인한다. 원본 파일 저장소 이전과 앱별 gateway scope 수정은 별도 과제다.
 
+### 기존 GKE moimroom 앱 설정 재현
+
+`charlie-apps/moimroom-gcp`는 수동 적용한 Deployment이며 Helm release나 Argo CD 관리 대상이 아니다. 이미지 게시 workflow는 배포하지 않는다. [GKE profile](../../clusters/gcp-dev-workload/values/moimroom-gcp.yaml)은 이전 후 설정(`replicaCount: 1`, `seedSpaces: false`, `DATABASE_URL`은 기존 `moimroom-gke-dburl/uri` Secret 참조)과 현재 이미지·공개 S3 설정·기존 Secret 참조·resources를 함께 보존한다. Secret 값은 넣지 않는다. DB 대상 결정은 [ADR0053의 후속 작업](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/72)을 따른다.
+
+운영자가 준비한 moimroom 저장소의 `ca3c8f8e852ab6b57bd6390bcc7b5c69bee0ddb8` checkout을 사용한다. 다음 명령은 클러스터에 접근하지 않고 Deployment 하나만 파일로 출력한다. chart나 이미지를 바꿀 때는 profile과 전체 Deployment diff를 다시 검토한다.
+
+```bash
+mkdir -p .generated
+make render-gke-moimroom MOIMROOM_CHART=/path/to/moimroom/deploy/helm/moimroom > .generated/gke-moimroom.yaml
+```
+
+전체 chart의 Service template에는 GKE Internal LoadBalancer annotation 지원이 없다. 전체 chart를 적용하거나 `helm upgrade --install`로 인수하지 않는다. 기존 `moimroom-gcp`·`moimroom-gcp-internal` Service, CNPG Cluster, PVC, Secret은 이 경로에 포함하지 않는다. 렌더링은 향후 수동 배포의 입력이며 merge만으로 운영 리소스가 바뀌지 않는다.
+
+실제 조회·변경 승인을 별도로 받은 운영자만 명시적인 kubeconfig/context로 Deployment diff를 검토하고 적용한다. template은 `metadata.namespace`를 생략하므로 **apply에도 `--namespace charlie-apps`가 필수**다. Secret 갱신은 별도 작업이며, DB 연결이 바뀌었다면 이 profile의 참조와 승인된 Secret 대상이 같은지 먼저 확인한다.
+
+```bash
+kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps diff -f .generated/gke-moimroom.yaml
+# 위 diff의 Deployment 변경 승인을 받은 뒤에만 실행한다.
+kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps apply -f .generated/gke-moimroom.yaml
+kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps rollout status deployment/moimroom-gcp --timeout=5m
+```
+
 ## 2. Tailnet 정책과 operator 인증
 
 [policy-fragment](../../helm/db-network/policy-fragment.json.example)은 **추가할 조각**이다. 기존 정책 전체를 대체하면 앱 경로·route autoApprover를 잃을 수 있다. 기존 설정에 병합하고 TCP80 앱 규칙·autoApprovers를 유지한다. 기존 allow-all ACL/grant가 DB를 허용하면 제거·축소하고 포함된 accept/deny tests를 tailnet 정책 편집기에서 통과시킨다. grant는 합산되므로 새 규칙 추가만으로 deny가 생기지 않는다.
