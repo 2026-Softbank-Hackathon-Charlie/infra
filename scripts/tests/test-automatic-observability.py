@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Automatic onboarding render contracts. No credentials, cluster or cloud API."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -102,6 +103,12 @@ class AutomaticObservability(unittest.TestCase):
                 self.assertNotIn('secrets',rule.get('resources',[]));self.assertNotIn('pods/log',rule.get('resources',[]))
         role=of(docs,'Role')[0];self.assertEqual(role['metadata']['namespace'],'observability')
         service=of(docs,'Service')[0];self.assertEqual(service['spec']['loadBalancerSourceRanges'],['10.40.0.0/19'])
+        config=of(docs,'ConfigMap')[0]['data']['nginx.conf']
+        deploy=of(docs,'Deployment')[0]['spec']['template']
+        self.assertEqual(deploy['metadata']['annotations']['checksum/config'],hashlib.sha256(config.rstrip('\n').encode()).hexdigest())
+        self.assertTrue(deploy['spec']['containers'][0]['securityContext']['readOnlyRootFilesystem'])
+        for module in ('fastcgi','uwsgi','scgi'):
+            self.assertIn(f'{module}_temp_path /tmp/{module};',config)
         policy=of(docs,'NetworkPolicy')[0];app=policy['spec']['ingress'][1]
         self.assertEqual(set(app['from'][0]),{'namespaceSelector','podSelector'})
         self.assertEqual(app['ports'][0]['port'],4319)
@@ -133,6 +140,17 @@ class AutomaticObservability(unittest.TestCase):
         args=of(prom,'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
         self.assertIn('--watch-object-refs-in-all-namespaces=false',args)
         self.assertIn('--prometheus-instance-namespaces=observability',args)
+        operator=of(prom,'Deployment')[0]['spec']['template']['spec']
+        self.assertFalse([v for v in (operator.get('volumes') or []) if v.get('secret',{}).get('secretName')=='monitoring-admission'])
+        container=operator['containers'][0]
+        self.assertEqual(container['ports'][0],{'containerPort':8080,'name':'http'})
+        self.assertEqual(container['readinessProbe']['httpGet']['port'],'http')
+        service=next(d for d in of(prom,'Service') if d['metadata']['name']=='monitoring-operator')
+        self.assertEqual(service['spec']['ports'][0]['targetPort'],'http')
+        monitor=next(d for d in of(prom,'ServiceMonitor') if d['metadata']['name']=='monitoring-operator')
+        self.assertEqual(monitor['spec']['endpoints'][0].get('scheme','http'),'http')
+        self.assertEqual(service['spec']['ports'][0]['port'],8080)
+        self.assertNotIn('tlsConfig',monitor['spec']['endpoints'][0])
     def test_activation_overrides_are_manual_and_narrow(self):
         import importlib.util
         spec=importlib.util.spec_from_file_location('activation',ROOT/'scripts/render-observability-activation.py')

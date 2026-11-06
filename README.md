@@ -960,3 +960,5 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/aws-dev-workload/values/baseline-observability.yaml](clusters/aws-dev-workload/values/baseline-observability.yaml)
 - [scripts/render-observability-activation.py](scripts/render-observability-activation.py)
 - [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)
+
+- [helm/charts/observability-boundary/templates/_helpers.tpl](helm/charts/observability-boundary/templates/_helpers.tpl) — query 설정과 Pod checksum 공유

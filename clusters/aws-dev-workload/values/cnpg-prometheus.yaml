@@ -129,7 +129,10 @@
     ],
     "extraArgs": [
       "--watch-object-refs-in-all-namespaces=false"
-    ]
+    ],
+    "tls": {
+      "enabled": false
+    }
   },
   "kubelet": {
     "enabled": false
