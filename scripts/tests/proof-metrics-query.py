@@ -47,7 +47,7 @@ def main():
         docs = yaml.safe_load_all(subprocess.check_output([os.environ.get('HELM','helm'),'template','boundary',str(ROOT/'helm/charts/observability-boundary'),'-n','observability','-f',str(ROOT/'clusters/aws-dev-workload/values/observability-boundary.yaml')],text=True))
         config = next(d['data']['nginx.conf'] for d in docs if d and d['kind']=='ConfigMap')
         sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1];sock.close()
-        config=config.replace('listen 8443 ssl;',f'listen 127.0.0.1:{port} ssl;').replace('/etc/query/tls',str(temp)).replace('/etc/query/auth',str(temp)).replace('/tmp/nginx.pid',str(temp/'nginx.pid')).replace('/tmp/client',str(temp/'client')).replace('/tmp/proxy',str(temp/'proxy')).replace('http://monitoring-prometheus.observability.svc:9090',f'http://127.0.0.1:{upstream.server_port}')
+        config=config.replace('listen 8443 ssl;',f'listen 127.0.0.1:{port} ssl;').replace('/etc/query/tls',str(temp)).replace('/etc/query/auth',str(temp)).replace('/tmp/nginx.pid',str(temp/'nginx.pid')).replace('/tmp/client',str(temp/'client')).replace('/tmp/proxy',str(temp/'proxy')).replace('/tmp/fastcgi',str(temp/'fastcgi')).replace('/tmp/uwsgi',str(temp/'uwsgi')).replace('/tmp/scgi',str(temp/'scgi')).replace('http://monitoring-prometheus.observability.svc:9090',f'http://127.0.0.1:{upstream.server_port}')
         conf=temp/'nginx.conf';conf.write_text(config)
         subprocess.run([binary,'-t','-p',str(temp)+'/', '-c',str(conf)],check=True,capture_output=True)
         process=subprocess.Popen([binary,'-p',str(temp)+'/', '-c',str(conf),'-g','daemon off;'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

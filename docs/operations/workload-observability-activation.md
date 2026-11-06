@@ -77,3 +77,15 @@ S3 fixture는 신규 프로덕션 backend가 아니라 테스트용 모의 HEAD 
 NLB2개+12Gi gp3는730시간 가정 고정 약$33.94/월, NLCU·전송·세금 별도다. 각 NLB 평균1NLCU 가정이면 약$42.70/월이다. 임시 합성 PVC1Gi는 유지한 시간만 추가된다. [공식 ELB 가격](https://aws.amazon.com/elasticloadbalancing/pricing/), [EBS 가격](https://aws.amazon.com/ebs/pricing/).
 
 실패 시 후속 단계를 중단한다. 수동 관측 Apps는 이전 pin으로 선택 복구한다. main/selfHeal 앱은 parent를 manual+이전 immutable SHA/chart.revision으로 pin한 뒤 ApplicationSet1개를 이전 profile로 선택 sync한다. 기존 확장 AppProject는 cleanup 동안 보존한다. 사용자 Git revert merge 전 원래 main/자동 정책을 복원하지 않는다. 상세 범위는 [리뷰된 계획](../plans/workload-observability-activation.md)을 따른다. DB/PVC/기존 token은 보존하고 신규 LB/SG/Secret/PVC 폐기는 별도 승인 없이 하지 않는다.
+
+
+## C2 런타임 수정 기록 (2026-11-06)
+
+승인 SHA76566a3의 관측 Project/수동 Apps, 경계 정책, 사설 Service2개, monitoring CRD10개, workload Secret7개와 gateway/중앙 collector/HyperDX CA까지 적용했다. 기존 앱/DB/관리 agent는 보존 중이다. 중앙에서는 합성8logs/2traces 수락, 잘못된 bearer/CA/hostname 거부를 확인했으며 저장 event ID 조회는 별도 확인한다.
+
+실제 Pod 시작에서 두 설정 문제가 발견돼 후속 agent 교체를 중단했다. 로컬 render만으로 잡지 못했던 문제다.
+
+- workload Operator: webhook은 off인데 별도 `tls.enabled`가 기본 true라, 생성하지 않는 monitoring-admission Secret mount를 기다렸다. 최소 구성에서 TLS를 함께 끄고 내부 HTTP8080 probe·Service·ServiceMonitor를 일치시킨다. 선택 적용은 workload operator Deployment/Service/ServiceMonitor 세 자원이다. 기존 관리 KPS와 원격 ingest/query TLS·인증은 바꾸지 않는다.
+- NGINX: 실제 unprivileged 이미지의 기본 fastcgi temp 경로가 read-only root의 /var/cache/nginx에 있었다. fastcgi/uwsgi/scgi를 기존 /tmp emptyDir로 명시한다. 설정만 바꾸면 subPath mount의 기존 Pod가 갱신되지 않으므로 config helper를 CM과 Deployment checksum에서 공유한다. 해당 CM/Deployment만 선택 적용하고 새 Pod UID·Ready·재시작 안정화를 확인한다.
+
+독립 재리뷰 GREEN: 기존 C2의 목표·대상·권한 안의 세부 수정이며 CPU/PVC/NLB/권한 확대가 없다. 수정 PR을 사용자가 머지하기 전 live 추가 변경은 하지 않는다. 머지 확인 후 workload KPS와 workload boundary Application의 Git values ref만 새 머지 SHA로 갱신해 위 변경 자원만 선택 적용한다. root 전체 sync나 root에 남아 있는 이전 SHA로 이 두 App을 덮어쓰지 않는다. backend 정상 확인 전 기존 agent는 종료하지 않는다.

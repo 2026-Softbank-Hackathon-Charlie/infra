@@ -1,7 +1,7 @@
 # 0063. 관측 TLS는 짧은 leaf와 공개 CA bundle 전환으로 갱신한다
 
 - 날짜: 2026-11-06
-- 상태: 제안 — C 실행 계획 리뷰·승인 대상, 실제 인증서 미발급
+- 상태: 채택 — 사용자 C2 실제 실행 승인 후 workload 인증서 발급, backend 검증 진행 중
 - 관련 ADR: [0061 사설 전송](0061-private-otlp-ingress-for-aws-workload.md), [0062 자동 관측](0062-automatically-observe-platform-workloads.md)
 
 ## 배경과 제약
@@ -14,9 +14,9 @@ AWS workload local gateway와 사설 Prometheus query에 TLS가 필요하다. �
 - cert-manager/Vault/ACM Private CA 추가: 자동 갱신에 유리하지만 새 발급 권한·비용·구성 범위가 생겨 이번 활성화에서는 제외.
 - leaf90일/CA365일, CA key 메모리 전용, 신규 CA bundle을 먼저 신뢰시킨 후 leaf 전환: 초기 선택 제안. 자동 갱신을 제공하지 않으며 운영자가 만료 전에 재발급해야 한다.
 
-## 결정 제안과 이유
+## 결정과 이유
 
-workload에서 새로 발급하는 local gateway 및 query leaf는90일, 자체 CA는365일로 제안한다. CA key는 메모리에서 leaf 발급에만 사용한 뒤 폐기한다. 중앙 기존 인증서와 관리 gateway leaf는 교체하지 않으며 실제 만료/SAN은 검증한다.
+workload에서 새로 발급하는 local gateway 및 query leaf는90일, 자체 CA는365일로 채택한다. CA key는 메모리에서 leaf 발급에만 사용한 뒤 폐기한다. 중앙 기존 인증서와 관리 gateway leaf는 교체하지 않으며 실제 만료/SAN은 검증한다.
 
 갱신할 때 새 CA/leaf를 발급하고, 기존+신규 공개 CA bundle을 agent/앱 profile/HyperDX에 먼저 공급해 readiness를 확인한다. 서버 Secret을 새 leaf로 전환한 뒤 새 trust로 TLS 검증하고 이전 CA를 제거한다. 앱 profile CA checksum은 Pod rollout을 유발한다. 실제 SAN과 trust propagation이 확인되지 않으면 이전 CA를 제거하지 않는다.
 
@@ -32,3 +32,6 @@ agent/upstream bearer와 query password는 별개 credential이며 TLS 유효기
 
 - [C 활성화 계획](../plans/workload-observability-activation.md)
 - [운영 안내](../operations/automatic-workload-observability.md)
+
+
+2026-11-06 C2 실행 승인에 따라 workload gateway/query leaf를 발급했다. 두 leaf의 notAfter는2027-02-04T11:49:16Z이며 CA key는 발급 후 폐기했다. query SAN은 실제 internal NLB DNS, gateway SAN은 서비스 DNS다. private key와 credential 값은 기록하지 않는다. NGINX와 Node HyperDX는 파일/환경의 CA·인증서를 시작 시 읽으므로 갱신 시 해당 Deployment의 한정 rollout과 readiness/TLS 확인을 수행한다. 파일 갱신만으로 reload됐다고 간주하지 않는다.
