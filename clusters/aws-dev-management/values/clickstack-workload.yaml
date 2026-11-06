@@ -1,0 +1,21 @@
+{
+  "privateIngest": {
+    "enabled": true,
+    "privateSubnets": [
+      "subnet-0a35d4f954a4720cd",
+      "subnet-0d1aaecfc0e33aae8"
+    ],
+    "sourceRanges": [
+      "10.40.32.0/19"
+    ]
+  },
+  "additionalIngestTokenKeys": [
+    "WORKLOAD_OTLP_AUTH_TOKEN"
+  ],
+  "hyperdx": {
+    "queryTrust": {
+      "enabled": true,
+      "configMap": "observability-metrics-query-ca"
+    }
+  }
+}

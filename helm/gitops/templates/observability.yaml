@@ -69,7 +69,11 @@ spec:
     path: helm/charts/clickstack
     helm:
       releaseName: clickstack
-      valueFiles: [../../../clusters/aws-dev-management/values/clickstack.yaml]
+      valueFiles:
+        - ../../../clusters/aws-dev-management/values/clickstack.yaml
+        {{- if (dig "automatic" "enabled" false .Values.observability) }}
+        - ../../../clusters/aws-dev-management/values/clickstack-workload.yaml
+        {{- end }}
   destination: {server: {{ $management.endpoint | quote }}, namespace: observability}
   syncPolicy:
     syncOptions: [ServerSideApply=true]

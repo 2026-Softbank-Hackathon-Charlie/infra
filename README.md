@@ -946,3 +946,11 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/proof-alloy-discovery.py](scripts/tests/proof-alloy-discovery.py)
 - [scripts/tests/proof-metrics-query.py](scripts/tests/proof-metrics-query.py)
 - [scripts/tests/test-automatic-observability.py](scripts/tests/test-automatic-observability.py)
+
+- [docs/plans/workload-observability-activation.md](docs/plans/workload-observability-activation.md) — AWS 자동 관측 활성화 실행 계획·승인 범위
+- [docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md](docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md) — 관측 TLS 수명·CA bundle 갱신 제안
+- [clusters/aws-dev-management/values/observability-activation.yaml](clusters/aws-dev-management/values/observability-activation.yaml)
+- [clusters/aws-dev-management/values/clickstack-workload.yaml](clusters/aws-dev-management/values/clickstack-workload.yaml)
+- [clusters/aws-dev-workload/values/baseline-observability.yaml](clusters/aws-dev-workload/values/baseline-observability.yaml)
+- [scripts/render-observability-activation.py](scripts/render-observability-activation.py)
+- [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)

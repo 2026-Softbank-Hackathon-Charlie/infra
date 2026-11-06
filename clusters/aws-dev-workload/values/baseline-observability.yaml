@@ -1,0 +1,5 @@
+{
+  "networkPolicy": {
+    "isolateObservabilityGateway": true
+  }
+}

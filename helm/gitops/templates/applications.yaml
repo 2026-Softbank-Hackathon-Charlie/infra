@@ -162,7 +162,9 @@ spec:
     - {group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration, name: aws-load-balancer-webhook, jqPathExpressions: [".webhooks[].clientConfig.caBundle"]}
   {{- end }}
   syncPolicy:
+    {{- if not (and (eq $purpose "workload") (eq $name "kube-prometheus-stack") (dig "automatic" "enabled" false $.Values.observability)) }}
     automated: {prune: false, selfHeal: true}
+    {{- end }}
     syncOptions: [CreateNamespace=true, ServerSideApply=true{{ if eq $name "aws-load-balancer-controller" }}, RespectIgnoreDifferences=true{{ end }}]
     {{- with $addon.namespaceLabels }}
     managedNamespaceMetadata:
