@@ -838,6 +838,9 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/adr/0060-private-otlp-ingress-for-aws-workload.md](docs/adr/0060-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
+| [docs/adr/0061-automatically-observe-platform-workloads.md](docs/adr/0061-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
+| [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
 | [helm/charts/clickstack/LICENSE](helm/charts/clickstack/LICENSE) | ClickStack 로컬 배포·Secret 참조 템플릿 |
