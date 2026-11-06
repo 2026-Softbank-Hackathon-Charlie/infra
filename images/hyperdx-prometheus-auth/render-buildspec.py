@@ -3,7 +3,7 @@
 import base64,json,shlex
 from pathlib import Path
 root=Path(__file__).resolve().parent
-commands=['set -eu','mkdir -p tests']
+commands=['set -eu', 'task_dir=$(mktemp -d /tmp/hyperdx-auth.XXXXXXXX)', 'cd "$task_dir"', 'mkdir -p tests']
 for name in ['Dockerfile','patch-prometheus-auth.cjs','tests/test-prometheus-auth.cjs']:
     data=base64.b64encode((root/name).read_bytes()).decode()
     script=f'import base64;from pathlib import Path;Path({name!r}).write_bytes(base64.b64decode({data!r}))'
