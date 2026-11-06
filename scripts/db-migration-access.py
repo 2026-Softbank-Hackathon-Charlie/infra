@@ -37,7 +37,9 @@ def manifests(args):
                 f'Invalid {field}: use a DNS label of 1-{limit} lowercase letters, digits or hyphens.')
     protected = args.namespace in PROTECTED or args.namespace.startswith('kube-')
     require(not protected or (args.namespace, args.cluster) in PROTECTED_EXCEPTIONS,
-            'The requested namespace is reserved for infrastructure.')
+            'The requested namespace is reserved for infrastructure.' +
+            ' Only these (namespace, CNPG Cluster) pairs may be granted there: ' +
+            ', '.join(f'{ns}/{name}' for ns, name in sorted(PROTECTED_EXCEPTIONS)) + '.')
     for value in (args.context, args.kubeconfig):
         require(value.strip() and not any(ord(char) < 32 for char in value),
                 'Context and kubeconfig must be explicit nonempty values without control characters.')

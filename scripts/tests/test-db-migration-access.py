@@ -226,6 +226,19 @@ class MigrationAccessTests(unittest.TestCase):
                     self.assertIn('reserved for infrastructure', error)
                     self.assertEqual(self.kube.calls, [])
 
+    def test_the_exception_still_requires_the_cluster_to_exist(self):
+        # The exception only passes the protected-namespace check; the existence preflight is unchanged.
+        self.kube.add({'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'charlie-apps'}})
+        code, _, _ = self.invoke('grant', namespace='charlie-apps', cluster='moimroom-db-gke')
+        self.assertEqual(code, 1)
+        self.assertEqual(self.kube.mutations(), [])
+
+    def test_the_refusal_names_the_allowed_pairs(self):
+        code, _, error = self.invoke('render', namespace='charlie-apps', cluster='moimroom-gcp-db')
+        self.assertEqual(code, 1)
+        self.assertIn('reserved for infrastructure', error)
+        self.assertIn('charlie-apps/moimroom-db-gke', error)
+
     def test_the_same_cluster_name_is_unchanged_outside_protected_namespaces(self):
         self.seed_live_moimroom_db('moimroom', 'moimroom-db-gke')
         code, _, error = self.invoke('grant', namespace='moimroom', cluster='moimroom-db-gke')

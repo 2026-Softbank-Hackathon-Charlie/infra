@@ -11,10 +11,10 @@
 - `scripts/db-migration-access.py`는 이전할 때만 플랫폼 계정(`charlie-system/hopcharlie-platform`)에 지정한 CNPG Cluster 하나의 `get`, `patch`를 임시로 준다(ADR 0048). 이 helper는 `charlie-apps`를 포함한 인프라 네임스페이스를 보호 목록(`PROTECTED`)에 두고 `render`, `grant`, `revoke` 모두에서 거부한다.
 - 운영 moimroom DB는 GKE의 `charlie-apps/moimroom-db-gke`이고 EKS `moimroom/moimroom-db`가 이를 따라가는 replica다(2026-11-05 운영 이전 기록, ADR 0053과 #72). `charlie-apps`는 GKE 앱 워크로드의 공용 네임스페이스다.
 - 2026-11-06 GKE → EKS 이전이 precheck에서 세 번 멈췄다. 플랫폼 계정이 원본 Cluster를 `get`할 권한이 없었다. 상시 권한은 `list`뿐이다(`clusters/gcp-dev-workload/hopcharlie-platform-access.yaml`). helper가 원본 네임스페이스를 거부해서 런북 절차대로는 원본에 권한을 줄 수 없었다.
-- 이 문제를 다룬 PR이나 ADR은 없다(2026-11-06 저장소 점검).
 
 가정과 미확인:
 
+- 이 문제를 다룬 PR이나 ADR이 없다는 것은 2026-11-06에 PR·이슈 제목과 본문, ADR 본문을 검색해 확인한 결과다. 사라진 내용이나 리뷰 스레드까지 읽은 것은 아니다(미확인).
 - 실제 클러스터의 현재 역할과 lag는 이번 작성에서 다시 조회하지 않았다.
 - 허용할 쌍이 앞으로 더 늘어날지는 정해지지 않았다.
 
