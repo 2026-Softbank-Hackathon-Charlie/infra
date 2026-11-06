@@ -58,3 +58,40 @@ resource "aws_iam_role_policy" "image_publish" {
     ]
   })
 }
+
+# The platform repository's image scan workflow (platform SEC-04, ADR 0029):
+# pulls running images to scan them with Grype. Read only, on every
+# repository of the account; it cannot push, delete or deploy.
+resource "aws_iam_role" "image_scan" {
+  name = "hopcharlie-image-scan"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = local.github_oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = local.image_publishers.platform.subject
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "image_scan" {
+  name = "pull-images"
+  role = aws_iam_role.image_scan.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+        Resource = "arn:aws:ecr:${var.region}:${data.aws_caller_identity.me.account_id}:repository/*"
+      },
+      { Effect = "Allow", Action = "ecr:GetAuthorizationToken", Resource = "*" },
+    ]
+  })
+}
