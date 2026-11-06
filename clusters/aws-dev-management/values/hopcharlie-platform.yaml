@@ -11,7 +11,7 @@
   },
   "api": {
     "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
-    "dsnHostSuffixes": ".ts.net",
+    "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local",
     "appDbTopology": {
       "enabled": true,
       "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
