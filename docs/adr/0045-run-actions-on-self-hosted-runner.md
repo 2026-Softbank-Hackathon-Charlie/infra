@@ -72,6 +72,8 @@
 
 ### 2026-11-06 증설
 
+이 절의 3배 사양(12 vCPU/48 GB·runner 9개)은 [ADR 0067](0067-reduce-gcp-runner-to-double-initial-capacity.md)의 2배 사양 제안으로 변경한다. 아래 기록은 당시 증설 이력으로 보존하며 실제 축소 적용은 별도 승인·검증한다.
+
 - runner 3개로는 platform, infra, 다른 세션의 CI가 함께 기다려서 GCP VM을 3배인 e2 커스텀 vCPU 12개, 메모리 48 GB(`e2-custom-12-49152`)로 키우고 runner를 `hopcharlie-gcp-runner-1`부터 `9`까지 9개로 늘린다. e2 표준 유형에는 vCPU 12개가 없어 커스텀 유형을 쓴다. 동시에 도는 job의 Docker 이미지와 빌드 캐시를 위해 부팅 디스크를 80 GB에서 200 GB로 늘린다(pd-balanced는 크기에 따라 IOPS도 는다). 비용은 하루 약 12~13달러로 늘어난다고 추정한다(가격표를 확인하지 않은 추정). 할당량은 프로젝트 vCPU 24개와 E2 vCPU 24개 안이다(11-04 기준 사용량으로 계산).
 - `gcp_up.py`는 기존 VM의 머신 유형이 다르면 `--resize`를 줄 때만 VM을 멈추고 바꾼다. 우리 runner 중 하나라도 job을 돌리고 있으면 멈추지 않는다. 디스크는 `gcloud compute disks resize`로 따로 늘린다. 다시 켠 뒤 bootstrap.sh가 없는 runner만 추가한다.
 - 처음 증설은 사용자 결정으로 PR 검사 job(validate, helm, terraform 검사) 3개가 돌던 중에 VM을 멈춰 했다. 끊긴 job은 다시 실행한다.
