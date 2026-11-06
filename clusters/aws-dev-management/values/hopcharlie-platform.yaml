@@ -14,7 +14,15 @@
     "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local",
     "appDbTopology": {
       "enabled": true,
-      "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+      "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local",
+      "route": {
+        "tailnet": "tail567fe8.ts.net",
+        "proxyClass": "hopcharlie-app-db-egress-management",
+        "tag": "tag:hop-db-client-management"
+      }
+    },
+    "appFiles": {
+      "enabled": true
     }
   },
   "gcp": {
