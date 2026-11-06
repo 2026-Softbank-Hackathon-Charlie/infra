@@ -128,11 +128,17 @@
       "observability"
     ],
     "extraArgs": [
-      "--watch-object-refs-in-all-namespaces=false"
+      "--watch-referenced-objects-in-all-namespaces=false"
     ],
     "tls": {
       "enabled": false
-    }
+    },
+    "kubeletService": {
+      "enabled": false
+    },
+    "alertmanagerConfigNamespaces": [
+      "observability"
+    ]
   },
   "kubelet": {
     "enabled": false

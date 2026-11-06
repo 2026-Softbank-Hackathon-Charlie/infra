@@ -1,6 +1,6 @@
 # AWS 자동 관측 활성화 적용안
 
-2026-11-06. **준비 코드 C1**이다. 실제 Secret/Argo/클러스터/NLB 변경 C2는 아직 승인·실행하지 않았다. 준비 PR은 사용자가 머지한다. 기존 공통 앱 profile/Job 및 root·baseline·ClickStack 기본 파일은 off 상태를 보존한다.
+2026-11-06. C1 준비 PR과 런타임 수정 PR을 사용자가 머지했고, 승인된 C2 backend 배포를 실행했다. 현재 결과와 미완료 항목은 문서 아래 C2 결과를 따른다. 최종 EKS 앱·Job 활성화 PR은 준비 중이며 C3 실제 rollout 승인은 아직 받지 않았다.
 
 ## override와 적용 경계
 
@@ -89,3 +89,37 @@ NLB2개+12Gi gp3는730시간 가정 고정 약$33.94/월, NLCU·전송·세금 �
 - NGINX: 실제 unprivileged 이미지의 기본 fastcgi temp 경로가 read-only root의 /var/cache/nginx에 있었다. fastcgi/uwsgi/scgi를 기존 /tmp emptyDir로 명시한다. 설정만 바꾸면 subPath mount의 기존 Pod가 갱신되지 않으므로 config helper를 CM과 Deployment checksum에서 공유한다. 해당 CM/Deployment만 선택 적용하고 새 Pod UID·Ready·재시작 안정화를 확인한다.
 
 독립 재리뷰 GREEN: 기존 C2의 목표·대상·권한 안의 세부 수정이며 CPU/PVC/NLB/권한 확대가 없다. 수정 PR을 사용자가 머지하기 전 live 추가 변경은 하지 않는다. 머지 확인 후 workload KPS와 workload boundary Application의 Git values ref만 새 머지 SHA로 갱신해 위 변경 자원만 선택 적용한다. root 전체 sync나 root에 남아 있는 이전 SHA로 이 두 App을 덮어쓰지 않는다. backend 정상 확인 전 기존 agent는 종료하지 않는다.
+
+
+## C2 배포 결과와 최종 활성화 PR (2026-11-06)
+
+PR #114 머지 SHA `725d632073331bff32b09fbf1f5306ffec382b3e`를 workload KPS·boundary 두 Application의 Git ref에 한정 적용했다. root와 다른 관측 App은 승인 SHA `76566a3d835a916a45f33c3a527e6874f6e7a43f`를 유지하며 모두 manual이다. root 전체 sync는 실행하지 않았다.
+
+- management Alloy 3/3, workload Alloy 2/2 Ready. 기존 관리 OTel DS의 exporter `otlphttp/central` 큐가 세 번 연속 0임을 확인한 뒤 UID precondition·foreground 삭제 후 새 DS를 기동했다. 기존 RBAC/ConfigMap/PVC/hostPath는 삭제하지 않았다.
+- 중앙 collector·양쪽 gateway·workload Operator/Prometheus·query proxy·HyperDX Ready를 확인했다. Alloy 큐는 5개 모두 0이며 관리 쪽 로그 전송 카운터는 양수다. workload 앱 등록 flags는 아직 live off이므로 workload 전송량 0은 수집 검증 완료를 뜻하지 않는다.
+- 두 NLB는 internal/active이고 target healthy다. 중앙 ingest ingress는 workload `10.40.32.0/19`, query ingress는 management `10.40.0.0/19`의 TCP443에만 열려 있다.
+- 합성 `c2-backend-1793966371`의 로그 8건·트레이스 2건 저장을 기존 HyperDX 사용자 세션의 ClickHouse connection으로 확인했다. 중앙 ingest의 잘못된 bearer/CA/hostname 거부, query의 정상 vector(1)·BasicAuth 누락/오류 거부·admin/lifecycle/write 차단·잘못된 CA/hostname 거부를 확인했다. 일반 앱/감사 로그는 조회하지 않았다.
+- workload KPS CLI 오타를 `--watch-referenced-objects-in-all-namespaces=false`로 교정했다. kubelet 수집이 꺼진 CNPG 전용 Operator의 불필요한 kubelet Service 관리도 `prometheusOperator.kubeletService.enabled=false`로 중지한다. kube-system write/Secret cluster 권한은 추가하지 않는다. AlertmanagerConfig 감시 namespace도 observability로 제한해 불필요한 전체 namespace Secret/ConfigMap metadata 감시를 차단한다. 세 최소 수정은 독립 리뷰 GREEN을 받았다.
+
+KPS에는 위 세 항목의 임시 Helm parameters가 있다. 이 PR이 머지되면 **해당 Application의 values Git ref를 새 merge SHA로 옮기는 것과, 일치하는 세 parameter를 제거하는 것을 단일 JSON patch로 처리**한다. 다른 parameters와 manual 정책을 보존한다. 수정 전 root pin을 그대로 전체 sync해 덮어쓰지 않는다. 운영 인자와 Boolean false의 렌더 동등성을 확인하고 operator Deployment만 선택 적용한다.
+
+### 최종 PR의 영향과 적용 관문
+
+이 PR은 EKS profile의 `observability.enabled/metricsEnabled`와 실제 공개 gateway CA, `automaticJobs=true`를 준비한다. GKE와 root 공유 기본값은 off다. Secret/private key/token은 Git에 넣지 않는다. 이 PR의 merge 자체가 main/selfHeal ApplicationSet을 통해 현재 확정된 EKS 앱의 Pod 설정·Namespace·CNPG metadata/PodMonitor·NetworkPolicy를 자동 반영할 수 있다. root 기본 off/manual은 이 자동 전파를 막지 않는다. 따라서 실제 desired diff와 진행 중 migration을 확인하고 C3 실행 승인을 받은 뒤에만 merge한다. 향후 생성 Job에는 관측 label·TTL이 적용되며, 이 설정만으로 새 Job이 실행되지는 않는다. API의 Job template 재읽기·실제 새 Job 수집 검증까지 완료를 확인한다.
+
+머지 전 진행 중 migration과 현재 앱 namespace 목록을 다시 확인한다. 기존 CNPG topology/replica/externalClusters/certificates ignoreDifferences는 보존하며 이 영역 diff가 있으면 중단한다. 새 앱 Pod에는 OTLP endpoint·공개 CA·metadata가 제공되고 CNPG PodMonitor가 생성된다. 앱 stdout·CNPG scrape·새 Job·앱 SDK trace의 실제 수집은 활성화 후 별도 합성 검증 대상이다. 모임룸 SDK PR #8의 사용자 머지·이미지 게시·배포가 완료되기 전에는 실제 애플리케이션 trace 완료로 보고하지 않는다.
+
+### 미완료: HyperDX Prometheus 인증 전달
+
+기존 관리 연결을 보존하고 `Workload Prometheus` connection과 `Workload CNPG Metrics` source를 추가했다. 그러나 실제 HyperDX `/v1/prometheus/query` 호출은 401이다. 확인한 pinned API source에서 `isPrometheusEndpoint` 분기는 connection의 username/password를 `proxyToPrometheus`의 Authorization header로 전달하지 않는다. 반면 프록시에 직접 보낸 올바른 BasicAuth 요청은 200이므로 저장·TLS 경로와 UI 인증 전달 문제를 구분한다. 현재 UI 메트릭 source는 사용 가능하다고 안내하지 않는다.
+
+별도 최소 해결안은 HyperDX upstream의 BasicAuth 전달 지원 여부를 확인하고, 지원되는 고정 버전 또는 검증한 패치를 선택하는 것이다. 임의 sidecar 추가, 인증 해제, URL/query string 비밀값 주입은 이번 C2에서 실행하지 않았다. 새 이미지·구성·배포 영향이 있는 해결안은 별도 계획 리뷰·승인 대상으로 남긴다. 이 한계는 로그·트레이스 탐색과 독립적이다.
+
+고정 버전의 감시 범위 근거: [Prometheus Operator v0.94.1 Alertmanager informer](https://github.com/prometheus-operator/prometheus-operator/blob/v0.94.1/pkg/alertmanager/operator.go#L228). `alertmanagerConfigNamespaces`는 Secret/ConfigMap metadata 감시 범위를 결정하며 CNPG PodMonitor의 cross-namespace discovery와는 별개다.
+
+최종 runtime 검증: 새 Operator Pod의 cache 동기화 완료, Forbidden/오류 부재, 재시작 0을 확인했다. 전체 관측 Pod는 Ready이며 workload queue2Gi·Prometheus10Gi PVC는 Bound다. 마지막 namespace 점검은 docker-doom/moimroom/moimroom-mig 세 개이며 진행 중 Job은 없었다. 이는 시점 점검이므로 C3 merge 직전에 다시 확인한다.
+
+
+## C3 최종 머지 검토 (2026-11-07)
+
+[확정 C3 계획](../plans/workload-observability-c3.md)은 독립 리뷰 GREEN을 받았다. 실제 live profile·GitOps SHA55ea56a 기준으로 Deployment3/Namespace3/CNPG inheritedMetadata2와 신규 CA CM3·관측 NP5·PodMonitor2를 확인했고, 기존 env/image/요청량·DB topology·credential 리소스는 불변이다. 사용자에게 migration 미진행을 확인받았다. CPU 여유360m 대비 동시 앱 surge150m/192Mi/3Pod를 확인해 증설 없이 진행한다. 최신 main10361ee 병합 후 전체 Helm·관측·inventory 검사가 통과했다. 아직 앱 활성화는 실행하지 않았으며, #119 사용자 merge로 실제 rollout·소유 로그 전송이 시작된다. KPS 수렴·한정 rollback을 포함한 명시 범위는 C3 계획을 따른다. 최초 retained 로그가 replay될 수 있다. HyperDX401과 SDK 미배포는 별도 미완료다.

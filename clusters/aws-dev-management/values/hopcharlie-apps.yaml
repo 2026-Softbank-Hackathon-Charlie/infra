@@ -82,11 +82,11 @@
           "proxyNamespace": "hopcharlie-db-network"
         },
         "observability": {
-          "enabled": false,
-          "metricsEnabled": false,
-          "endpoint": "",
-          "caBundle": "",
-          "clusterName": "",
+          "enabled": true,
+          "metricsEnabled": true,
+          "endpoint": "https://observability-gateway.observability.svc:443",
+          "caBundle": "-----BEGIN CERTIFICATE-----\nMIIDQDCCAiigAwIBAgIUWseAIbXz9nM7N4CwkUXcYH//8JQwDQYJKoZIhvcNAQEL\nBQAwJjEkMCIGA1UEAwwbQ2hhcmxpZSB3b3JrbG9hZC1nYXRld2F5IENBMB4XDTI2\nMTEwNjExNDQxNloXDTI3MTEwNjExNDkxNlowJjEkMCIGA1UEAwwbQ2hhcmxpZSB3\nb3JrbG9hZC1nYXRld2F5IENBMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\nAQEAxdcR1vWRLlxToekIuYqJHAqpMU5IJ3esl3k34ShAK57dYzIu9sAIZseznV7r\nJCD0rlIB4Jq7Alr5oxqPUNamxzsvGw7XCqviPp6R64NMuLBG72Okht3RIfgOKORd\nauhf0ul1SHJ2KES1qSFPUAa4TbqNiI3dz+nYxy4D44nwBJR3tztiYrCl5W8eUcwh\n+bOmFlRxQtrbbrsmrdNdU3+fsZfGHimEmKMMhe+XT2AT1YxewZntEAZJ6n9sE4b7\nOpCz0AYQ+r0MreTeyy1Cgn4oHZ2O75YwPHnXsU2ZHLAKwj6EaPlUeuTxBN+VcZm2\nz2+/vYDDsqhmfSJnz5IAn3F3sQIDAQABo2YwZDASBgNVHRMBAf8ECDAGAQH/AgEA\nMB0GA1UdDgQWBBQPQPlY/vFJ0bRXxrRwgPQU4pRzgDAfBgNVHSMEGDAWgBQPQPlY\n/vFJ0bRXxrRwgPQU4pRzgDAOBgNVHQ8BAf8EBAMCAYYwDQYJKoZIhvcNAQELBQAD\nggEBAIDVaZ29pbKxu6wQoL8BX1Biio+vTu1qMRbAzSd0ref/e2QUiJSb5dx3WLC5\ntl0rbK9fRZ6mNqLl+08VOBEnv6P8T4DrCt0eqSm6cfYkV3BymOxmhbuXM4Vkcj0f\nVYrvxcw3KBh+O/q9OKj8GmFIR1QqFW5Iu0UP/W/9/WZGf8y0uvCfkcyhKYd4QYkw\nibdtcVYvriqvMGrMsPcuRP9DmoCwVeXh2ZsvnkdmX99l3OGGNp7cXDgyX0mQvM8c\nzf1BPzuGuChyQA2V4AOAzawnoCOH7wmoCzAa/YizfwLQr7Gsd1YbnB1n1WjwOo1m\nRH1twlJV5o66+LbvXUvOW928r04=\n-----END CERTIFICATE-----\n",
+          "clusterName": "charlie-dev-workload",
           "cloudProvider": "aws",
           "region": "ap-northeast-2"
         }

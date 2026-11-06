@@ -70,6 +70,6 @@
     "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:6c72662@sha256:869952ff0d59970c0e71fa0d156646abbfdd241fc757f1dc007f096fa3fd0a1a"
   },
   "observability": {
-    "automaticJobs": false
+    "automaticJobs": true
   }
 }

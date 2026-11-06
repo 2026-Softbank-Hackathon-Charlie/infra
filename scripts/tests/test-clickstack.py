@@ -271,7 +271,7 @@ class ClickStackTests(unittest.TestCase):
         values = json.loads((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text())
         values['ingress']['enabled'] = False
         base = render(ROOT / 'helm/charts/hopcharlie-platform', 'hopcharlie-platform', values=values)
-        values['observability'] = {'enabled': True}
+        values.setdefault('observability', {})['enabled'] = True
         enabled = render(ROOT / 'helm/charts/hopcharlie-platform', 'hopcharlie-platform', values=values)
         policy = next(d for d in enabled if d['metadata']['name'] == 'hopcharlie-otel-egress')
         self.assertEqual([d for d in enabled if d is not policy], base)
