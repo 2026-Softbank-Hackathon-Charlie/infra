@@ -1,0 +1,16 @@
+{
+  "observability": {
+    "enabled": true,
+    "automatic": {
+      "enabled": true
+    },
+    "agentTargets": [
+      "management",
+      "workload"
+    ],
+    "gatewayTargets": [
+      "management",
+      "workload"
+    ]
+  }
+}
