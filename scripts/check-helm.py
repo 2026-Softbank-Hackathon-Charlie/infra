@@ -355,6 +355,17 @@ def main():
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        # Born-paired app databases (ADR 0063) stay off until the rollout steps; the
+        # values only render the platform's two settings when set.
+        assert "PLATFORM_APP_DB_TOPOLOGY" not in env and "PLATFORM_APP_DB_HOST_TEMPLATES" not in env, env
+        topo_values = work / "platform-app-db-topology.json"
+        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+        topo_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": True, "hostTemplates": hosts}}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(topo_values)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        topo_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert topo_env["PLATFORM_APP_DB_TOPOLOGY"] == "1" and topo_env["PLATFORM_APP_DB_HOST_TEMPLATES"] == hosts, topo_env
+        assert topo_env["PLATFORM_DSN_HOST_SUFFIXES"] == env["PLATFORM_DSN_HOST_SUFFIXES"]
         two = work / "platform-two-templates.json"
         two.write_text(json.dumps({"deploy": {"backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,gke=https://{app}-{service}.{instance}.gke.test:{port}/?env={env}"}}))
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(two)))
@@ -452,6 +463,12 @@ def main():
         appset = next(d for d in docs if d["kind"] == "ApplicationSet")
         assert appset["metadata"]["annotations"]["argocd.argoproj.io/sync-options"] == "Delete=false"
         assert appset["spec"]["template"]["metadata"]["finalizers"] == ["resources-finalizer.argocd.argoproj.io"]
+        # Migrations change the Cluster's topology fields (ADR 0050); the Tailscale operator
+        # rewrites only a database egress Service's externalName (ADR 0063).
+        assert appset["spec"]["template"]["spec"]["ignoreDifferences"] == [
+            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", ".spec.externalClusters", ".spec.certificates"]},
+            {"group": "", "kind": "Service", "jqPathExpressions": [
+                'select(.spec.type == "ExternalName" and .metadata.annotations["tailscale.com/tailnet-fqdn"] != null) | .spec.externalName']}]
         check_project(docs, apps_project, "argocd")
         allowed = {(d["group"], d["kind"]) for d in apps_project["spec"]["namespaceResourceWhitelist"]}
         for doc in docs:
@@ -568,6 +585,95 @@ def main():
         assert key["spec"]["encryptedData"] == backed["values"]["sealedSecrets"]["pgBackup"] and key["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}
         docs = render(ROOT / "helm/charts/hopcharlie-app", backed_file, "moimroom", "moimroom", ("-f", gke_profile))
         assert not [d for d in docs if d["kind"] in ("ObjectStore", "ScheduledBackup")] and "plugins" not in next(d for d in docs if d["kind"] == "Cluster")["spec"]
+        # Apps registered in two environments (ADR 0063): with values.dbTopology the
+        # Cluster is one half of a CNPG distributed topology. The gke file is born
+        # primary (initdb), the eks file a replica (pg_basebackup) of it; both use the
+        # sealed app account and CA, and reach each other through the Tailscale
+        # Services when the profile's dbNetwork is on.
+        pg_app = {k: "AgBwZy1hcHAK" for k in ("username", "password", "dbname", "host", "port", "uri", "jdbc-uri")}
+        pg_ca = {"ca.crt": "AgBjYS1jcnQK", "ca.key": "AgBjYS1rZXkK"}
+        topo_files = {}
+        for env, peer in (("gke", "eks"), ("eks", "eks")):  # peer: the env born a replica
+            topo = copy.deepcopy(stateful)
+            topo.pop("profile")
+            topo["env"] = env
+            topo["values"]["dbTopology"] = {"primary": "gke", "peer": peer}
+            topo["values"]["sealedSecrets"].update(pgApp=pg_app, pgCA=pg_ca)
+            topo_files[env] = work / f"topology-{env}.json"
+            topo_files[env].write_text(json.dumps(topo))
+        apps_envs = json.loads(apps_values.read_text())["environments"]
+        sizes = set()
+        for env, other in (("gke", "eks"), ("eks", "gke")):
+            profile = copy.deepcopy(apps_envs[env]["profile"])
+            profile["dbNetwork"]["enabled"] = True
+            on = work / f"topology-profile-{env}.json"
+            on.write_text(json.dumps({"profile": profile}))
+            docs = render(ROOT / "helm/charts/hopcharlie-app", topo_files[env], "moimroom", "moimroom", ("-f", on))
+            for doc in docs:
+                assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+            ns = next(d for d in docs if d["kind"] == "Namespace")
+            assert ns["metadata"]["labels"]["hopcharlie.dev/db-topology"] == "true"
+            spec = next(d for d in docs if d["kind"] == "Cluster")["spec"]
+            sizes.add(spec["storage"]["size"])
+            secret = {"name": "moimroom-db-app"}
+            if env == "gke":
+                assert spec["bootstrap"] == {"initdb": {"database": "app", "owner": "app", "secret": secret}}, spec["bootstrap"]
+            else:
+                assert spec["bootstrap"] == {"pg_basebackup": {"source": "moimroom-db-gke", "database": "app", "owner": "app", "secret": secret}}, spec["bootstrap"]
+            assert spec["replica"] == {"self": f"moimroom-db-{env}", "primary": "moimroom-db-gke", "source": f"moimroom-db-{other}"}, spec["replica"]
+            assert spec["certificates"] == {"serverCASecret": "app-pg-ca", "clientCASecret": "app-pg-ca", "serverAltDNSNames": [
+                f"moimroom-db-to-{env}.moimroom.svc", f"moimroom-db-to-{env}.moimroom.svc.cluster.local"]}, spec["certificates"]
+            tls = {"sslCert": {"name": "moimroom-db-replication", "key": "tls.crt"}, "sslKey": {"name": "moimroom-db-replication", "key": "tls.key"},
+                   "sslRootCert": {"name": "app-pg-ca", "key": "ca.crt"}}
+            params = {"user": "streaming_replica", "dbname": "postgres", "sslmode": "verify-full"}
+            assert spec["externalClusters"] == [
+                {"name": f"moimroom-db-{env}", "connectionParameters": {"host": "moimroom-db-rw.moimroom.svc", **params}, **tls},
+                {"name": f"moimroom-db-{other}", "connectionParameters": {"host": f"moimroom-db-to-{other}.moimroom.svc.cluster.local", **params}, **tls}], spec["externalClusters"]
+            sealed = {d["metadata"]["name"]: d for d in docs if d["kind"] == "SealedSecret"}
+            assert sealed["moimroom-db-app"]["spec"]["template"]["type"] == "kubernetes.io/basic-auth"
+            assert sealed["moimroom-db-app"]["spec"]["encryptedData"] == pg_app
+            assert sealed["app-pg-ca"]["spec"]["template"]["type"] == "Opaque" and sealed["app-pg-ca"]["spec"]["encryptedData"] == pg_ca
+            services = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Service"}
+            net = profile["dbNetwork"]
+            assert services["moimroom-db-ts"]["metadata"]["annotations"] == {
+                "tailscale.com/expose": "true", "tailscale.com/hostname": f"hop-db-{env}-moimroom",
+                "tailscale.com/tags": f"tag:hop-db-{env}", "tailscale.com/proxy-class": f"hopcharlie-app-db-ingress-{env}"}
+            assert services["moimroom-db-ts"]["spec"]["selector"] == {"cnpg.io/cluster": "moimroom-db", "cnpg.io/instanceRole": "primary"}
+            egress = services[f"moimroom-db-to-{other}"]
+            assert egress["spec"]["type"] == "ExternalName" and egress["metadata"]["annotations"] == {
+                "tailscale.com/tailnet-fqdn": f"hop-db-{other}-moimroom.{net['tailnetDomain']}", "tailscale.com/hostname": f"hop-db-{env}-moimroom-to-{other}",
+                "tailscale.com/tags": f"tag:hop-db-client-{env}", "tailscale.com/proxy-class": f"hopcharlie-app-db-egress-{env}"}
+            policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "moimroom-db-replication")["spec"]
+
+            def proxy(svc):
+                return {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "hopcharlie-db-network"}}, "podSelector": {"matchLabels": {
+                    "tailscale.com/parent-resource": svc, "tailscale.com/parent-resource-ns": "moimroom"}}}
+            assert policy["ingress"] == [{"from": [proxy("moimroom-db-ts")], "ports": [{"protocol": "TCP", "port": 5432}]}], policy
+            assert policy["egress"] == [{"to": [proxy(f"moimroom-db-to-{other}")], "ports": [{"protocol": "TCP", "port": 5432}]}], policy
+            # dbNetwork off: the Cluster and Secrets, no tailnet objects.
+            profile["dbNetwork"]["enabled"] = False
+            off = work / f"topology-profile-off-{env}.json"
+            off.write_text(json.dumps({"profile": profile}))
+            docs = render(ROOT / "helm/charts/hopcharlie-app", topo_files[env], "moimroom", "moimroom", ("-f", off))
+            assert not [d for d in docs if d["metadata"]["name"].startswith("moimroom-db-")
+                        and d["kind"] in ("Service", "NetworkPolicy")], "dbNetwork off draws no tailnet objects"
+        assert len(sizes) == 1, f"both environments' databases must be the same size: {sizes}"
+        for name, change in (
+            ("dbTopology without pgCA", lambda v: v["values"]["sealedSecrets"].pop("pgCA")),
+            ("dbTopology without pgApp and pgCA", lambda v: (v["values"]["sealedSecrets"].pop("pgCA"), v["values"]["sealedSecrets"].pop("pgApp"))),
+            ("dbTopology without a postgres resource", lambda v: v["values"].update(resources=[{"name": "photos", "type": "s3"}])),
+            ("dbTopology of other environments", lambda v: v["values"]["dbTopology"].update(primary="aws", peer="gcp")),
+            ("dbTopology whose only environment is the file's", lambda v: v["values"]["dbTopology"].update(primary="eks", peer="eks")),
+            ("unknown dbTopology key", lambda v: v["values"]["dbTopology"].update(role="primary")),
+            ("pgApp without uri", lambda v: v["values"]["sealedSecrets"]["pgApp"].pop("uri")),
+            ("service whose Service is the tailnet ingress", lambda v: v["values"]["services"][0].update(name="db-ts")),
+        ):
+            values = json.loads(topo_files["eks"].read_text())
+            change(values)
+            broken = work / "broken-values.json"
+            broken.write_text(json.dumps(values))
+            result = subprocess.run([HELM, "template", "moimroom", str(ROOT / "helm/charts/hopcharlie-app"), "-n", "moimroom", "-f", str(eks_profile), "-f", str(broken)], capture_output=True, text=True)
+            assert result.returncode != 0, f"hopcharlie-app accepts {name}"
         for name, values_of, profile in (
             ("a backup bucket without its key", lambda v: v["values"]["sealedSecrets"].pop("pgBackup"), eks_profile),
             ("a backup key without its bucket", lambda v: v["values"].pop("backup"), eks_profile),

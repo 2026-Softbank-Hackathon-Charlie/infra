@@ -37,6 +37,13 @@
         }
       }
     },
+    "platformApps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"}
+      }
+    },
     "proxyResources": {
       "type": "object",
       "additionalProperties": false,

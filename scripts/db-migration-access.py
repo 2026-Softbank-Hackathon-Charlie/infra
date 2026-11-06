@@ -19,6 +19,12 @@ PROTECTED = {'argocd', 'cert-manager', 'charlie-apps', 'charlie-platform', 'char
 PROTECTED_EXCEPTIONS = {('charlie-apps', 'moimroom-db-gke')}
 DNS_LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?')
 RBAC_API = 'rbac.authorization.k8s.io/v1'
+# get and patch for the migration engine. migrate is not a Kubernetes verb: the workload's
+# ValidatingAdmissionPolicy hopcharlie-platform-migration lets the platform patch a Cluster
+# outside a db-topology namespace only when it holds migrate on that Cluster (infra ADR 0063).
+VERBS = ['get', 'patch', 'migrate']
+# Sessions granted before migrate was added; revoke still recognizes them.
+LEGACY_VERBS = ['get', 'patch']
 
 
 class Refused(Exception):
@@ -52,20 +58,24 @@ def manifests(args):
     return [
         {'apiVersion': RBAC_API, 'kind': 'Role', 'metadata': metadata,
          'rules': [{'apiGroups': ['postgresql.cnpg.io'], 'resources': ['clusters'],
-                    'resourceNames': [args.cluster], 'verbs': ['get', 'patch']}]},
+                    'resourceNames': [args.cluster], 'verbs': VERBS}]},
         {'apiVersion': RBAC_API, 'kind': 'RoleBinding', 'metadata': metadata,
          'roleRef': {'apiGroup': 'rbac.authorization.k8s.io', 'kind': 'Role', 'name': name},
          'subjects': [{'kind': 'ServiceAccount', 'name': 'hopcharlie-platform', 'namespace': 'charlie-system'}]},
     ]
 
 
-def owned(actual, expected):
+def owned(actual, expected, legacy=False):
     if actual is None:
         return
     metadata = actual.get('metadata') or {}
     wanted = expected['metadata']
-    same_body = {key: value for key, value in actual.items() if key != 'metadata'} == {
-        key: value for key, value in expected.items() if key != 'metadata'}
+    body = {key: value for key, value in actual.items() if key != 'metadata'}
+    same_body = body == {key: value for key, value in expected.items() if key != 'metadata'}
+    if legacy and not same_body and expected['kind'] == 'Role':
+        old = json.loads(json.dumps(expected))
+        old['rules'][0]['verbs'] = LEGACY_VERBS
+        same_body = body == {key: value for key, value in old.items() if key != 'metadata'}
     require(same_body and metadata.get('name') == wanted['name']
             and metadata.get('namespace') == wanted['namespace']
             and all((metadata.get(field) or {}).get(key) == value
@@ -107,11 +117,11 @@ class Kubectl:
                 'kubectl returned a different object; refusing the requested operation.')
         return document
 
-    def read_rbac(self, expected):
+    def read_rbac(self, expected, legacy=False):
         metadata = expected['metadata']
         actual = self.get(expected['kind'].lower() + 's.rbac.authorization.k8s.io',
                           metadata['name'], metadata['namespace'])
-        owned(actual, expected)
+        owned(actual, expected, legacy)
         return actual
 
     def create(self, document):
@@ -122,8 +132,8 @@ class Kubectl:
         require(actual.get('metadata', {}).get('uid'), 'Created RBAC response is missing its identity.')
         return actual
 
-    def remove(self, expected, created_uid=None):
-        actual = self.read_rbac(expected)
+    def remove(self, expected, created_uid=None, legacy=False):
+        actual = self.read_rbac(expected, legacy)
         if actual is None:
             return
         metadata = actual['metadata']
@@ -169,9 +179,9 @@ def grant(kube, args, documents):
 
 def revoke(kube, documents):
     for document in documents:
-        kube.read_rbac(document)
+        kube.read_rbac(document, legacy=True)
     for document in reversed(documents):
-        kube.remove(document)
+        kube.remove(document, legacy=True)
 
 
 def main(argv=None):

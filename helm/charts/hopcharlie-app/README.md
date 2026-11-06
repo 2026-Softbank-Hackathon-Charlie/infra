@@ -22,6 +22,8 @@ HopCharlie 플랫폼이 GitHub에서 배포하는 앱 하나를 그리는 차트
 | ObjectStore, ScheduledBackup | `<app>-<resource>` | `postgres` 리소스, `values.backup`, `profile.postgres.backup.enabled`가 모두 있을 때. 아래 백업 절 |
 | Ingress | `<app>-<service>` | 공개 서비스, `profile.ingress.enabled`. 클래스 `profile.ingress.className`, 호스트 `<namespace>.<hostSuffix>`(eks: `<instance>.eks.hopcharlie.internal`), 경로 `/`에서 공개 Service의 `http` 포트로. 클러스터의 공용 진입점이 받는다(infra ADR 0058) |
 | ResourceQuota, LimitRange, NetworkPolicy | `hopcharlie-app` | `profile.quota`, `limitRange`, `networkPolicy`의 `enabled` |
+| SealedSecret | `<app>-<resource>-app`, `app-pg-ca` | `values.dbTopology`. 두 환경 DB가 같이 쓰는 앱 계정(`kubernetes.io/basic-auth`)과 CA. 아래 두 환경 DB 절 |
+| Service, NetworkPolicy | `<cluster>-ts`, `<cluster>-to-<other>`, `<cluster>-replication` | `values.dbTopology`와 `profile.dbNetwork.enabled`. NetworkPolicy는 `profile.networkPolicy.enabled`일 때만 |
 
 ## 서비스 계약
 
@@ -62,6 +64,18 @@ SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict
 - ScheduledBackup `<app>-<resource>`: `schedule`(기본 매일 UTC 18:00, 한국 시각 03:00), 켜자마자 한 번(`immediate`), Backup은 ScheduledBackup이 소유한다. sync-wave 1이다.
 
 `path`는 앱을 등록할 때마다 새로 정해진다. 같은 이름으로 다시 등록한 앱의 새 DB가 예전 DB의 WAL이 있는 곳에 쓰지 않으므로 Barman의 빈 보관소 검사를 통과한다. 백업을 켜거나 끄면 CNPG가 plugin 컨테이너를 넣거나 빼려고 Postgres 파드를 한 번 다시 만든다. 백업 버킷은 앱을 지워도 남는다.
+
+## 두 환경 DB
+
+두 환경에 등록한 앱의 기본 인스턴스는 플랫폼이 `values.dbTopology`(`primary`, `peer`)와 `values.sealedSecrets.pgApp`, `pgCA`를 함께 쓴다(infra ADR 0063). 이때 차트는 CNPG Cluster를 분산 토폴로지의 반쪽으로 그린다.
+
+- `primary` 환경의 파일은 `bootstrap.initdb`, 다른 환경의 파일은 `bootstrap.pg_basebackup`으로 태어난다. 둘 다 봉인된 `<cluster>-app`을 앱 계정으로 쓴다.
+- `certificates`의 서버 CA와 클라이언트 CA는 `app-pg-ca`다. `replica`는 `self: <cluster>-<env>`, `primary: <cluster>-<primary>`, `source: <cluster>-<other>`이고, `externalClusters`는 자기와 상대(egress Service)를 `verify-full`로 가리킨다.
+- 디스크 크기는 `profile.postgres.topologyStorageSize`(없으면 `storageSize`)다. 두 환경 프로필이 같은 값을 둔다.
+- 네임스페이스에 `hopcharlie.dev/db-topology: "true"`를 단다. 워크로드의 플랫폼 계정 권한과 공용 프록시 정책이 이 레이블을 본다.
+- `profile.dbNetwork.enabled`면 Tailscale ingress Service `<cluster>-ts`(호스트 `hop-db-<env>-<instance>`)와 egress Service `<cluster>-to-<other>`(상대 `hop-db-<other>-<instance>.<tailnetDomain>`), 복제 NetworkPolicy를 그린다. 프록시는 `profile.dbNetwork.proxyNamespace`에서 돈다.
+
+`dbTopology`가 없으면 출력은 이 기능 이전과 같다.
 
 ## 앱을 지우면 네임스페이스째 지워진다
 

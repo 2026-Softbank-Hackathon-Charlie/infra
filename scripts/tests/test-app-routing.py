@@ -107,6 +107,7 @@ class KubeconfigTests(unittest.TestCase):
         if 'can-i' in args:
             rule = args[args.index('can-i') + 1:]
             yes = rule[0] in ('get', 'list') and not any(r in rule for r in ('secrets', 'configmaps'))
+            yes = yes or rule == ['patch', 'clusters.postgresql.cnpg.io', '-A']
             yes = yes or (rule[:2] == ['get', 'secrets'] and self.secret_access == 'yes')
             return done(args, 'yes' if yes else 'no - no RBAC policy matched', 0 if yes else 1)
         if 'diff' in args:
@@ -141,7 +142,9 @@ class KubeconfigTests(unittest.TestCase):
         code, calls, out = self.invoke('--apply')
         self.assertEqual(code, 0, out)
         applied = [[d['kind'] for d in yaml.safe_load_all(i) if d] for a, i in calls.log if 'apply' in a]
-        self.assertEqual(applied, [['Namespace'], ['Namespace', 'ServiceAccount', 'Secret', 'ClusterRole', 'ClusterRoleBinding']])
+        self.assertEqual(applied, [['Namespace'], ['Namespace', 'ServiceAccount', 'Secret', 'ClusterRole', 'ClusterRoleBinding',
+                                                   'ClusterRole', 'ClusterRoleBinding', 'ValidatingAdmissionPolicy',
+                                                   'ValidatingAdmissionPolicyBinding']])
         self.assertEqual(len(calls.has('diff')), 2)
 
     def test_other_account_is_refused_first(self):
