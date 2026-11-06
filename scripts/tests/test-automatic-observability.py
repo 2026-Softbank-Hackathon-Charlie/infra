@@ -133,6 +133,40 @@ class AutomaticObservability(unittest.TestCase):
         args=of(prom,'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
         self.assertIn('--watch-object-refs-in-all-namespaces=false',args)
         self.assertIn('--prometheus-instance-namespaces=observability',args)
+    def test_activation_overrides_are_manual_and_narrow(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('activation',ROOT/'scripts/render-observability-activation.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        targets=load('helm/gitops/ci/targets-values.yaml')['targets']
+        for target in targets.values(): target['vpc_id']='vpc-04b7c6a79ad46fcdc'
+        sha='a'*40
+        selected,values=module.render(sha,targets)
+        self.assertEqual(len(selected),9)
+        click=next(d for d in selected if d['metadata']['name']=='charlie-management-clickstack')
+        self.assertEqual(click['spec']['source']['helm']['valueFiles'],[
+            '../../../clusters/aws-dev-management/values/clickstack.yaml',
+            '../../../clusters/aws-dev-management/values/clickstack-workload.yaml'])
+        self.assertFalse(of(render('observability-boundary'), 'Deployment'))
+        base=load('clusters/aws-dev-workload/values/baseline.yaml')
+        before=render('cluster-baseline',base,'charlie-apps')
+        base['networkPolicy'].update(load('clusters/aws-dev-workload/values/baseline-observability.yaml')['networkPolicy'])
+        after=render('cluster-baseline',base,'charlie-apps')
+        changed=[(b,a) for b,a in zip(before,after) if b!=a]
+        self.assertEqual(len(changed),1)
+        policy=changed[0][1]
+        self.assertEqual((policy['kind'],policy['metadata']['namespace'],policy['metadata']['name']),('NetworkPolicy','observability','system-compatibility'))
+        self.assertEqual(policy['spec']['podSelector']['matchExpressions'][0]['operator'],'NotIn')
+        self.assertEqual(policy['spec']['egress'],[{}])
+        central=load('clusters/aws-dev-management/values/clickstack.yaml')
+        central.update(load('clusters/aws-dev-management/values/clickstack-workload.yaml'))
+        docs=render('clickstack',central,'observability','clickstack')
+        service=next(d for d in of(docs,'Service') if d['metadata']['name']=='clickstack-otlp-private')
+        self.assertEqual(service['spec']['loadBalancerSourceRanges'],['10.40.32.0/19'])
+        self.assertFalse(of(docs,'Secret'))
+        with self.assertRaises(ValueError): module.render('main',targets)
+        other=copy.deepcopy(targets);other['workload']['endpoint']='http://unsafe.invalid'
+        with self.assertRaises(ValueError): module.render(sha,other)
+
     def test_hyperdx_query_trust_opt_in(self):
         docs=render('clickstack',{'hyperdx':{'queryTrust':{'enabled':True}}},'observability','clickstack')
         app=next(d for d in of(docs,'Deployment') if d['metadata']['name']!='clickstack-otel-collector')

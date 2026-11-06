@@ -615,8 +615,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [scripts/tests/test-gke-moimroom.py](scripts/tests/test-gke-moimroom.py) | GKE 렌더 진입점의 profile 소비·Deployment 한정·기존 설정·Secret 참조 보존 오프라인 검사 |
-| [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
-| [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044) |
+| [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
+| [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
 | [clusters/gcp-dev-workload/moimroom-db-backup.yaml](clusters/gcp-dev-workload/moimroom-db-backup.yaml) | GKE 운영 moimroom DB의 ObjectStore와 ScheduledBackup, 손으로 적용(ADR 0057) |
 | [clusters/gcp-dev-workload/moimroom-db-backup-patch.json](clusters/gcp-dev-workload/moimroom-db-backup-patch.json) | 같은 DB의 Cluster에 넣는 Workload Identity annotation, plugin, 4Gi 디스크(ADR 0057) |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
@@ -638,6 +638,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
 | [helm/charts/hopcharlie-app/templates/ingress.yaml](helm/charts/hopcharlie-app/templates/ingress.yaml) | 공개 서비스의 공용 진입점 Ingress, 호스트 `<instance>.<hostSuffix>`(ADR 0058) |
 | [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
+| [helm/charts/hopcharlie-app/templates/dbnetwork.yaml](helm/charts/hopcharlie-app/templates/dbnetwork.yaml) | 두 환경 앱 DB의 Tailscale ingress, egress Service와 복제 NetworkPolicy(ADR 0063) |
 | [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
 | [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
 | [scripts/put-sealed-secrets-cert.sh](scripts/put-sealed-secrets-cert.sh) | 워크로드 클러스터의 Sealed Secrets 공개 인증서를 SSM `/hopcharlie/sealed-secrets/eks`에 넣는 스크립트 |
@@ -842,6 +843,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
 | [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
+| [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
 | [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
@@ -891,6 +893,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
 - [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
+- [helm/charts/hopcharlie-db-network/templates/platform-apps.yaml](helm/charts/hopcharlie-db-network/templates/platform-apps.yaml)
 - [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
 - [helm/charts/hopcharlie-db-network/templates/services.yaml](helm/charts/hopcharlie-db-network/templates/services.yaml)
 - [helm/charts/hopcharlie-db-network/templates/validate.yaml](helm/charts/hopcharlie-db-network/templates/validate.yaml)
@@ -951,3 +954,11 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/proof-alloy-discovery.py](scripts/tests/proof-alloy-discovery.py)
 - [scripts/tests/proof-metrics-query.py](scripts/tests/proof-metrics-query.py)
 - [scripts/tests/test-automatic-observability.py](scripts/tests/test-automatic-observability.py)
+
+- [docs/plans/workload-observability-activation.md](docs/plans/workload-observability-activation.md) — AWS 자동 관측 활성화 실행 계획·승인 범위
+- [docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md](docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md) — 관측 TLS 수명·CA bundle 갱신 제안
+- [clusters/aws-dev-management/values/observability-activation.yaml](clusters/aws-dev-management/values/observability-activation.yaml)
+- [clusters/aws-dev-management/values/clickstack-workload.yaml](clusters/aws-dev-management/values/clickstack-workload.yaml)
+- [clusters/aws-dev-workload/values/baseline-observability.yaml](clusters/aws-dev-workload/values/baseline-observability.yaml)
+- [scripts/render-observability-activation.py](scripts/render-observability-activation.py)
+- [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)

@@ -31,6 +31,7 @@
 - 보호 네임스페이스는 이 목록에 정확히 일치하는 `(네임스페이스, Cluster)`일 때만 허용한다. 같은 네임스페이스의 다른 Cluster(예: 낡은 독립 DB `moimroom-gcp-db`), 다른 보호 네임스페이스, `kube-*` 네임스페이스는 계속 거부한다.
 - `render`, `grant`, `revoke`가 같은 검사를 거쳐서 부여와 회수가 일관되다.
 - 부여되는 권한은 그대로다. 지정한 Cluster 하나의 `get`, `patch`이고 Secret, 다른 Cluster, cluster 범위 RBAC, 새 토큰은 포함하지 않는다.
+- [ADR 0063](0063-born-paired-app-databases-for-two-environment-apps.md) 이후 helper의 Role은 같은 Cluster에 사용자 정의 verb `migrate`도 준다. 워크로드의 ValidatingAdmissionPolicy가 레이블 없는 네임스페이스의 Cluster patch를 이 verb가 있을 때만 통과시키기 때문이다. 범위와 회수 방식은 그대로다.
 - 이 변경은 코드 준비다. 실제 권한 부여는 ADR 0048과 `AGENTS.md`에 따라 별도 승인과 운영자 실행이 필요하다.
 
 ## 영향과 후속 작업
@@ -42,7 +43,7 @@
   - `moimroom-db-gke`가 다른 용도로 바뀌거나 이름이 바뀌면 예외를 갱신해야 한다.
 - 필요한 후속 작업 및 검증:
   1. 부여 전에 플랫폼 카탈로그(`apps.yaml`)의 gke `cnpgCluster`가 `moimroom-db-gke`로 운영에 반영됐는지 확인한다(infra #94, SSM 반영과 API 재시작 완료).
-  2. 부여 후 `kubectl auth can-i get`, `patch`가 해당 Cluster에서만 `yes`이고 Secret과 다른 Cluster는 `no`인지 확인한다.
+  2. 부여 후 `kubectl auth can-i migrate`가 해당 Cluster에서만 `yes`이고 Secret은 `no`인지 확인한다. ADR 0063의 ClusterRole이 적용된 클러스터에서는 `get`, `patch`가 모든 Cluster에서 `yes`이고, 실제 patch 범위는 VAP와 `migrate`가 정한다.
   3. 이전 종료 뒤 같은 세션으로 `revoke`하고 `auth can-i`가 `no`인지 확인한다.
   4. 승인 시점에 플랫폼 계정 권한을 미리 확인하는 검사는 platform 쪽 별도 작업이다(미구현).
 

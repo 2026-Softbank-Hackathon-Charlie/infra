@@ -1,7 +1,7 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:ad23460@sha256:77ef865859fbab02a96a614773623a1bcc31525186fd7aaeb80287ed891edb15",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:eba119b@sha256:171303e0501c369a54b1304dc6a634f1bdf2315dfabf8e116f8b23a72df18042",
     "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:737e397@sha256:b781c7abfe495ed6eca3899cb4183891d127e66c516c4013545730849b9c2bc0",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
@@ -11,7 +11,11 @@
   },
   "api": {
     "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
-    "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local"
+    "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local",
+    "appDbTopology": {
+      "enabled": true,
+      "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+    }
   },
   "gcp": {
     "tokenAudience": "https://iam.googleapis.com/projects/414068132732/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",

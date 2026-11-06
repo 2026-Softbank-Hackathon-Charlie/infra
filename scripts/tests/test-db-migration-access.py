@@ -157,7 +157,7 @@ class MigrationAccessTests(unittest.TestCase):
         role, binding = document['items']
         self.assertEqual([role['kind'], binding['kind']], ['Role', 'RoleBinding'])
         self.assertEqual(role['rules'], [{'apiGroups': ['postgresql.cnpg.io'], 'resources': ['clusters'],
-                                          'resourceNames': [CLUSTER], 'verbs': ['get', 'patch']}])
+                                          'resourceNames': [CLUSTER], 'verbs': ['get', 'patch', 'migrate']}])
         self.assertEqual(binding['subjects'], [{'kind': 'ServiceAccount', 'name': 'hopcharlie-platform',
                                               'namespace': 'charlie-system'}])
         self.assertEqual(binding['roleRef'], {'apiGroup': 'rbac.authorization.k8s.io',
@@ -197,14 +197,14 @@ class MigrationAccessTests(unittest.TestCase):
             with self.subTest(allowed=command):
                 code, _, error = self.invoke(command, **pair)
                 self.assertEqual(code, 0, error)
-        # The Role stays scoped to that one Cluster and to get/patch.
+        # The Role stays scoped to that one Cluster and to get/patch/migrate (ADR 0063).
         self.kube = FakeKubectl()
         self.seed_live_moimroom_db()
         self.invoke('grant', **pair)
         role = json.loads(self.kube.mutations('create')[0][1])
         self.assertEqual(role['metadata']['namespace'], 'charlie-apps')
         self.assertEqual(role['rules'], [{'apiGroups': ['postgresql.cnpg.io'], 'resources': ['clusters'],
-                                          'resourceNames': ['moimroom-db-gke'], 'verbs': ['get', 'patch']}])
+                                          'resourceNames': ['moimroom-db-gke'], 'verbs': ['get', 'patch', 'migrate']}])
 
     def test_the_exception_does_not_widen_to_other_clusters_or_protected_namespaces(self):
         refused = [
@@ -431,6 +431,29 @@ class MigrationAccessTests(unittest.TestCase):
         code, _, error = self.invoke('revoke')
         self.assertEqual(code, 0, error)
         self.assertEqual(len(self.kube.mutations('delete')), 2)
+
+    def test_a_session_granted_before_migrate_is_revoked_but_not_reused(self):
+        # ADR 0063 added migrate; an older get/patch session can still be revoked, while
+        # grant refuses to take it over (revoke it, then grant again).
+        for document in self.rendered():
+            if document['kind'] == 'Role':
+                document['rules'][0]['verbs'] = ['get', 'patch']
+            self.kube.add(document)
+        self.kube.calls.clear()
+        code, _, _ = self.invoke('grant')
+        self.assertEqual(code, 1)
+        self.assertEqual(self.kube.mutations(), [])
+        code, _, error = self.invoke('revoke')
+        self.assertEqual(code, 0, error)
+        self.assertEqual(len(self.kube.mutations('delete')), 2)
+        # Any other verb set is still not ours.
+        self.kube = FakeKubectl()
+        for document in self.rendered():
+            if document['kind'] == 'Role':
+                document['rules'][0]['verbs'] = ['get', 'patch', 'delete']
+            self.kube.add(document)
+        code, _, _ = self.invoke('revoke')
+        self.assertEqual(code, 1)
 
     def test_revoke_refuses_a_different_cluster_for_the_same_session(self):
         self.seed_grant()

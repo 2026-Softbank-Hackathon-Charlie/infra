@@ -14,7 +14,11 @@
   },
   "api": {
     "corsOrigins": "",
-    "dsnHostSuffixes": ".ts.net"
+    "dsnHostSuffixes": ".ts.net",
+    "appDbTopology": {
+      "enabled": false,
+      "hostTemplates": ""
+    }
   },
   "appDomain": "",
   "github": {

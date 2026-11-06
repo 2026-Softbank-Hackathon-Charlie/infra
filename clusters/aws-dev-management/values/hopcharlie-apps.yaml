@@ -31,7 +31,8 @@
           },
           "backup": {
             "enabled": true
-          }
+          },
+          "topologyStorageSize": "4Gi"
         },
         "s3": {
           "endpoint": "https://s3.ap-northeast-2.amazonaws.com",
@@ -71,6 +72,15 @@
             }
           ]
         },
+        "dbNetwork": {
+          "enabled": true,
+          "tailnetDomain": "tail567fe8.ts.net",
+          "ingressTag": "tag:hop-db-eks",
+          "egressTag": "tag:hop-db-client-eks",
+          "ingressProxyClass": "hopcharlie-app-db-ingress-eks",
+          "egressProxyClass": "hopcharlie-app-db-egress-eks",
+          "proxyNamespace": "hopcharlie-db-network"
+        },
         "observability": {
           "enabled": false,
           "metricsEnabled": false,
@@ -106,7 +116,8 @@
             "limits": {
               "memory": "512Mi"
             }
-          }
+          },
+          "topologyStorageSize": "4Gi"
         },
         "s3": {
           "endpoint": "https://storage.googleapis.com",
@@ -145,6 +156,15 @@
               }
             }
           ]
+        },
+        "dbNetwork": {
+          "enabled": true,
+          "tailnetDomain": "tail567fe8.ts.net",
+          "ingressTag": "tag:hop-db-gke",
+          "egressTag": "tag:hop-db-client-gke",
+          "ingressProxyClass": "hopcharlie-app-db-ingress-gke",
+          "egressProxyClass": "hopcharlie-app-db-egress-gke",
+          "proxyNamespace": "hopcharlie-db-network"
         },
         "observability": {
           "enabled": false,
