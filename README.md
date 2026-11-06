@@ -896,6 +896,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
 - [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
 - [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
+- [helm/db-network/management.yaml](helm/db-network/management.yaml)
 - [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
 - [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
 - [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
@@ -903,6 +904,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
 - [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
 - [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+- [docs/plans/2026-11-06-management-db-connectivity.md](docs/plans/2026-11-06-management-db-connectivity.md)
 
 ## rin 전용 GCP 이전
 

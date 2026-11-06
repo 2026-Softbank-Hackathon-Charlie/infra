@@ -114,3 +114,34 @@ helper는 다른 내용의 기존 Role/RoleBinding을 인수하지 않는다. �
 5. 새 연결 자체를 철거하려면 DB가 더 이상 해당 복제 경로에 의존하지 않는지 확인한 뒤 network release를 먼저 제거한다. operator가 proxy·tailnet 장치를 정리한 것을 확인한 다음 operator release·이번에 생성한 Secret/OAuth client를 회수한다. 기존 앱용 router와 다른 장치는 삭제하지 않는다.
 
 이 PR의 로컬 렌더·mock tests는 경로·역할 설정의 계약만 검사한다. 실제 WAL 처리량, 복제 성공, 무손실 전환과 예산은 설치 후 시험 결과로 기록한다.
+
+## 6. 관리 EKS의 moimroom SQL 경로 전환 (#98)
+
+2026-11-06 실제 API Pod에서 기존 `moimroom-db-*-rw.moimroom.*.ts.net` 주소 두 개가 모두 `NXDOMAIN`/`bad address`였다. source 이름 수정은 SSM/API에 반영돼 있었으므로 이름만 다시 바꾸거나 기존 실패 실행을 재개해서 해결되지 않는다. [이슈 #98](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/98)은 아래 연결 설정 준비만 다룬다.
+
+| 환경 | CNPG Cluster | API가 사용할 local DB 주소 | 기존 peer Service에서 확인한 원격 ingress |
+|---|---|---|---|
+| GKE 원본 | `charlie-apps/moimroom-db-gke` | `db-gke.hopcharlie-db-network.svc.cluster.local` | `hop-db-gke-moimroom.tail567fe8.ts.net` |
+| EKS 대상 | `moimroom/moimroom-db` | `db-eks.hopcharlie-db-network.svc.cluster.local` | `hop-db-eks-moimroom.tail567fe8.ts.net` |
+
+[관리 프로필](../../helm/db-network/management.yaml)은 위 workload Service annotation에서 읽은 목적지이며 기본 비활성이다. management에서 일반 예제 대신 이 파일을 사용한다. 기존 ingress 장치가 재등록돼 이름이 달라졌으면 이 파일부터 검토·수정한다. 새 VM, API sidecar, workload DB 설정 변경은 포함하지 않는다.
+
+로컬에서 다음 명령은 렌더만 한다. 기본 프로필로는 0개, 명시적 활성화로는 ProxyClass 1개·Service 2개·NetworkPolicy 5개다.
+
+```powershell
+helm template db-network helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management.yaml
+helm template db-network helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management.yaml --set enabled=true
+```
+
+다음 실제 작업은 **별도 적용 승인 후** 진행한다. 이 PR을 만들었다는 이유로 실행하지 않는다.
+
+1. 관리 운영자 컨텍스트, namespace, 외부 `operator-oauth`, tag ownership·TCP5432 tailnet grant, Pod Security·노드 여유를 1~2절 기준으로 검토한다. 기존 allow-all을 두고 통신 격리가 됐다고 판단하지 않는다.
+2. 3절의 고정 operator를 설치하고 DB chart에는 `helm/db-network/management.yaml --set enabled=true`를 사용한다. operator와 두 proxy가 Ready인지, `db-gke`/`db-eks`의 `externalName`이 `placeholder`에서 실제 proxy Service로 바뀌었는지 확인한다. 이 수동 릴리스를 Argo에 등록하지 않는다.
+3. **기존 관리 API 실행 위치에서** 두 local 주소의 DNS, TCP5432, TLS·앱 SQL 계정 접속을 확인한다. workload 사이 복제나 로컬 port-forward 성공으로 대체하지 않는다. 실패하면 catalog 전환과 새 이전 실행을 보류한다. 인증서/Secret을 이슈·Git·로그에 남기지 않는다.
+4. catalog는 `terraform/platform/aws/host/apps.yaml`이 원본이다. 승인된 platform Terraform plan에서 `/hopcharlie/host/apps.yaml`의 의도한 주소 변경만 있는지 검토한 뒤 반영한다. SSM만 수동 수정하면 다음 apply가 Git 값으로 되돌린다. 이 단계에서 workload/strict apply를 함께 실행하지 않는다.
+5. allowlist는 활성 platform values의 `.ts.net,.hopcharlie-db-network.svc.cluster.local`을 사용한다. **이 값의 병합은 기존 Argo 자동 sync로 API 재시작을 일으킬 수 있으므로**, 병합과 동기화 시점을 위 준비 순서에 맞춰 별도로 승인한다. API는 시작 시 catalog를 읽으므로 SSM 반영 뒤 다시 시작하고, API의 실제 catalog와 새 Plan의 host·namespace·CNPG 이름을 대조한다. 이미 실패한 낡은 Plan을 재사용하지 않는다.
+6. 실제 이전 승인을 받은 뒤 4절의 세션별 `get/patch`를 원본·대상 한 개씩 부여하고 종료·실패·취소 뒤 회수한다. 상시 observer 권한은 확대하지 않는다.
+
+중단 시 새 Plan 실행을 막고 마지막으로 **통신이 검증된** 설정으로 돌아간다. 이전 경로가 없으면 실행을 보류하며, 카탈로그만 과거의 해석되지 않는 주소로 돌려 정상 복구라고 보고하지 않는다. 진행 중인 이전이 proxy를 사용하면 경로를 먼저 삭제하지 않는다. 운영 DB·PVC·토폴로지는 이 전환 작업으로 삭제하거나 바꾸지 않는다.
