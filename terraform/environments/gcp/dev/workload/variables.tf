@@ -51,7 +51,7 @@ variable "machine_type" {
 }
 variable "node_count" {
   type    = number
-  default = 1
+  default = 3
   validation {
     condition     = var.node_count >= 1 && var.node_count <= 3 && floor(var.node_count) == var.node_count
     error_message = "This demo supports one to three nodes in one zone."

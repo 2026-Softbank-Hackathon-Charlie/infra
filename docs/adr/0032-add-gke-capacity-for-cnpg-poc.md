@@ -1,8 +1,9 @@
 # 0032. PostgreSQL PoC를 위한 기존 GKE 노드 풀 증설
 
 - 날짜: 2026-11-04
-- 상태: 채택
-- 관련 ADR: [0031](0031-reproduce-cnpg-poc-on-gke.md)
+- 상태: 대체됨
+- 대체 ADR: [0068](0068-record-three-node-gke-workload-capacity.md)
+- 관련 ADR: [0031](0031-reproduce-cnpg-poc-on-gke.md), [0068](0068-record-three-node-gke-workload-capacity.md)
 
 ## 배경과 제약
 

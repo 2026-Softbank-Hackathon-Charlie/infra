@@ -5,6 +5,6 @@ node_service_account_email      = "charlie-gke-nodes@replace-with-project-id.iam
 # Replace documentation-only addresses with management/operator public egress CIDRs.
 control_plane_authorized_cidrs  = ["203.0.113.10/32"]
 cluster_name                    = "charlie-dev-gcp-workload"
-node_count                      = 1
+node_count                      = 3
 machine_type                    = "e2-standard-2"
 deletion_protection             = true

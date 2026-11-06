@@ -55,7 +55,7 @@
 | [docs/adr/0029-add-gcp-app-image-repository.md](docs/adr/0029-add-gcp-app-image-repository.md) | 기존 GCP bootstrap의 앱 이미지 저장소와 노드 읽기 권한 재사용 제안 |
 | [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
 | [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
-| [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC 실행을 위한 기존 GKE 노드 풀 증설 제안 |
+| [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC용 GKE 2대 증설 이력; 현재 3대 기준은 ADR0068 |
 | [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
 | [docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md](docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md) | AWS CNPG 앱의 admission 기본값·Role 생략 값 비교 정책 |
 | [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
@@ -933,6 +933,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
 | [docs/adr/0066-platform-reads-scc-findings.md](docs/adr/0066-platform-reads-scc-findings.md) | 플랫폼 API가 SCC Standard 결과를 읽기 전용으로 읽음 |
 | [docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md) | GCP runner 호스트를 최초의 2배인 8 vCPU/32 GB·동시 6개로 축소하고 디스크는 보존 |
+| [docs/adr/0068-record-three-node-gke-workload-capacity.md](docs/adr/0068-record-three-node-gke-workload-capacity.md) | 이미 적용된 GKE workload 3대 기준을 Terraform 기본값·예제·검사에 기록 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
