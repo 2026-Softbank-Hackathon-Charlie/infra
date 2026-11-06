@@ -175,3 +175,11 @@ Prometheus 서비스 DNS `monitoring-prometheus.observability.svc:9090`은 fixtu
 - 08:16 UTC 확인에서 관리 2a 2대·2c 1대, 3대 모두 Ready이며 기존 workload Ready 부족/Pending이 없었다. CPU allocatable 합계5.79, requests2.68, 여유3.11코어다. 이전의 1.36코어 여유 수치는 증설 전 기록이다.
 - 이 결과는 ClickStack 설치·Secret 생성 완료가 아니다. 신규 operator 생성 Pod/init 요청과 실제 배치·런타임 검증은 여전히 C 관문이다.
 - 최신 main(919d7f3)의 다른 프로젝트 변경을 보존하며 미병합 ClickStack ADR을 0050으로 정리했다. 실제 CI 부트스트랩은 별도 [C 계획](plans/clickstack-management-deployment.md)과 제안 ADR0051의 승인 대상이다.
+
+## 2026-11-05 실제 설치 중 Collector 설정 오류 수정
+
+기존 운영자와 Argo CD로 Secret 9개, AppProject 1개 및 관리 Application 4개를 등록했다. operator 2개와 ClickHouse·Keeper·MongoDB·HyperDX가 기동했고 DB PVC 4개 및 중앙 큐 PVC가 Bound 상태다. 새 CI나 EKS 접근 권한은 생성하지 않았다.
+
+중앙 Collector는 ClickHouse 연결·schema seed에 성공했지만 기본 설정에 `null`을 병합하면 불필요한 파이프라인이 빈 상태로 남아 종료됐다. 기존 정적 검사는 실제 Collector의 config merge 동작을 검증하지 못했다. 수정안은 기존 seed 도구 실행 후 완결된 단일 설정으로 Collector를 기동한다. TLS·bearer 인증·영속 큐·로그/트레이스 범위·TTL·자원·권한은 유지한다. 기존 ADR0050 결정을 구현하는 오류 수정이며 새 아키텍처 결정은 없다.
+
+독립 계획 리뷰 GREEN. 사용자 머지 후 고정 SHA로 중앙 앱 sync, Collector Ready 및 합성 데이터 저장을 확인한 다음 gateway/agent를 설치한다. 현재 gateway/agent sync, 실제 로그/트레이스 수신, UI 로그인과 HyperDX PromQL 조회는 미검증이다.
