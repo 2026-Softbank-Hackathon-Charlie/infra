@@ -83,3 +83,14 @@ run "reject_long_bucket_prefix" {
   variables { bucket_prefix = "hopcharlie-gke-apps-" }
   expect_failures = [var.bucket_prefix]
 }
+run "security_findings_are_read_only" {
+  command = plan
+  assert {
+    condition     = google_project_iam_member.scc_findings.role == "roles/securitycenter.findingsViewer" && google_project_iam_member.scc_findings.member == "serviceAccount:charlie-platform-storage@charlie-test-project.iam.gserviceaccount.com" && length(google_project_iam_member.scc_findings.condition) == 0
+    error_message = "The platform reads SCC findings only."
+  }
+  assert {
+    condition     = google_project_service.securitycenter.service == "securitycenter.googleapis.com" && !google_project_service.securitycenter.disable_on_destroy && !google_project_service.securitycenter.disable_dependent_services
+    error_message = "Removing this root must never switch the SCC API off."
+  }
+}
