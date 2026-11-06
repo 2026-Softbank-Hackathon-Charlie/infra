@@ -33,6 +33,12 @@ output "planner_token" {
   sensitive   = true
 }
 
+output "image_scanner_token" {
+  description = "Agent token of the platform image scan workflow (GitHub secret SCANNER_TOKEN; posts scans only by convention)."
+  value       = random_password.image_scanner.result
+  sensitive   = true
+}
+
 output "viewer_token" {
   description = "Read-only token (demo screen, judges)."
   value       = random_password.viewer.result

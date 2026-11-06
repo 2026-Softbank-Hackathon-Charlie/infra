@@ -87,10 +87,18 @@ resource "random_password" "viewer" {
   special = false
 }
 
+# The platform repository's image scan workflow posts Grype results with it
+# (platform SEC-04): GitHub secret SCANNER_TOKEN = output image_scanner_token.
+resource "random_password" "image_scanner" {
+  length  = 40
+  special = false
+}
+
 locals {
   platform_tokens = join(",", concat(
     [for n in var.operators : "${n}:operator:${random_password.operator[n].result}"],
     ["planner:agent:${random_password.planner.result}", "screen:viewer:${random_password.viewer.result}"],
+    ["image-scanner:agent:${random_password.image_scanner.result}"],
   ))
 }
 
