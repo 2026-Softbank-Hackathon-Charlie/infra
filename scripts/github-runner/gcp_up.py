@@ -5,12 +5,12 @@ In project project-b47cdba3-db5b-42a2-9a6, zone asia-northeast3-a, it reuses or
 creates two firewall rules on the default network for the network tag
 hopcharlie-github-runner (allow tcp:22 from the IAP range at priority 800, deny
 all other ingress at priority 900, so default-allow-ssh/rdp at 65534 do not
-reach the VM) and one VM hopcharlie-github-runner: e2-standard-8, Ubuntu 24.04,
-80 GB pd-balanced, an ephemeral external IP for egress, no service account (job
+reach the VM) and one VM hopcharlie-github-runner: e2-custom-12-49152, Ubuntu 24.04,
+200 GB pd-balanced, an ephemeral external IP for egress, no service account (job
 code gets no GCP credentials), shielded VM, OS Login and no project SSH keys.
 When IAP SSH works, it copies bootstrap.sh and a file with an org registration
-token to the VM and runs bootstrap.sh with sudo: tools, six runners
-hopcharlie-gcp-runner-1..6 with the label hopcharlie, and a daily Docker prune.
+token to the VM and runs bootstrap.sh with sudo: tools, nine runners
+hopcharlie-gcp-runner-1..9 with the label hopcharlie, and a daily Docker prune.
 Last it lists the org's runners.
 
 An existing VM of another machine type is resized only with --resize: the VM
@@ -49,8 +49,10 @@ HERE = Path(__file__).resolve().parent
 PROJECT, ZONE, NETWORK = 'project-b47cdba3-db5b-42a2-9a6', 'asia-northeast3-a', 'default'
 NAME = 'hopcharlie-github-runner'  # VM name and the network tag the firewall rules target
 LABELS = {'project': 'hopcharlie', 'component': 'github-runner', 'managed-by': 'infra-scripts-github-runner'}
-# e2-standard-8 (8 vCPU, 32 GB) for six runners; it was e2-standard-4 with three until 2026-11-06.
-MACHINE_TYPE, DISK_GB, DISK_TYPE = 'e2-standard-8', 80, 'pd-balanced'
+# e2 custom 12 vCPU / 48 GB and 200 GB for nine runners; it was e2-standard-4, 80 GB and three
+# runners until 2026-11-06. --resize changes only the machine type; grow the disk with
+# gcloud compute disks resize (Ubuntu grows the root partition on the next boot).
+MACHINE_TYPE, DISK_GB, DISK_TYPE = 'e2-custom-12-49152', 200, 'pd-balanced'
 IMAGE_FAMILY, IMAGE_PROJECT = 'ubuntu-2404-lts-amd64', 'ubuntu-os-cloud'
 IAP_RANGE = '35.235.240.0/20'
 # name: (priority, action, rules, source range); both INGRESS on NETWORK for the tag NAME.
@@ -59,7 +61,7 @@ FIREWALLS = {
     f'{NAME}-deny-ingress': (900, 'deny', 'all', '0.0.0.0/0'),
 }
 RUNNER_PREFIX = 'hopcharlie-gcp-runner'
-RUNNER_NAMES = [f'{RUNNER_PREFIX}-{n}' for n in range(1, 7)]
+RUNNER_NAMES = [f'{RUNNER_PREFIX}-{n}' for n in range(1, 10)]
 REMOTE_DIR = 'hopcharlie-runner-bootstrap'  # in the OS Login user's home, mode 700
 
 
