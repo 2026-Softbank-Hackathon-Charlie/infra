@@ -49,12 +49,16 @@ data:
         {{- include "hopcharlie.labels" "hopai" | nindent 8 }}
     spec:
       backoffLimit: 0
-      ttlSecondsAfterFinished: {{ .Values.hopai.keepFinishedSeconds }}
+      ttlSecondsAfterFinished: {{ if .Values.observability.automaticJobs }}{{ max 3600 (int .Values.hopai.keepFinishedSeconds) }}{{ else }}{{ .Values.hopai.keepFinishedSeconds }}{{ end }}
       activeDeadlineSeconds: {{ .Values.hopai.deadlineSeconds }}
       template:
         metadata:
           labels:
             {{- include "hopcharlie.labels" "hopai" | nindent 12 }}
+            {{- if .Values.observability.automaticJobs }}
+            observability.hopcharlie.dev/enabled: "true"
+            observability.hopcharlie.dev/kind: job
+            {{- end }}
         spec:
           restartPolicy: Never
           serviceAccountName: hopcharlie-platform

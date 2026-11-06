@@ -25,6 +25,14 @@ metadata:
     app.kubernetes.io/part-of: {{ $.Values.values.app }}
     app.kubernetes.io/managed-by: {{ $.Release.Service }}
 spec:
+  {{- if $.Values.profile.observability.enabled }}
+  inheritedMetadata:
+    labels:
+      observability.hopcharlie.dev/enabled: "true"
+      observability.hopcharlie.dev/kind: database
+      hopcharlie.dev/app: {{ $.Values.values.app | quote }}
+      hopcharlie.dev/service: {{ $pg.name | quote }}
+  {{- end }}
   instances: 1
   # CNPG restarts a newly promoted primary with a smart shutdown that waits for
   # every client session up to this many seconds. The default 180 keeps the new

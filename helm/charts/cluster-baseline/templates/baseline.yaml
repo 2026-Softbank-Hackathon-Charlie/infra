@@ -54,7 +54,13 @@ metadata:
   name: system-compatibility
   namespace: {{ . }}
 spec:
+  {{- if and (eq . "observability") $.Values.networkPolicy.isolateObservabilityGateway }}
+  podSelector:
+    matchExpressions:
+      - {key: observability.hopcharlie.dev/gateway, operator: NotIn, values: ["true"]}
+  {{- else }}
   podSelector: {}
+  {{- end }}
   policyTypes: [Ingress, Egress]
   ingress: [{}]
   egress: [{}]

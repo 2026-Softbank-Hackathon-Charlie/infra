@@ -1,0 +1,160 @@
+{
+  "fullnameOverride": "monitoring",
+  "kubeControllerManager": {
+    "enabled": false
+  },
+  "kubeScheduler": {
+    "enabled": false
+  },
+  "kubeEtcd": {
+    "enabled": false
+  },
+  "kubeProxy": {
+    "enabled": false
+  },
+  "defaultRules": {
+    "create": false
+  },
+  "prometheus": {
+    "prometheusSpec": {
+      "replicas": 1,
+      "retention": "7d",
+      "retentionSize": "8GB",
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "512Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      },
+      "storageSpec": {
+        "volumeClaimTemplate": {
+          "spec": {
+            "storageClassName": "gp3",
+            "accessModes": [
+              "ReadWriteOnce"
+            ],
+            "resources": {
+              "requests": {
+                "storage": "10Gi"
+              }
+            }
+          }
+        }
+      },
+      "image": {
+        "registry": "quay.io",
+        "repository": "prometheus/prometheus",
+        "tag": "v3.15.0-distroless",
+        "sha": "b2a413d5a03ea6a76782a508d1c7947440bba3b973931a25676e278431891b01"
+      },
+      "enableAdminAPI": false,
+      "enableRemoteWriteReceiver": false,
+      "podMonitorSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/monitor": "cnpg"
+        }
+      },
+      "podMonitorNamespaceSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/enabled": "true"
+        }
+      },
+      "serviceMonitorSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/disabled": "true"
+        }
+      },
+      "ruleSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/disabled": "true"
+        }
+      }
+    },
+    "serviceAccount": {
+      "createTokenSecret": false
+    }
+  },
+  "grafana": {
+    "enabled": false
+  },
+  "alertmanager": {
+    "enabled": false
+  },
+  "prometheusOperator": {
+    "resources": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    "image": {
+      "registry": "quay.io",
+      "repository": "prometheus-operator/prometheus-operator",
+      "tag": "v0.94.1",
+      "sha": "7c88d4e7bae63bd8d0f8da986054337c23b4472fa8d3c6817f5bc4b8407a2d6a"
+    },
+    "prometheusConfigReloader": {
+      "image": {
+        "registry": "quay.io",
+        "repository": "prometheus-operator/prometheus-config-reloader",
+        "tag": "v0.94.1",
+        "sha": "06b52bd4dbe3ed6dd5905aadaf8b9987d9da4c31d37bb86deaadae68cee2d26b"
+      }
+    },
+    "admissionWebhooks": {
+      "patch": {
+        "image": {
+          "registry": "ghcr.io",
+          "repository": "jkroepke/kube-webhook-certgen",
+          "tag": "1.8.9",
+          "sha": "58e4ac2e15bf7785eb00ac90d03f9be1ff3f2fe0add6c71b54af6e5c80031148"
+        }
+      },
+      "enabled": false
+    },
+    "prometheusInstanceNamespaces": [
+      "observability"
+    ],
+    "alertmanagerInstanceNamespaces": [
+      "observability"
+    ],
+    "thanosRulerInstanceNamespaces": [
+      "observability"
+    ],
+    "extraArgs": [
+      "--watch-object-refs-in-all-namespaces=false"
+    ]
+  },
+  "kubelet": {
+    "enabled": false
+  },
+  "nodeExporter": {
+    "enabled": false
+  },
+  "kubeStateMetrics": {
+    "enabled": false
+  },
+  "kubeApiServer": {
+    "enabled": false
+  },
+  "coreDns": {
+    "enabled": false
+  },
+  "kubeDns": {
+    "enabled": false
+  },
+  "windowsMonitoring": {
+    "enabled": false
+  },
+  "global": {
+    "rbac": {
+      "create": false
+    }
+  }
+}

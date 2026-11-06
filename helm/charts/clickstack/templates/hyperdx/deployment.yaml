@@ -83,8 +83,12 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- end }}
-      {{- if or .Values.hyperdx.deployment.volumes $dashboards.enabled }}
+      {{- if or .Values.hyperdx.deployment.volumes $dashboards.enabled .Values.hyperdx.queryTrust.enabled }}
       volumes:
+        {{- if .Values.hyperdx.queryTrust.enabled }}
+        - name: metrics-query-ca
+          configMap: {name: {{ .Values.hyperdx.queryTrust.configMap | quote }}}
+        {{- end }}
         {{- with .Values.hyperdx.deployment.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -132,8 +136,11 @@ spec:
             timeoutSeconds: {{ .Values.hyperdx.deployment.readinessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.hyperdx.deployment.readinessProbe.failureThreshold }}
           {{- end }}
-          {{- if or .Values.hyperdx.deployment.volumeMounts $dashboards.enabled }}
+          {{- if or .Values.hyperdx.deployment.volumeMounts $dashboards.enabled .Values.hyperdx.queryTrust.enabled }}
           volumeMounts:
+            {{- if .Values.hyperdx.queryTrust.enabled }}
+            - {name: metrics-query-ca, mountPath: /etc/hyperdx/query-ca, readOnly: true}
+            {{- end }}
             {{- with .Values.hyperdx.deployment.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -150,6 +157,9 @@ spec:
                 name: clickstack-config
 
           env:
+            {{- if .Values.hyperdx.queryTrust.enabled }}
+            - {name: NODE_EXTRA_CA_CERTS, value: /etc/hyperdx/query-ca/ca.crt}
+            {{- end }}
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:

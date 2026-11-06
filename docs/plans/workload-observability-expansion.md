@@ -1,8 +1,8 @@
 # 플랫폼 워크로드 자동 Observability 연결 계획 v3
 
 - 날짜: 2026-11-06
-- 상태: v3 독립 재리뷰 GREEN. 사용자 개발·배포 승인 전.
-- 결정 제안: [0060 사설 전송](../adr/0060-private-otlp-ingress-for-aws-workload.md), [0061 자동 연결](../adr/0061-automatically-observe-platform-workloads.md), 기존 [0050 ClickStack](../adr/0050-adopt-clickstack-for-hackathon-observability.md).
+- 상태: v3 독립 재리뷰 GREEN. 사용자 B 개발 승인 후 코드·로컬 검증 완료; C 실제 배포 미승인.
+- 결정 제안: [0061 사설 전송](../adr/0061-private-otlp-ingress-for-aws-workload.md), [0062 자동 연결](../adr/0062-automatically-observe-platform-workloads.md), 기존 [0050 ClickStack](../adr/0050-adopt-clickstack-for-hackathon-observability.md).
 - 변경 분류: 공통 배포 계약·Pod/namespace 라벨·수집/인증·CNPG·Prometheus·클러스터 간 네트워크에 걸치는 영향이 큰 작업. 기존 고정 앱 목록 계획의 GREEN/읽기 승인은 이 변경안 구현 승인을 대신하지 않는다.
 
 ## 목표와 완료 기준
@@ -98,7 +98,7 @@
 
 현재 requests/quota/storage 여유, Alloy metadata 발견/짧은 Job positions·queue 실제 동작, 보호 namespace 실제 목록, baseline flow inventory, NGINX auth/CA config와 HyperDX query trust, 최종 immutable image pins/SDK 버전, CNPG inherited labels/monitor schema 및 신규 앱 acceptance는 미검증이다. B에서 코드/설정 실현 가능성을 검증하고 C 실환경 관문을 통과하기 전 설치/완료를 주장하지 않는다.
 
-v2 독립 리뷰 YELLOW의 targetPort·B merge 경계·첫 로그 누락 지적을 반영해 v3로 수정했다. v3 재리뷰 GREEN: 세 MAJOR와 CA 원천·agent 전환·storage public-preview 고지 지적을 반영했고 중대한 미해결 지적은 없다. B 실제 binary proof 실패 시 코드 준비 완료/자동 수집 완료로 보고하지 않는 조건을 유지한다. 사용자 요청은 계획 재작성·리뷰이며 구현은 시작하지 않았다.
+v2 독립 리뷰 YELLOW의 targetPort·B merge 경계·첫 로그 누락 지적을 반영해 v3로 수정했다. v3 재리뷰 GREEN: 세 MAJOR와 CA 원천·agent 전환·storage public-preview 고지 지적을 반영했고 중대한 미해결 지적은 없다. B 실제 binary proof 실패 시 코드 준비 완료/자동 수집 완료로 보고하지 않는 조건을 유지한다. v3 GREEN 리뷰 후 사용자가 “진행하세요”로 B 코드 준비를 승인했다. C 실제 배포는 승인되지 않았다.
 
 ## v3 검토 근거
 
@@ -109,3 +109,12 @@ v0.161.0 k8s_observer의 `pod_endpoint.go`는 Running이 아닌 Pod의 endpoint�
 - [Alloy OTel log conversion](https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.receiver.loki/)
 - [Alloy OTel HTTP exporter/storage](https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.exporter.otlphttp/)
 - [Alloy1.21.3 release](https://github.com/grafana/alloy/releases/tag/v1.21.3)
+
+
+## B 구현·검증 결과 (2026-11-06)
+
+공통 앱/DB/Job 연결, Alloy 양 클러스터 values, 별도 gateway app listener와 peer-IP metadata 연결, CNPG 최소 Prometheus와 namespace 한정 Operator Secret RBAC, query proxy 및 private ingest Service, HyperDX 공개 CA trust를 준비했다. 세부 내용과 실제 검증 명령은 [운영 안내](../operations/automatic-workload-observability.md)를 따른다. 기존 구성 렌더 8개를 main `8d59c09`와 비교해 동일함을 확인했다.
+
+계획 내 구현 구체화: 플랫폼 Job 전용 `automaticJobs=false` gate를 추가해 기존 `observability.enabled`와 분리했다. disabled 앱 profile은 ApplicationSet에 직렬화하지 않아 기존 ApplicationSet도 불변이다. 고정 Operator의 Secret/ConfigMap/StatefulSet 변경 권한은 observability Role로 분리하고 `--watch-object-refs-in-all-namespaces=false`와 instance namespace 제한을 함께 사용한다. gateway는 app 신호만 peer-IP로 연결하고, agent에는 기존 metadata를 보존한다. 기존 gateway egress는 유지한다.
+
+실제 클러스터에서 신규 앱/DB/Job 배포 및 HyperDX log↔trace 조회, CNPG target up, NLB/SG/source restriction·TLS·용량 검증은 C에서만 수행한다. 로컬 합성 증거를 실제 수집 완료로 보고하지 않는다.

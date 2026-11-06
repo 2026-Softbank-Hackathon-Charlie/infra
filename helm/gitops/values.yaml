@@ -28,6 +28,9 @@
     ],
     "gatewayTargets": [
       "management"
-    ]
+    ],
+    "automatic": {
+      "enabled": false
+    }
   }
 }

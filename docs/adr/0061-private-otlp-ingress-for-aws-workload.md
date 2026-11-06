@@ -1,8 +1,8 @@
-# 0060. AWS workload 관측은 전용 사설 전송·조회 경로로 연결한다
+# 0061. AWS workload 관측은 전용 사설 전송·조회 경로로 연결한다
 
 - 날짜: 2026-11-06
-- 상태: 제안 — v3 계획 독립 재리뷰 GREEN·사용자 개발/배포 승인 전
-- 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md), [0061 자동 연결](0061-automatically-observe-platform-workloads.md)
+- 상태: 채택 — v3 개발 계획 승인; 코드 준비 B에 적용, 실제 배포 C 미승인
+- 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md), [0062 자동 연결](0062-automatically-observe-platform-workloads.md)
 
 ## 배경과 제약
 
@@ -14,13 +14,13 @@
 - 기존 공개 ALB·앱/DB LB·DB Tailscale 경로 변경: 기존 데이터 경로와 노출/장애 범위를 섞어 제외.
 - 전용 internal NLB로 신호별 제한 경로 제공: LB 비용이 추가되지만 기존 AWS LBC를 활용하는 안정된 주소·소스 제한이 가능해 제안.
 
-## 결정 제안과 이유
+## 결정과 이유
 
 1. **중앙 ingest:** 관리 private subnet의 internal NLB TCP443→중앙 Collector4318, IP target, workload 두 subnet CIDR만 source로 허용한다. TLS는 Collector까지 통과하며 gateway가 기존 CA·중앙 서비스 서버 이름을 검증한다. workload 전용 bearer를 추가하고 기존 management token/ClusterIP는 보존한다.
 2. **메트릭 query:** workload 최소 Prometheus 앞에 신규 NGINX unprivileged TLS/BasicAuth/read-only query proxy 및 internal NLB를 둔다. 관리 두 subnet CIDR만 허용하고 lifecycle/write/admin은 거부한다. proxy image는 B에서 공식 안정 버전/digest를 확인해 고정한다. 실제 NLB DNS SAN 인증서와 HyperDX 공개 CA trust로 hostname 검증을 유지한다. HyperDX 기존 팀에는 인증 API로 connection/source를 한 번 등록해 새 DB를 자동 발견한다.
 3. NLB/target group/관리 SG는 AWS LBC가 소유한다. 기존 앱/DB LB·공개 ALB·Terraform state는 변경하거나 중복 소유하지 않는다.
 
-로컬 app listener는 TLS+소유 namespace/Pod 정책, agent listener는 TLS+bearer, 중앙 전송은 별도 bearer로 분리한다. 앱에 중앙 토큰이나 앱별 수동 credential을 배포하지 않는다. 상세 자동 연결·baseline compatibility의 gateway 제외와 전용 ingress/targetPort egress는 [ADR0061](0061-automatically-observe-platform-workloads.md)의 결정 제안이다. 강한 다중 테넌트 인증으로 표현하지 않는다.
+로컬 app listener는 TLS+소유 namespace/Pod 정책, agent listener는 TLS+bearer, 중앙 전송은 별도 bearer로 분리한다. 앱에 중앙 토큰이나 앱별 수동 credential을 배포하지 않는다. 상세 자동 연결·baseline compatibility의 gateway 제외와 전용 ingress/targetPort egress는 [ADR0062](0062-automatically-observe-platform-workloads.md)의 결정 제안이다. 강한 다중 테넌트 인증으로 표현하지 않는다.
 
 ## 영향과 후속 작업
 
@@ -37,3 +37,5 @@
 - [AWS LBC Service annotations](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/service/annotations/)
 - [NGINX BasicAuth](https://docs.nginx.com/nginx/admin-guide/security-controls/configuring-http-basic-authentication/)
 - [기존 ClickStack](../../helm/charts/clickstack/), [workload gateway](../../clusters/aws-dev-workload/values/otel-gateway.yaml)
+
+구현 및 로컬 검증 결과와 실행 전 관문은 [자동 관측 운영 안내](../operations/automatic-workload-observability.md)에 기록한다. 새 CI를 추가하지 않았으며 모든 기존 환경의 activation을 off로 유지한다.

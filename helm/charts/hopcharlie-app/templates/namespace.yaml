@@ -7,6 +7,9 @@ kind: Namespace
 metadata:
   name: {{ .Release.Namespace }}
   labels:
+    {{- if .Values.profile.observability.enabled }}
+    observability.hopcharlie.dev/enabled: "true"
+    {{- end }}
     hopcharlie.dev/app: {{ .Values.values.app }}
     hopcharlie.dev/instance: {{ .Release.Namespace }}
     app.kubernetes.io/part-of: {{ .Values.values.app }}

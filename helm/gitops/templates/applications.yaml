@@ -140,7 +140,7 @@ spec:
         skipCrds: true
         {{- end }}
         valueFiles:
-          - $values/clusters/aws-dev-{{ $purpose }}/values/{{ $name }}.yaml
+          - $values/clusters/aws-dev-{{ $purpose }}/values/{{ if and (eq $purpose "workload") (eq $name "kube-prometheus-stack") (dig "automatic" "enabled" false $.Values.observability) }}cnpg-prometheus{{ else }}{{ $name }}{{ end }}.yaml
         {{- if eq $name "aws-load-balancer-controller" }}
         parameters:
           - {name: clusterName, value: {{ $target.name | quote }}}

@@ -1,8 +1,8 @@
-# 0061. 플랫폼 배포 계약에 관측 자동 연결을 포함한다
+# 0062. 플랫폼 배포 계약에 관측 자동 연결을 포함한다
 
 - 날짜: 2026-11-06
-- 상태: 제안 — v3 계획 독립 재리뷰 GREEN·사용자 개발 승인 전
-- 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md), [0060 사설 경로](0060-private-otlp-ingress-for-aws-workload.md)
+- 상태: 채택 — v3 개발 계획 승인; 코드 준비 B에 적용, 실제 배포 C 미승인
+- 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md), [0061 사설 경로](0061-private-otlp-ingress-for-aws-workload.md)
 
 ## 배경과 제약
 
@@ -16,7 +16,7 @@
 - Alloy1.21.3/chart1.15.0의 Kubernetes discovery→소유 target relabel→파일 reader→OTLP 전송: 선택 제안. metadata가 늦으면 파일 reader 생성도 늦어지며 첫 위치부터 읽는다. discovery/file/conversion은 GA 구성 요소를 사용하며, 영속 queue의 `otelcol.storage.file`은 public-preview 예외다. stability.level=public-preview와 pin·config validate·단기 Job/positions/queue 재시작 proof를 B 선행 관문으로 두고 사용자에게 preview 위험을 명시한다.
 - 모든 바이너리 강제 자동 계측: runtime별 차이와 eBPF 특권이 있어 제외. 연결 설정은 자동으로 주입하고 내부 span 지원은 구분한다.
 
-## 결정 제안과 이유
+## 결정과 이유
 
 공통 app namespace/Pod, CNPG inherited metadata, 플랫폼 Job template에 관측 소유/분류 라벨을 붙인다. Alloy의 node-local Kubernetes pod discovery가 소유 target을 확정한 뒤 해당 UID/container 파일만 읽는다. 최초 위치부터 읽고 완료 Job Pod를 최소1시간 보존하며 positions/queue를 유지한다. 비소유 파일의 reader/positions가 생성되지 않는 것과 metadata 지연 중 첫 로그가 보존되는 것을 검증한다. 중앙 전송·저장소·콘솔은 기존 OTel gateway/ClickStack이다.
 
@@ -44,3 +44,5 @@
 수집 agent 제안: [Alloy1.21.3](https://github.com/grafana/alloy/releases/tag/v1.21.3) / chart1.15.0, GA [pod discovery](https://grafana.com/docs/alloy/latest/reference/components/discovery/discovery.kubernetes/)→소유 target relabel→[file source](https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.file/)→[OTel 변환](https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.receiver.loki/)→기존 gateway. 새 agent는 기존 agent와 교체하고 Loki 저장소를 배포하지 않는다.
 
 [Alloy1.21.3 storage.file 상태](https://github.com/grafana/alloy/blob/v1.21.3/docs/sources/reference/components/otelcol/otelcol.storage.file.md)는 public-preview이며 전체 agent가 GA-only라는 뜻이 아니다. B 코드 준비 승인과 C 실행 승인에 이 예외를 포함한다.
+
+구현 및 로컬 검증 결과와 실행 전 관문은 [자동 관측 운영 안내](../operations/automatic-workload-observability.md)에 기록한다. 새 CI를 추가하지 않았으며 모든 기존 환경의 activation을 off로 유지한다.

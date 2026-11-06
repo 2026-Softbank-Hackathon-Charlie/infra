@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "metrics": {
+    "enabled": true,
+    "privateSubnets": [
+      "subnet-01c5e9cb092c45c4d",
+      "subnet-08b2320980f9d615c"
+    ],
+    "sourceRanges": [
+      "10.40.0.0/19"
+    ],
+    "tlsSecret": "observability-metrics-query-tls",
+    "authSecret": "observability-metrics-query-auth",
+    "image": "docker.io/nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03"
+  }
+}

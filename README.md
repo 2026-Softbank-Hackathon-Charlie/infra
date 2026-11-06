@@ -838,8 +838,8 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/adr/0060-private-otlp-ingress-for-aws-workload.md](docs/adr/0060-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
-| [docs/adr/0061-automatically-observe-platform-workloads.md](docs/adr/0061-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
+| [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
+| [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
 | [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
@@ -921,3 +921,26 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/gcp/dev/rin/tests/test_bootstrap.py](terraform/environments/gcp/dev/rin/tests/test_bootstrap.py) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/variables.tf](terraform/environments/gcp/dev/rin/variables.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/versions.tf](terraform/environments/gcp/dev/rin/versions.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+
+### 자동 워크로드 관측 준비 파일
+
+- [clusters/aws-dev-management/values/alloy.yaml](clusters/aws-dev-management/values/alloy.yaml)
+- [clusters/aws-dev-management/values/observability-boundary.yaml](clusters/aws-dev-management/values/observability-boundary.yaml)
+- [clusters/aws-dev-management/values/otel-gateway-automatic.yaml](clusters/aws-dev-management/values/otel-gateway-automatic.yaml)
+- [clusters/aws-dev-workload/values/alloy.yaml](clusters/aws-dev-workload/values/alloy.yaml)
+- [clusters/aws-dev-workload/values/cnpg-prometheus.yaml](clusters/aws-dev-workload/values/cnpg-prometheus.yaml)
+- [clusters/aws-dev-workload/values/observability-boundary.yaml](clusters/aws-dev-workload/values/observability-boundary.yaml)
+- [clusters/aws-dev-workload/values/otel-gateway-automatic.yaml](clusters/aws-dev-workload/values/otel-gateway-automatic.yaml)
+- [docs/operations/automatic-workload-observability.md](docs/operations/automatic-workload-observability.md)
+- [helm/charts/clickstack/templates/otel-collector/private-service.yaml](helm/charts/clickstack/templates/otel-collector/private-service.yaml)
+- [helm/charts/hopcharlie-app/templates/observability.yaml](helm/charts/hopcharlie-app/templates/observability.yaml)
+- [helm/charts/observability-boundary/Chart.yaml](helm/charts/observability-boundary/Chart.yaml)
+- [helm/charts/observability-boundary/templates/gateway-policy.yaml](helm/charts/observability-boundary/templates/gateway-policy.yaml)
+- [helm/charts/observability-boundary/templates/metadata-rbac.yaml](helm/charts/observability-boundary/templates/metadata-rbac.yaml)
+- [helm/charts/observability-boundary/templates/metrics-query.yaml](helm/charts/observability-boundary/templates/metrics-query.yaml)
+- [helm/charts/observability-boundary/templates/metrics-rbac.yaml](helm/charts/observability-boundary/templates/metrics-rbac.yaml)
+- [helm/charts/observability-boundary/values.schema.json](helm/charts/observability-boundary/values.schema.json)
+- [helm/charts/observability-boundary/values.yaml](helm/charts/observability-boundary/values.yaml)
+- [scripts/tests/proof-alloy-discovery.py](scripts/tests/proof-alloy-discovery.py)
+- [scripts/tests/proof-metrics-query.py](scripts/tests/proof-metrics-query.py)
+- [scripts/tests/test-automatic-observability.py](scripts/tests/test-automatic-observability.py)
