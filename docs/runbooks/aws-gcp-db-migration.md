@@ -139,4 +139,6 @@ helper는 다른 내용의 기존 Role/RoleBinding을 인수하지 않는다. �
 4. 성공·실패·취소 모두 권한 revoke와 `auth can-i` 재확인, GitOps 최종 topology 반영·동기화 복구를 수행한다. namespace·DB·PVC 삭제는 이 helper의 범위가 아니다.
 5. 새 연결 자체를 철거하려면 DB가 더 이상 해당 복제 경로에 의존하지 않는지 확인한 뒤 network release를 먼저 제거한다. operator가 proxy·tailnet 장치를 정리한 것을 확인한 다음 operator release·이번에 생성한 Secret/OAuth client를 회수한다. 기존 앱용 router와 다른 장치는 삭제하지 않는다.
 
+파일 이전을 포함하면 catalog 반영 후 **새 Plan을 draft**하고 `files.source`/`files.target`가 방향에 맞게 EKS `s3:hopcharlie-eks-moimroom`, GKE `gcs:charlie-414068132732-moimroom-gcp`인지 확인한다. 기존 Plan의 파일 경로는 catalog 수정으로 자동 갱신되지 않는다. 실행 서버의 `s3`/`gcs` rclone remote 설정은 미확인이다. 별도 승인한 운영자가 실제 실행 서버에서 backend·계정·bucket 일치, 양쪽 목록·원본 읽기·대상 쓰기/삭제 권한과 대상 기존 파일의 삭제 영향을 검토하기 전에는 이전을 시작하지 않는다.
+
 이 PR의 로컬 렌더·mock tests는 경로·역할 설정의 계약만 검사한다. 실제 WAL 처리량, 복제 성공, 무손실 전환과 예산은 설치 후 시험 결과로 기록한다.

@@ -74,6 +74,21 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
             self.assertNotIn('password', env)
             self.assertNotIn('bucket', env)
 
+    def test_canonical_file_buckets_match_app_storage_profiles(self):
+        catalog = yaml.safe_load((ROOT / 'terraform/platform/aws/host/apps.yaml').read_text(encoding='utf-8'))
+        app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
+        profiles = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text(encoding='utf-8'))
+        gke = yaml.safe_load((ROOT / 'clusters/gcp-dev-workload/values/moimroom-gcp.yaml').read_text(encoding='utf-8'))
+        eks_namespace = app['environments']['eks'].get('namespace', app['namespace'])
+        eks_prefix = profiles['environments']['eks']['profile']['s3']['bucketPrefix']
+        expected = {
+            'eks': f's3:{eks_prefix}{eks_namespace}',
+            'gke': 'gcs:' + gke['s3']['bucket'],
+        }
+        for environment, bucket in expected.items():
+            with self.subTest(environment=environment):
+                self.assertEqual(app['environments'][environment]['bucket'], bucket)
+
 
 if __name__ == '__main__':
     unittest.main()
