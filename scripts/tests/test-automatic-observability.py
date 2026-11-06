@@ -138,7 +138,7 @@ class AutomaticObservability(unittest.TestCase):
         self.assertEqual(len(of(prom,'Deployment')),1)
         cr=of(prom,'Prometheus')[0];self.assertEqual(cr['spec']['podMonitorNamespaceSelector']['matchLabels']['observability.hopcharlie.dev/enabled'],'true')
         args=of(prom,'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
-        self.assertIn('--watch-object-refs-in-all-namespaces=false',args)
+        self.assertIn('--watch-referenced-objects-in-all-namespaces=false',args)
         self.assertIn('--prometheus-instance-namespaces=observability',args)
         operator=of(prom,'Deployment')[0]['spec']['template']['spec']
         self.assertFalse([v for v in (operator.get('volumes') or []) if v.get('secret',{}).get('secretName')=='monitoring-admission'])
