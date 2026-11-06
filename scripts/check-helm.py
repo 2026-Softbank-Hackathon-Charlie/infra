@@ -355,11 +355,17 @@ def main():
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
-        # Born-paired app databases (ADR 0063) stay off until the rollout steps; the
-        # values only render the platform's two settings when set.
-        assert "PLATFORM_APP_DB_TOPOLOGY" not in env and "PLATFORM_APP_DB_HOST_TEMPLATES" not in env, env
-        topo_values = work / "platform-app-db-topology.json"
+        # Born-paired app databases (ADR 0063) are on in the management values after
+        # rollout steps 1-4; the chart renders the two settings only when set.
         hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+        assert env.get("PLATFORM_APP_DB_TOPOLOGY") == "1" and env.get("PLATFORM_APP_DB_HOST_TEMPLATES") == hosts, env
+        off_values = work / "platform-app-db-topology-off.json"
+        off_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": False, "hostTemplates": ""}}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(off_values)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        off_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert "PLATFORM_APP_DB_TOPOLOGY" not in off_env and "PLATFORM_APP_DB_HOST_TEMPLATES" not in off_env, off_env
+        topo_values = work / "platform-app-db-topology.json"
         topo_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": True, "hostTemplates": hosts}}}))
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(topo_values)))
         api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
