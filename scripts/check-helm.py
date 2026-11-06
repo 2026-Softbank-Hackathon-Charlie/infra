@@ -360,7 +360,7 @@ def main():
         hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
         assert env.get("PLATFORM_APP_DB_TOPOLOGY") == "1" and env.get("PLATFORM_APP_DB_HOST_TEMPLATES") == hosts, env
         off_values = work / "platform-app-db-topology-off.json"
-        off_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": False, "hostTemplates": ""}}}))
+        off_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": False, "hostTemplates": "", "route": {"tailnet": "", "proxyClass": "", "tag": ""}}}}))
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(off_values)))
         api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
         off_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
@@ -372,10 +372,18 @@ def main():
         topo_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert topo_env["PLATFORM_APP_DB_TOPOLOGY"] == "1" and topo_env["PLATFORM_APP_DB_HOST_TEMPLATES"] == hosts, topo_env
         assert topo_env["PLATFORM_DSN_HOST_SUFFIXES"] == env["PLATFORM_DSN_HOST_SUFFIXES"]
-        # App DB routes and registered-app files (ADR 0064) stay off until their
-        # one-time steps; the management values do not set them yet.
-        assert not any(k.startswith("PLATFORM_APP_DB_ROUTE_") or k == "PLATFORM_APP_FILES" for k in env), env
+        # App DB routes and registered-app files (ADR 0064) are on in the management
+        # values after their one-time steps (IAM, app-db-routes release).
         route = {"tailnet": "tail567fe8.ts.net", "proxyClass": "hopcharlie-app-db-egress-management", "tag": "tag:hop-db-client-management"}
+        assert {k: env.get("PLATFORM_APP_DB_ROUTE_" + k) for k in ("TAILNET", "PROXY_CLASS", "TAG")} == {
+            "TAILNET": route["tailnet"], "PROXY_CLASS": route["proxyClass"], "TAG": route["tag"]}, env
+        assert env.get("PLATFORM_APP_FILES") == "1", env
+        off_values = work / "platform-app-db-routes-off.json"
+        off_values.write_text(json.dumps({"api": {"appDbTopology": {"route": {"tailnet": "", "proxyClass": "", "tag": ""}}, "appFiles": {"enabled": False}}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(off_values)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        off_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert not any(k.startswith("PLATFORM_APP_DB_ROUTE_") or k == "PLATFORM_APP_FILES" for k in off_env), off_env
         on_values = work / "platform-app-db-routes.json"
         on_values.write_text(json.dumps({"api": {"appDbTopology": {"route": route}, "appFiles": {"enabled": True}}}))
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(on_values)))
@@ -386,7 +394,7 @@ def main():
         assert api["spec"]["template"]["spec"]["automountServiceAccountToken"] is True
         # The gke: remote uses the API pod's Google ADC (ADR 0041).
         assert on_env["GOOGLE_APPLICATION_CREDENTIALS"] == "/etc/gcp/adc.json", on_env
-        for i, bad in enumerate(({"api": {"appDbTopology": {"route": {"tailnet": "tail567fe8.ts.net"}}}},
+        for i, bad in enumerate(({"api": {"appDbTopology": {"route": {"tailnet": "tail567fe8.ts.net", "proxyClass": "", "tag": ""}}}},
                                  {"api": {"appDbTopology": {"hostTemplates": "", "route": route}}})):
             path = work / f"platform-app-db-routes-invalid-{i}.json"
             path.write_text(json.dumps(bad))
