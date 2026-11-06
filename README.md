@@ -458,7 +458,8 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/environments/aws/dev/foundation/backend.hcl.example](terraform/environments/aws/dev/foundation/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
 | [terraform/environments/aws/dev/foundation/backend.tf](terraform/environments/aws/dev/foundation/backend.tf) | 부분 S3 backend 선언; 실제 bucket/key는 로컬 설정 또는 CI 입력 |
 | [terraform/environments/aws/dev/foundation/main.tf](terraform/environments/aws/dev/foundation/main.tf) | 공유 인프라 기능별 파일 안내 |
-| [terraform/environments/aws/dev/foundation/network.tf](terraform/environments/aws/dev/foundation/network.tf) | 공유 VPC·public/private subnet·IGW·NAT·route·관리→workload API SG |
+| [terraform/environments/aws/dev/foundation/network.tf](terraform/environments/aws/dev/foundation/network.tf) | 공유 VPC, public/private subnet, IGW, NAT, route, 관리에서 workload API로 가는 SG, S3 Gateway endpoint |
+| [docs/adr/0054-route-vpc-s3-traffic-through-gateway-endpoint.md](docs/adr/0054-route-vpc-s3-traffic-through-gateway-endpoint.md) | 사설 subnet의 S3 요청을 NAT 대신 Gateway endpoint로 보내는 결정 |
 | [terraform/environments/aws/dev/foundation/observability.tf](terraform/environments/aws/dev/foundation/observability.tf) | Loki S3·암호화·버킷 정책·Loki Pod Identity IAM |
 | [terraform/environments/aws/dev/foundation/outputs.tf](terraform/environments/aws/dev/foundation/outputs.tf) | 후속 stack 또는 운영자에게 전달하는 비밀값 없는 리소스/target 출력 |
 | [terraform/environments/aws/dev/foundation/providers.tf](terraform/environments/aws/dev/foundation/providers.tf) | 리전·허용 계정·공통 리소스 태그 |
@@ -580,6 +581,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
+| [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |
 
 ### GitHub에서 배포하는 앱
 
@@ -600,18 +602,28 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md](docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md) | 플랫폼 앱 이미지를 AR에도 올려 GKE가 받게 하는 제안 |
 | [docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md](docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md) | GKE sealed-secrets 값 파일·수동 적용·키 백업 절차 |
 | [docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md](docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md) | 플랫폼 API의 GKE 읽기 전용 토큰 kubeconfig 제안 |
+| [docs/adr/0056-render-app-service-contract-in-chart.md](docs/adr/0056-render-app-service-contract-in-chart.md) | 앱 차트의 워커 서비스, 서비스별 메모리와 CPU, DB 연결 변수, Postgres 파드 resources 제안 |
 | [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
 | [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
+| [docs/adr/0058-share-one-app-entry-per-workload-cluster.md](docs/adr/0058-share-one-app-entry-per-workload-cluster.md) | 워크로드 EKS의 앱 진입점을 Traefik과 내부 NLB 하나로 모으는 제안, GKE 후속 작업 |
+| [docs/runbooks/app-entry.md](docs/runbooks/app-entry.md) | 앱 진입점 등록, 롤링 재시작 시험, 전환, 앱 NLB 정리, NLB 재생성과 되돌리기 |
+| [scripts/register-traefik.py](scripts/register-traefik.py) | root sync 없이 워크로드 AppProject 변경과 Traefik Application만 미리 보기, 생성, sync. AppProject가 Traefik 저장소와 대상 말고 바뀌면 멈춤 |
+| [scripts/tests/test-register-traefik.py](scripts/tests/test-register-traefik.py) | 위 스크립트의 AppProject 변경 검사 오프라인 테스트 |
+| [terraform/environments/aws/dev/workload/apps-dns.tf](terraform/environments/aws/dev/workload/apps-dns.tf) | 앱 진입점 내부 이름: VPC에 연결한 private zone `hopcharlie.internal`과 Traefik NLB를 가리키는 `*.eks.hopcharlie.internal`(NLB가 없으면 레코드 없이 plan) |
+| [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044) |
-| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`의 프로필: 내부 NLB 80 포트, CNPG, S3, quota, NetworkPolicy |
+| [clusters/gcp-dev-workload/moimroom-db-backup.yaml](clusters/gcp-dev-workload/moimroom-db-backup.yaml) | GKE 운영 moimroom DB의 ObjectStore와 ScheduledBackup, 손으로 적용(ADR 0057) |
+| [clusters/gcp-dev-workload/moimroom-db-backup-patch.json](clusters/gcp-dev-workload/moimroom-db-backup-patch.json) | 같은 DB의 Cluster에 넣는 Workload Identity annotation, plugin, 4Gi 디스크(ADR 0057) |
+| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
 | [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
 | [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
 | [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
+| [helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml](helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml) | 플랫폼 API가 만드는 Job을 AI 실행기(라벨, ServiceAccount, 이미지, 볼륨)로 한정하는 ValidatingAdmissionPolicy (`platform.aiRunner.enabled`) |
 | [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
 | [helm/charts/hopcharlie-app/Chart.yaml](helm/charts/hopcharlie-app/Chart.yaml) | 앱 chart 메타데이터 |
 | [helm/charts/hopcharlie-app/values.yaml](helm/charts/hopcharlie-app/values.yaml) | gitops 파일 형식과 환경 프로필 기본값 |
@@ -622,6 +634,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-app/templates/namespace.yaml](helm/charts/hopcharlie-app/templates/namespace.yaml) | 앱 네임스페이스와 Pod Security label |
 | [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
 | [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
+| [helm/charts/hopcharlie-app/templates/ingress.yaml](helm/charts/hopcharlie-app/templates/ingress.yaml) | 공개 서비스의 공용 진입점 Ingress, 호스트 `<instance>.<hostSuffix>`(ADR 0058) |
 | [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
 | [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
 | [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
@@ -638,6 +651,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 |---|---|
 | [.github/workflows/platform-terraform.yml](.github/workflows/platform-terraform.yml) | AWS 인증 없는 두 root 전용 검증 workflow |
 | [docs/adr/0022-platform-app-build.md](docs/adr/0022-platform-app-build.md) | 앱 CodeBuild 및 제한된 IAM 제안 |
+| [docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md](docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md) | 앱 CodeBuild의 로컬 Docker layer 캐시와 동시 빌드 4개 결정 |
 | [docs/plans/2026-11-03-app-deploy-infra-spec.md](docs/plans/2026-11-03-app-deploy-infra-spec.md) | 앱 배포 인프라 명세 및 실제 완료 조건 |
 | [docs/plans/2026-11-03-app-deploy-infra.md](docs/plans/2026-11-03-app-deploy-infra.md) | 앱 배포 인프라 순차 실행 계획 |
 | [terraform/platform/aws/app-build.tf](terraform/platform/aws/app-build.tf) | 전용 CodeBuild 프로젝트와 최소 IAM 정책 |
@@ -762,6 +776,14 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/versions.tf](terraform/integrations/gcp/app-images/versions.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/tests/access.tftest.hcl](terraform/integrations/gcp/app-images/tests/access.tftest.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl](terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/backend.hcl.example](terraform/integrations/gcp/app-db-backup/backend.hcl.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/main.tf](terraform/integrations/gcp/app-db-backup/main.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/outputs.tf](terraform/integrations/gcp/app-db-backup/outputs.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/terraform.tfvars.example](terraform/integrations/gcp/app-db-backup/terraform.tfvars.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/variables.tf](terraform/integrations/gcp/app-db-backup/variables.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/versions.tf](terraform/integrations/gcp/app-db-backup/versions.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl](terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
 
 ## AWS↔GKE 앱 사설 경로 (Tailscale)
 
@@ -856,6 +878,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 
 - [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
 - [docs/adr/0050-let-migrations-own-app-database-topology.md](docs/adr/0050-let-migrations-own-app-database-topology.md)
+- [docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md](docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md)
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
@@ -876,3 +899,22 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
 - [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
 - [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+
+## rin 전용 GCP 이전
+
+로컬 코드·검증 단계이며 실제 cloud 생성/전환과 Git 발행은 별도 승인이 필요합니다. [운영 계약](docs/rin-gcp-host.md)을 확인합니다.
+
+| 파일 | 설명 |
+|---|---|
+| [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/outputs.tf](terraform/environments/gcp/dev/rin/outputs.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/startup.sh](terraform/environments/gcp/dev/rin/startup.sh) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/terraform.tfvars.example](terraform/environments/gcp/dev/rin/terraform.tfvars.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/host.tftest.hcl](terraform/environments/gcp/dev/rin/tests/host.tftest.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/test_bootstrap.py](terraform/environments/gcp/dev/rin/tests/test_bootstrap.py) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/variables.tf](terraform/environments/gcp/dev/rin/variables.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/versions.tf](terraform/environments/gcp/dev/rin/versions.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |

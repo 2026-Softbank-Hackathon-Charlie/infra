@@ -66,6 +66,20 @@ run "default_network" {
 
   assert {
     condition = (
+      aws_vpc_endpoint.s3.vpc_id == aws_vpc.shared.id &&
+      aws_vpc_endpoint.s3.service_name == "com.amazonaws.ap-northeast-2.s3" &&
+      aws_vpc_endpoint.s3.vpc_endpoint_type == "Gateway" &&
+      aws_vpc_endpoint.s3.tags["Component"] == "network" &&
+      length(aws_vpc_endpoint_route_table_association.s3) == 4 &&
+      alltrue([for key, association in aws_vpc_endpoint_route_table_association.s3 :
+        association.vpc_endpoint_id == aws_vpc_endpoint.s3.id && association.route_table_id == aws_route_table.private[key].id
+      ])
+    )
+    error_message = "Every private route table must reach regional S3 through the Gateway endpoint."
+  }
+
+  assert {
+    condition = (
       alltrue([for subnet in aws_subnet.public :
         subnet.tags["kubernetes.io/role/elb"] == "1" &&
         subnet.tags["kubernetes.io/cluster/charlie-dev-management"] == "shared" &&
@@ -154,9 +168,10 @@ run "custom_network_inputs" {
       aws_subnet.private["workload-1"].cidr_block == "10.80.48.0/20" &&
       output.management_cluster_name == "other-management" && output.workload_cluster_name == "other-workload" &&
       aws_subnet.public["0"].tags["kubernetes.io/cluster/other-management"] == "shared" &&
-      aws_subnet.private["workload-1"].tags["kubernetes.io/cluster/other-workload"] == "shared"
+      aws_subnet.private["workload-1"].tags["kubernetes.io/cluster/other-workload"] == "shared" &&
+      aws_vpc_endpoint.s3.service_name == "com.amazonaws.us-west-2.s3"
     )
-    error_message = "CIDR slots must stay stable with reversed AZ names and custom inputs must reach discovery tags and outputs."
+    error_message = "CIDR slots must stay stable with reversed AZ names and custom inputs must reach discovery tags, outputs and the S3 endpoint region."
   }
 }
 run "reject_noncanonical_cidr" {

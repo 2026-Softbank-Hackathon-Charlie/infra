@@ -26,7 +26,8 @@
     "codebuildProject": "",
     "imageRegistry": "",
     "gkeImageRegistry": "",
-    "gkeImageCredentialConfig": {}
+    "gkeImageCredentialConfig": {},
+    "backendTemplates": ""
   },
   "gcp": {
     "credentialConfig": {},
@@ -49,5 +50,12 @@
   },
   "observability": {
     "enabled": false
+  },
+  "hopai": {
+    "enabled": false,
+    "image": "",
+    "maxRuns": 3,
+    "keepFinishedSeconds": 86400,
+    "deadlineSeconds": 3600
   }
 }

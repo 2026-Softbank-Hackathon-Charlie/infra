@@ -65,6 +65,42 @@ def check_project(docs, project, namespace):
             assert doc["metadata"].get("namespace", namespace) in allowed_namespaces, doc["metadata"]
 
 
+PG_ENV = {"DATABASE_URL": "uri", "PGHOST": "host", "PGPORT": "port", "PGDATABASE": "dbname", "PGUSER": "username", "PGPASSWORD": "password", "JDBC_DATABASE_URL": "jdbc-uri"}
+
+
+def check_service_contract(gitops_file, docs, profile):
+    """The per-service contract (platform ADR 0024): a service without a port
+    gets no Service, ports, probes or PORT; memory is its request and limit,
+    cpu its request; the database variables come from CNPG's app secret,
+    before the service's own env; the Postgres pod gets profile.postgres.resources."""
+    values = gitops_file["values"]
+    defaults = {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"memory": "256Mi"}}
+    pg = next((r["name"] for r in values.get("resources") or [] if r["type"] == "postgres"), None)
+    services = {d["metadata"]["name"] for d in docs if d["kind"] == "Service"}
+    for svc in values["services"]:
+        name = f"{values['app']}-{svc['name']}"
+        deployment = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == name)
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        env = [e["name"] for e in container.get("env") or []]
+        port = svc.get("port")
+        assert (name in services) == bool(port), name
+        assert deployment["spec"].get("minReadySeconds") == (None if port else 10), deployment["spec"]
+        assert ("ports" in container) == bool(port) and ("PORT" in env) == bool(port), container
+        assert ("readinessProbe" in container) == bool(port) and ("livenessProbe" in container) == bool(port and svc.get("healthCheck")), container
+        resources = copy.deepcopy(defaults)
+        if svc.get("memory"):
+            resources["requests"]["memory"] = resources["limits"]["memory"] = svc["memory"]
+        if svc.get("cpu"):
+            resources["requests"]["cpu"] = svc["cpu"]
+        assert container["resources"] == resources, (name, container["resources"])
+        own = sorted((svc.get("env") or {}).keys())
+        assert env[len(env) - len(own):] == own, env
+        refs = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container.get("env") or [] if e["name"] in PG_ENV}
+        assert refs == ({k: {"name": f"{values['app']}-{pg}-app", "key": v} for k, v in PG_ENV.items()} if pg else {}), refs
+    for cluster in (d for d in docs if d["kind"] == "Cluster"):
+        assert cluster["spec"].get("resources") == profile.get("postgres", {}).get("resources"), cluster["spec"].get("resources")
+
+
 def check_gke_image_settings(platform_values, work):
     chart = ROOT / "helm/charts/hopcharlie-platform"
     values = json.loads(platform_values.read_text())
@@ -115,7 +151,7 @@ def check_gke_image_settings(platform_values, work):
 
 def check_system_network_policy():
     chart = ROOT / "helm/charts/cluster-baseline"
-    expected = {"kube-system", "observability", "cnpg-system", "cert-manager"}
+    expected = {"kube-system", "observability", "cnpg-system", "cert-manager", "traefik"}
     with tempfile.TemporaryDirectory(prefix="charlie-system-policy-") as temp:
         work = Path(temp)
         projects = render(ROOT / "helm/gitops", ROOT / "helm/gitops/ci/targets-values.yaml", "charlie-addons", "argocd")
@@ -125,7 +161,7 @@ def check_system_network_policy():
             docs = render(chart, values_path, "baseline", namespace)
             policies = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "system-compatibility"]
             assert {d["metadata"]["namespace"] for d in policies} == (expected if purpose == "workload" else set()), purpose
-            assert len(policies) == (4 if purpose == "workload" else 0)
+            assert len(policies) == (len(expected) if purpose == "workload" else 0)
             for policy in policies:
                 assert policy["spec"] == {"podSelector": {}, "policyTypes": ["Ingress", "Egress"], "ingress": [{}], "egress": [{}]}, policy
             project = next(d for d in projects if d["kind"] == "AppProject" and d["metadata"]["name"] == f"charlie-addons-{purpose}")
@@ -147,6 +183,50 @@ def check_system_network_policy():
             result = subprocess.run([HELM, "template", "baseline", str(chart), "-f", str(values)], capture_output=True, text=True)
             assert result.returncode != 0 and "systemCompatibilityNamespaces" in result.stderr, result.stderr
     print("System NetworkPolicy checks passed: exact namespaces, management opt-out, unchanged app policies, AppProject permissions and unsafe input rejection.")
+
+
+def check_traefik(docs):
+    """The shared app entry of the workload cluster (ADR 0058): one internal NLB with a
+    fixed name that Argo CD never deletes, an IngressClass apps must ask for by name,
+    and no CRD provider, dashboard or public TLS port."""
+    services = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Service"}
+    assert sorted(services) == ["traefik", "traefik-no-route"], sorted(services)
+    svc = services["traefik"]
+    notes = svc["metadata"]["annotations"]
+    assert notes["argocd.argoproj.io/sync-options"] == "Delete=false,Prune=false", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-name"] == "hopcharlie-apps-eks", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-scheme"] == "internal", notes
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"] == "ip", notes
+    # Traefik keeps serving for 20 s and drains for 30 s after SIGTERM; the NLB holds a
+    # draining target at least that long and stops new connections once /ping fails.
+    assert notes["service.beta.kubernetes.io/aws-load-balancer-target-group-attributes"] == "deregistration_delay.timeout_seconds=60", notes
+    assert {k.rpartition("/")[2]: v for k, v in notes.items() if "healthcheck" in k} == {
+        "aws-load-balancer-healthcheck-protocol": "http", "aws-load-balancer-healthcheck-port": "8080", "aws-load-balancer-healthcheck-path": "/ping",
+        "aws-load-balancer-healthcheck-interval": "5", "aws-load-balancer-healthcheck-timeout": "3",
+        "aws-load-balancer-healthcheck-healthy-threshold": "2", "aws-load-balancer-healthcheck-unhealthy-threshold": "2"}, notes
+    assert svc["spec"]["type"] == "LoadBalancer" and svc["spec"]["loadBalancerSourceRanges"] == ["10.40.0.0/19"], svc["spec"]
+    assert [(p["port"], p["targetPort"]) for p in svc["spec"]["ports"]] == [(80, "web")], svc["spec"]["ports"]
+    classes = [d for d in docs if d["kind"] == "IngressClass"]
+    assert [(c["metadata"]["name"], c["spec"]["controller"]) for c in classes] == [("traefik", "traefik.io/ingress-controller")], classes
+    assert (classes[0]["metadata"].get("annotations") or {}).get("ingressclass.kubernetes.io/is-default-class", "false") == "false", classes
+    args = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["containers"][0]["args"]
+    for arg in ("--providers.kubernetesingress.ingressClass=traefik", "--providers.kubernetesingress.ingressendpoint.publishedservice=traefik/traefik",
+                "--entryPoints.web.forwardedHeaders.trustedIPs=10.40.0.0/16", "--entryPoints.web.forwardedHeaders.notAppendXForwardedFor=true",
+                "--entryPoints.web.transport.lifeCycle.requestAcceptGraceTimeout=20s", "--entryPoints.web.transport.lifeCycle.graceTimeOut=30s",
+                "--api.dashboard=false"):
+        assert arg in args, arg
+    assert not any("websecure" in a for a in args), args
+    spread = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["topologySpreadConstraints"]
+    assert [(s["topologyKey"], s["maxSkew"], s["whenUnsatisfiable"], s.get("nodeTaintsPolicy"), s.get("matchLabelKeys")) for s in spread] == [
+        ("kubernetes.io/hostname", 1, "DoNotSchedule", "Honor", ["pod-template-hash"])], spread
+    assert not any(a.startswith("--providers.kubernetescrd") for a in args), args
+    # A host with no app Ingress gets 503 from a Service without endpoints, not
+    # Traefik's 404, so the platform's probe of a missing route fails.
+    assert "--providers.kubernetesingress.allowEmptyServices=true" in args, args
+    catch_all = [d for d in docs if d["kind"] == "Ingress"]
+    assert [(d["metadata"]["name"], d["spec"]) for d in catch_all] == [("traefik-no-route", {
+        "ingressClassName": "traefik", "defaultBackend": {"service": {"name": "traefik-no-route", "port": {"number": 80}}}})], catch_all
+    assert services["traefik-no-route"]["spec"]["selector"] == {"hopcharlie.dev/no-route": "none"}
 
 
 def main():
@@ -193,6 +273,14 @@ def main():
                         if "chart" in source:
                             pin = VERSIONS["charts"][source["chart"]]
                             assert source["repoURL"] == pin["repo"] and source["targetRevision"] == pin["version"]
+                            # Only Traefik skips its CRDs (ADR 0058: the CRD provider is off).
+                            assert source["helm"].get("skipCrds", False) == (source["chart"] == "traefik"), app["metadata"]["name"]
+                    labels = app["spec"]["syncPolicy"].get("managedNamespaceMetadata", {}).get("labels")
+                    if app["metadata"]["name"] == "charlie-workload-traefik":
+                        assert app["spec"]["destination"]["namespace"] == "traefik"
+                        assert labels == {"elbv2.k8s.aws/pod-readiness-gate-inject": "enabled"}, labels
+                    else:
+                        assert labels is None, app["metadata"]["name"]
         for purpose in ("management", "workload"):
             values_root = ROOT / f"clusters/aws-dev-{purpose}/values"
             baseline_ns = "charlie-platform" if purpose == "management" else "charlie-apps"
@@ -211,12 +299,14 @@ def main():
                     chart_dir.mkdir(parents=True)
                     helm("pull", name, "--repo", pin["repo"], "--version", pin["version"], "--untar", "--untardir", chart_dir)
                 chart = chart_dir / name
-                namespace = "observability" if name in {"kube-prometheus-stack", "loki", "opentelemetry-collector"} else "kube-system"
+                namespace = "observability" if name in {"kube-prometheus-stack", "loki", "opentelemetry-collector"} else "traefik" if name == "traefik" else "kube-system"
                 release = "monitoring" if name == "kube-prometheus-stack" else name
                 extra = ("--set", f"clusterName=charlie-dev-{purpose}", "--set", "region=ap-northeast-2", "--set", "vpcId=vpc-0123456789abcdef0") if name == "aws-load-balancer-controller" else ()
                 docs = render(chart, values_root / f"{name}.yaml", release, namespace, extra)
                 check_project(docs, projects[purpose], namespace)
                 seen.update(check_images(docs))
+                if name == "traefik":
+                    check_traefik(docs)
         # GKE sealed-secrets (ADR 0043): applied by hand, not Argo. It must keep
         # its own key, never renew it, and unseal in every namespace.
         docs = render(work / "charts/sealed-secrets/sealed-secrets", ROOT / "clusters/gcp-dev-workload/values/sealed-secrets.yaml", "sealed-secrets-gcp", "charlie-apps")
@@ -258,6 +348,26 @@ def main():
                 if adc_maps:
                     assert json.loads(adc_maps[0]["data"]["adc.json"]) == configured_gcp["credentialConfig"]
         check_gke_image_settings(platform_values, work)
+        # The eks backend template (ADR 0058): one env=template list, checked here
+        # because the API refuses a bad one at startup.
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform")
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
+        assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        two = work / "platform-two-templates.json"
+        two.write_text(json.dumps({"deploy": {"backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,gke=https://{app}-{service}.{instance}.gke.test:{port}/?env={env}"}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(two)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        assert any(e["name"] == "PLATFORM_APP_BACKEND_TEMPLATES" and e["value"].startswith("eks=") and ",gke=" in e["value"] for e in api["spec"]["template"]["spec"]["containers"][0]["env"])
+        for bad in ("http://{instance}.eks.hopcharlie.internal", "eks=http://{instance}.eks.test,", "eks={instance}.eks.test",
+                    "eks=http://{instnace}.eks.test", "eks=http://{instance}.eks.test,gke=http://a b.test", "EKS=http://a.test"):
+            # A values file, as --set splits on commas.
+            bad_values = work / "platform-bad-templates.json"
+            bad_values.write_text(json.dumps({"deploy": {"backendTemplates": bad}}))
+            result = subprocess.run([HELM, "template", "hopcharlie-platform", str(ROOT / "helm/charts/hopcharlie-platform"), "--namespace", "charlie-platform",
+                                     "-f", str(platform_values), "-f", str(bad_values)], capture_output=True, text=True, encoding="utf-8")
+            assert result.returncode != 0 and "deploy.backendTemplates" in result.stderr, f"accepted {bad!r}"
         # Google ADC for the gcs storage driver (ADR 0041): only the API pod gets
         # the projected token; the gateway and Postgres share the service account.
         gcp_values = work / "platform-gcp.json"
@@ -324,7 +434,19 @@ def main():
         extra = [arg for name, value in params.items() for arg in ("--set-string", f"{name}={value}")]
         apps_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-apps.yaml"
         docs = render(ROOT / "helm/charts/hopcharlie-apps", apps_values, "hopcharlie-apps", "argocd", extra)
-        assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]
+        assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding",
+                                                   "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicy",
+                                                   "ValidatingAdmissionPolicyBinding", "ValidatingAdmissionPolicyBinding"]
+        # The platform's AI runner Jobs (hopcharlie-platform hopai.yaml) are kept to the
+        # runner by a policy on the platform ServiceAccount's Job requests.
+        runner = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and d["metadata"]["name"] == "hopcharlie-platform-ai-runner")
+        assert runner["spec"]["matchConstraints"]["resourceRules"] == [{"apiGroups": ["batch"], "apiVersions": ["*"], "operations": ["CREATE", "UPDATE"], "resources": ["jobs"]}]
+        assert "system:serviceaccount:charlie-platform:hopcharlie-platform" in runner["spec"]["matchConditions"][0]["expression"]
+        rules = " ".join(v["expression"] for v in runner["spec"]["validations"])
+        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-platform'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom"):
+            assert want in rules, want
+        binding = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["policyName"] == "hopcharlie-platform-ai-runner")
+        assert binding["spec"]["validationActions"] == ["Deny"]
         # Deleting the parent Application must leave the ApplicationSet (ADR 0036): its
         # Applications carry the resources finalizer, which deletes the apps' namespaces.
         appset = next(d for d in docs if d["kind"] == "ApplicationSet")
@@ -346,6 +468,8 @@ def main():
                 docs = render(ROOT / "helm/charts/hopcharlie-app", ci, gitops_file["namespace"], gitops_file["namespace"], extra)
                 for doc in docs:
                     assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+                profile = json.loads(eks_profile.read_text())["profile"] if extra else gitops_file.get("profile", {})
+                check_service_contract(gitops_file, docs, profile)
                 # Sealed values (platform ADR 0016, 0019): strict-scope SealedSecrets
                 # before the Deployments, envFrom and the checksum only with app secrets,
                 # and one bucket per instance.
@@ -371,6 +495,14 @@ def main():
                     # The gateway reaches every app's internal load balancer on port 80.
                     ports = [d["spec"]["ports"][0]["port"] for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"]
                     assert ports == ([80] if public else []), ports
+                    # The shared entry (ADR 0058): the public service's route on Traefik at
+                    # <instance>.eks.hopcharlie.internal, the platform's eks backend host.
+                    svc_name = next((f"{gitops_file['values']['app']}-{s['name']}" for s in gitops_file["values"]["services"] if s.get("public")), None)
+                    routes = [(d["metadata"]["name"], d["spec"]) for d in docs if d["kind"] == "Ingress"]
+                    assert routes == ([(svc_name, {"ingressClassName": "traefik", "rules": [{"host": f"{gitops_file['namespace']}.eks.hopcharlie.internal", "http": {"paths": [
+                        {"path": "/", "pathType": "Prefix", "backend": {"service": {"name": svc_name, "port": {"name": "http"}}}}]}}]})] if public else []), routes
+                else:
+                    assert not any(d["kind"] == "Ingress" for d in docs), "the chart's default profile has no Ingress"
         # GKE apps (ADR 0039): an internal passthrough load balancer that keeps the
         # gateway's source address for the NetworkPolicy, reached over the Tailscale
         # routers (ADR 0037). Buckets are GCS through its S3-compatible API (ADR 0040).
@@ -385,6 +517,7 @@ def main():
             plain.write_text(json.dumps(gitops_file))
             namespace = gitops_file["namespace"]
             docs = render(ROOT / "helm/charts/hopcharlie-app", plain, namespace, namespace, ("-f", gke_profile))
+            check_service_contract(gitops_file, docs, gke["profile"])
             has_s3 = any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or [])
             for pod in (d["spec"]["template"] for d in docs if d["kind"] == "Deployment"):
                 for container in pod["spec"]["containers"]:
@@ -393,6 +526,8 @@ def main():
                     assert env == (expected if has_s3 else {}), env
             for doc in docs:
                 assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+            # GKE has no shared entry yet (ADR 0058): no Ingress there.
+            assert not any(d["kind"] == "Ingress" for d in docs), "gke apps get no Ingress yet"
             for svc in (d for d in docs if d["kind"] == "Service" and d["spec"]["type"] == "LoadBalancer"):
                 assert svc["spec"]["externalTrafficPolicy"] == "Local", svc["spec"]
                 assert svc["metadata"]["annotations"] == {"networking.gke.io/load-balancer-type": "Internal"}, svc["metadata"]["annotations"]
@@ -402,6 +537,50 @@ def main():
             assert any({"ipBlock": {"cidr": "10.40.0.0/19"}} in (rule.get("from") or []) for d in policies for rule in d["spec"].get("ingress") or []), "GKE apps admit only the gateway subnets"
         # The schema and the chart refuse sealed values the platform must not write.
         stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
+        # Postgres backups (platform ADR 0025): with the platform's backup bucket and
+        # key, the eks profile gives the Cluster the Barman Cloud plugin, an
+        # ObjectStore at the registration's path and a daily ScheduledBackup. The gke
+        # profile, which does not turn backups on, draws none of them.
+        backed = copy.deepcopy(stateful)
+        backed.pop("profile")
+        backed["values"]["backup"] = {"bucket": "hopcharlie-eks-moimroom---pg", "path": "20261104T082201Z"}
+        backed["values"]["sealedSecrets"]["pgBackup"] = {"accessKey": "AgBiYWNrdXAtYWNjZXNzCg==", "secretKey": "AgBiYWNrdXAtc2VjcmV0Cg=="}
+        backed_file = work / "backed-values.json"
+        backed_file.write_text(json.dumps(backed))
+        docs = render(ROOT / "helm/charts/hopcharlie-app", backed_file, "moimroom", "moimroom", ("-f", eks_profile))
+        for doc in docs:
+            assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+        cluster = next(d for d in docs if d["kind"] == "Cluster")
+        assert cluster["spec"]["plugins"] == [{"name": "barman-cloud.cloudnative-pg.io", "enabled": True, "isWALArchiver": True,
+                                               "parameters": {"barmanObjectName": "moimroom-db", "serverName": "moimroom-db"}}], cluster["spec"]
+        store = next(d for d in docs if d["kind"] == "ObjectStore")
+        assert store["metadata"]["name"] == "moimroom-db" and store["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}
+        assert store["spec"]["configuration"]["destinationPath"] == "s3://hopcharlie-eks-moimroom---pg/20261104T082201Z/"
+        assert "endpointURL" not in store["spec"]["configuration"], store["spec"]["configuration"]
+        assert store["spec"]["configuration"]["s3Credentials"] == {"accessKeyId": {"name": "app-pgbackup", "key": "accessKey"}, "secretAccessKey": {"name": "app-pgbackup", "key": "secretKey"}}
+        assert store["spec"]["instanceSidecarConfiguration"]["env"] == [{"name": "AWS_REGION", "value": "ap-northeast-2"}, {"name": "AWS_DEFAULT_REGION", "value": "ap-northeast-2"}]
+        assert store["spec"]["retentionPolicy"] == "7d"
+        schedule = next(d for d in docs if d["kind"] == "ScheduledBackup")
+        assert schedule["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "1"}
+        assert schedule["spec"] == {"cluster": {"name": "moimroom-db"}, "schedule": "0 0 18 * * *", "method": "plugin",
+                                    "pluginConfiguration": {"name": "barman-cloud.cloudnative-pg.io"}, "immediate": True, "suspend": False, "backupOwnerReference": "self"}, schedule["spec"]
+        key = next(d for d in docs if d["kind"] == "SealedSecret" and d["metadata"]["name"] == "app-pgbackup")
+        assert key["spec"]["encryptedData"] == backed["values"]["sealedSecrets"]["pgBackup"] and key["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "-1"}
+        docs = render(ROOT / "helm/charts/hopcharlie-app", backed_file, "moimroom", "moimroom", ("-f", gke_profile))
+        assert not [d for d in docs if d["kind"] in ("ObjectStore", "ScheduledBackup")] and "plugins" not in next(d for d in docs if d["kind"] == "Cluster")["spec"]
+        for name, values_of, profile in (
+            ("a backup bucket without its key", lambda v: v["values"]["sealedSecrets"].pop("pgBackup"), eks_profile),
+            ("a backup key without its bucket", lambda v: v["values"].pop("backup"), eks_profile),
+            ("a backup path that is not one path segment", lambda v: v["values"]["backup"].update(path="a/b"), eks_profile),
+            ("a backup bucket without a path", lambda v: v["values"]["backup"].pop("path"), eks_profile),
+            ("backups without the bucket's region", lambda v: v.update(profile={"s3": {"region": ""}}), eks_profile),
+        ):
+            values = copy.deepcopy(backed)
+            values_of(values)
+            broken = work / "broken-values.json"
+            broken.write_text(json.dumps(values))
+            result = subprocess.run([HELM, "template", "moimroom", str(ROOT / "helm/charts/hopcharlie-app"), "-n", "moimroom", "-f", str(profile), "-f", str(broken)], capture_output=True, text=True)
+            assert result.returncode != 0, f"hopcharlie-app accepts {name}"
         for name, change in (
             ("app without appChecksum", lambda v: v["values"]["sealedSecrets"].pop("appChecksum")),
             ("reserved secret name", lambda v: v["values"]["sealedSecrets"]["app"].update(S3_BUCKET="AgA=")),
@@ -409,6 +588,12 @@ def main():
             ("unknown sealed key", lambda v: v["values"]["sealedSecrets"].update(db={})),
             ("profile reading another Secret", lambda v: v["profile"]["s3"].update(credentialsSecret="other")),
             ("env name that is also a secret", lambda v: v["values"]["services"][0]["env"].update(HOST_CODE="plain")),
+            # web stops being public first, so only the missing port is wrong.
+            ("public service without a port", lambda v: (v["values"]["services"][0].update(public=False), v["values"]["services"][1].update(public=True))),
+            ("health check without a port", lambda v: v["values"]["services"][1].update(healthCheck="/healthz")),
+            ("database variable in env", lambda v: v["values"]["services"][1]["env"].update(PGHOST="db")),
+            ("database variable as a secret", lambda v: v["values"]["sealedSecrets"]["app"].update(PGPASSWORD="AgA=")),
+            ("memory that is not a quantity", lambda v: v["values"]["services"][1].update(memory="512MB")),
         ):
             values = copy.deepcopy(stateful)
             change(values)

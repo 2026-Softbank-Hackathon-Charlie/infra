@@ -80,8 +80,9 @@ spec:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
       serviceAccountName: hopcharlie-platform
-      # The deploy executor patches Argo CD Applications in this cluster.
-      automountServiceAccountToken: {{ not (empty .Values.deploy.builder) }}
+      # The deploy executor patches Argo CD Applications in this cluster, and
+      # the AI runner's Jobs are created here (hopai.yaml).
+      automountServiceAccountToken: {{ or (not (empty .Values.deploy.builder)) .Values.hopai.enabled }}
       securityContext:
         {{- include "hopcharlie.podSecurity" 10001 | nindent 8 }}
       initContainers:
@@ -107,6 +108,10 @@ spec:
             - {name: PLATFORM_CORS_ORIGINS, value: {{ .Values.api.corsOrigins | quote }}}
             - {name: PLATFORM_DSN_HOST_SUFFIXES, value: {{ .Values.api.dsnHostSuffixes | quote }}}
             - {name: PLATFORM_AWS_REGION, value: {{ .Values.awsRegion | quote }}}
+            {{- if .Values.hopai.enabled }}
+            # POST /v1/ai-runs starts the AI runner from this Job template (hopai.yaml).
+            - {name: PLATFORM_AIRUN_JOB_TEMPLATE, value: /etc/hopai/job.yaml}
+            {{- end }}
             {{- with .Values.appDomain }}
             - {name: PLATFORM_APP_DOMAIN, value: {{ . | quote }}}
             {{- end }}
@@ -137,6 +142,15 @@ spec:
             {{- end }}
             {{- end }}
             {{- end }}
+            {{- with .Values.deploy.backendTemplates }}
+            {{- /* <env>=<template> entries (ADR 0058, platform PR #73). The API refuses a bad value at
+            startup and would not come up, so a value that is not that shape fails rendering here. */}}
+            {{- if not (regexMatch `^[a-z0-9-]+=https?://([a-z0-9.:/_?=&%-]|\{(app|instance|service|port|env)\})+(,[a-z0-9-]+=https?://([a-z0-9.:/_?=&%-]|\{(app|instance|service|port|env)\})+)*$` .) }}
+            {{- fail "deploy.backendTemplates must be <env>=<http:// or https:// template> entries separated by commas, with only {app}, {instance}, {service}, {port} and {env} placeholders" }}
+            {{- end }}
+            # Gateway backend templates per environment; the others read their Service's load balancer.
+            - {name: PLATFORM_APP_BACKEND_TEMPLATES, value: {{ . | quote }}}
+            {{- end }}
           ports:
             - {name: http, containerPort: 8080}
           readinessProbe:
@@ -150,12 +164,20 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: settings, mountPath: /config, readOnly: true}
+            {{- if .Values.hopai.enabled }}
+            - {name: hopai-job, mountPath: /etc/hopai, readOnly: true}
+            {{- end }}
             {{- if $gcp.tokenAudience }}
             - {name: gcp-token, mountPath: /var/run/secrets/gcp, readOnly: true}
             - {name: gcp-adc, mountPath: /etc/gcp, readOnly: true}
             {{- end }}
       volumes:
         {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        {{- if .Values.hopai.enabled }}
+        - name: hopai-job
+          configMap:
+            name: hopcharlie-hopai-job
+        {{- end }}
         {{- if $gcp.tokenAudience }}
         # Only this pod gets a token for the Google audience; the gateway and
         # Postgres share the service account but not this token.

@@ -62,7 +62,7 @@
         "systemCompatibilityNamespaces": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"enum": ["kube-system", "observability", "cnpg-system", "cert-manager"]}
+          "items": {"enum": ["kube-system", "observability", "cnpg-system", "cert-manager", "traefik"]}
         },
         "cnpg": {
           "type": "object",

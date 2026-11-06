@@ -28,9 +28,11 @@ spec:
       containers:
         - name: collector
           image: "{{ $otel.image.repository }}:{{ $otel.image.tag }}"
-          # Run the distribution entrypoint without the generic chart's extra
-          # relay.yaml argument, which would override standalone pipelines.
-          command: [/entrypoint.sh]
+          # Seed first, then load one complete config. Overlaying null pipelines
+          # onto the distribution defaults leaves invalid empty pipelines.
+          command: [/bin/sh, -ec]
+          args:
+            - migrate /etc/otel/schema/seed; exec /otelcontribcol --config /etc/otelcol-contrib/custom/custom.config.yaml
           securityContext:
             runAsUser: 10001
             runAsGroup: 10001

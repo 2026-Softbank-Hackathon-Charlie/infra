@@ -11,8 +11,11 @@
 #
 # Cost: none for IAM and the parameter; each bucket is billed for what it stores.
 # Cleanup: the platform deletes an instance's key, user and bucket with the
-# instance. ./tf.sh destroy fails on the boundary while a user still has it,
-# and it deletes /hopcharlie/app-secrets-key with every stored secret's key.
+# instance. It never deletes the backup bucket hopcharlie-eks-<app>---pg and
+# its user hopcharlie-app-<app>---pg (platform ADR 0025): before destroying,
+# an operator deletes them by that ADR's steps. ./tf.sh destroy fails on the
+# boundary while a user still has it, and it deletes
+# /hopcharlie/app-secrets-key with every stored secret's key.
 
 locals {
   # The bucket prefix and IAM path of environment eks. host/envs.yaml must name

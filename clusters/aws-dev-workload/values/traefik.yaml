@@ -1,0 +1,121 @@
+{
+  "image": {
+    "registry": "docker.io",
+    "repository": "traefik",
+    "tag": "v3.7.16@sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65"
+  },
+  "deployment": {
+    "replicas": 2,
+    "terminationGracePeriodSeconds": 60
+  },
+  "podDisruptionBudget": {
+    "enabled": true,
+    "minAvailable": 1
+  },
+  "resources": {
+    "requests": {
+      "cpu": "50m",
+      "memory": "64Mi"
+    },
+    "limits": {
+      "memory": "256Mi"
+    }
+  },
+  "topologySpreadConstraints": [
+    {
+      "maxSkew": 1,
+      "topologyKey": "kubernetes.io/hostname",
+      "whenUnsatisfiable": "DoNotSchedule",
+      "nodeTaintsPolicy": "Honor",
+      "matchLabelKeys": ["pod-template-hash"],
+      "labelSelector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "traefik"
+        }
+      }
+    }
+  ],
+  "api": {
+    "dashboard": false
+  },
+  "ingressClass": {
+    "enabled": true,
+    "isDefaultClass": false,
+    "name": "traefik"
+  },
+  "providers": {
+    "kubernetesCRD": {
+      "enabled": false
+    },
+    "kubernetesIngress": {
+      "enabled": true,
+      "ingressClass": "traefik",
+      "publishedService": {
+        "enabled": true
+      }
+    }
+  },
+  "additionalArguments": [
+    "--serversTransport.forwardingTimeouts.idleConnTimeout=30s"
+  ],
+  "ports": {
+    "web": {
+      "forwardedHeaders": {
+        "trustedIPs": ["10.40.0.0/16"],
+        "notAppendXForwardedFor": true
+      },
+      "transport": {
+        "respondingTimeouts": {
+          "readTimeout": 0
+        },
+        "lifeCycle": {
+          "requestAcceptGraceTimeout": "20s",
+          "graceTimeOut": "30s"
+        }
+      }
+    },
+    "websecure": null
+  },
+  "service": {
+    "annotations": {
+      "argocd.argoproj.io/sync-options": "Delete=false,Prune=false",
+      "service.beta.kubernetes.io/aws-load-balancer-type": "external",
+      "service.beta.kubernetes.io/aws-load-balancer-scheme": "internal",
+      "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "ip",
+      "service.beta.kubernetes.io/aws-load-balancer-name": "hopcharlie-apps-eks",
+      "service.beta.kubernetes.io/aws-load-balancer-attributes": "load_balancing.cross_zone.enabled=true",
+      "service.beta.kubernetes.io/aws-load-balancer-target-group-attributes": "deregistration_delay.timeout_seconds=60",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol": "http",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-port": "8080",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-path": "/ping",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval": "5",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout": "3",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold": "2",
+      "service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold": "2"
+    },
+    "spec": {
+      "loadBalancerSourceRanges": ["10.40.0.0/19"]
+    }
+  },
+  "extraObjects": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {"name": "traefik-no-route"},
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {"hopcharlie.dev/no-route": "none"},
+        "ports": [{"name": "http", "port": 80, "targetPort": 80}]
+      }
+    },
+    {
+      "apiVersion": "networking.k8s.io/v1",
+      "kind": "Ingress",
+      "metadata": {"name": "traefik-no-route"},
+      "spec": {
+        "ingressClassName": "traefik",
+        "defaultBackend": {"service": {"name": "traefik-no-route", "port": {"number": 80}}}
+      }
+    }
+  ]
+}

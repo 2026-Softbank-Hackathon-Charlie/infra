@@ -12,10 +12,20 @@
             "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "ip"
           }
         },
+        "ingress": {
+          "enabled": true,
+          "className": "traefik",
+          "hostSuffix": "eks.hopcharlie.internal"
+        },
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "gp3",
-          "storageSize": "1Gi"
+          "storageSize": "4Gi",
+          "resources": {
+            "requests": {"memory": "256Mi"},
+            "limits": {"memory": "512Mi"}
+          },
+          "backup": {"enabled": true}
         },
         "s3": {
           "endpoint": "https://s3.ap-northeast-2.amazonaws.com",
@@ -62,7 +72,11 @@
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "charlie-gcp-balanced",
-          "storageSize": "1Gi"
+          "storageSize": "1Gi",
+          "resources": {
+            "requests": {"memory": "256Mi"},
+            "limits": {"memory": "512Mi"}
+          }
         },
         "s3": {
           "endpoint": "https://storage.googleapis.com",
@@ -94,6 +108,15 @@
           ]
         }
       }
+    }
+  },
+  "platform": {
+    "aiRunner": {
+      "enabled": true,
+      "imagePrefixes": [
+        "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:",
+        "public.ecr.aws/aws-cli/aws-cli:"
+      ]
     }
   }
 }

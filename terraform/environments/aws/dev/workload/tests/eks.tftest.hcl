@@ -28,6 +28,15 @@ override_data {
     cnpg_restore_role_arn                   = "arn:aws:iam::123456789012:role/charlie-dev-cnpg-restore"
   } }
 }
+# The Traefik NLB of ADR 0058 exists, unless a run says otherwise.
+override_data {
+  target = data.aws_lbs.eks_apps_entry
+  values = { arns = ["arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/net/hopcharlie-apps-eks/0123456789abcdef"] }
+}
+override_data {
+  target = data.aws_lb.eks_apps_entry
+  values = { dns_name = "hopcharlie-apps-eks-0123456789abcdef.elb.ap-northeast-2.amazonaws.com", zone_id = "ZIBE1TIR4HY56" }
+}
 variables {
   aws_account_id                     = "123456789012"
   operator_principal_arn             = "arn:aws:iam::123456789012:role/operator"
@@ -71,4 +80,54 @@ run "reject_invalid_network_policy_mode" {
   command = plan
   variables { network_policy_enforcing_mode = "disabled" }
   expect_failures = [var.network_policy_enforcing_mode]
+}
+
+# ADR 0058: the app entry names wait for the Traefik NLB instead of failing the plan.
+run "apps_dns_without_the_traefik_nlb" {
+  command = plan
+  override_data {
+    target = data.aws_lbs.eks_apps_entry
+    values = { arns = [] }
+  }
+  expect_failures = [check.eks_apps_entry_nlb]
+  assert {
+    condition     = aws_route53_zone.apps.name == "hopcharlie.internal" && one(aws_route53_zone.apps.vpc).vpc_id == "vpc-0123456789abcdef0" && length(aws_route53_record.eks_apps) == 0
+    error_message = "Without the Traefik NLB the private zone must still be planned in the shared VPC, without the record."
+  }
+}
+run "apps_dns_points_at_the_traefik_nlb" {
+  command = apply
+  override_data {
+    target = data.aws_lbs.eks_apps_entry
+    values = { arns = ["arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/net/hopcharlie-apps-eks/0123456789abcdef"] }
+  }
+  override_data {
+    target = data.aws_lb.eks_apps_entry
+    values = { dns_name = "hopcharlie-apps-eks-0123456789abcdef.elb.ap-northeast-2.amazonaws.com", zone_id = "ZIBE1TIR4HY56" }
+  }
+  assert {
+    condition = (
+      length(aws_route53_record.eks_apps) == 1 &&
+      aws_route53_record.eks_apps[0].name == "*.eks.hopcharlie.internal" &&
+      aws_route53_record.eks_apps[0].type == "A" &&
+      one(aws_route53_record.eks_apps[0].alias).name == "hopcharlie-apps-eks-0123456789abcdef.elb.ap-northeast-2.amazonaws.com" &&
+      one(aws_route53_record.eks_apps[0].alias).zone_id == "ZIBE1TIR4HY56"
+    )
+    error_message = "The wildcard eks name must alias the Traefik NLB."
+  }
+}
+run "apps_dns_with_two_traefik_nlbs" {
+  command = plan
+  override_data {
+    target = data.aws_lbs.eks_apps_entry
+    values = { arns = [
+      "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/net/hopcharlie-apps-eks/0123456789abcdef",
+      "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/net/hopcharlie-apps-eks2/fedcba9876543210",
+    ] }
+  }
+  expect_failures = [check.eks_apps_entry_nlb]
+  assert {
+    condition     = length(aws_route53_record.eks_apps) == 0
+    error_message = "With two Traefik NLBs the record must be left out, with a warning, not pointed at either."
+  }
 }
