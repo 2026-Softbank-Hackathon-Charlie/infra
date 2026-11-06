@@ -239,14 +239,16 @@ AWS workload mode의 canonical 입력은 `config/project.json`의 `workload_netw
 
 ### Self-hosted runner
 
-조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0045](docs/adr/0045-run-actions-on-self-hosted-runner.md)). 호스트는 GCP 프로젝트 `project-b47cdba3-db5b-42a2-9a6`의 VM 한 대(`hopcharlie-github-runner`, e2-standard-4, asia-northeast3-a)로 옮기고, runner 3개(`hopcharlie-gcp-runner-1`부터 `3`)가 job을 하나씩 동시에 실행한다. 처음 쓴 AWS EC2 호스트(`Name=hopcharlie-github-runner`, t3.xlarge, runner `hopcharlie-runner-1`부터 `3`)는 GCP runner가 job을 받는 것을 확인한 뒤 지운다. 두 호스트의 label이 같아서 workflow는 바꾸지 않는다. 호스트가 없으면 job은 실패하지 않고 24시간까지 `queued`로 기다린다.
+조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0045](docs/adr/0045-run-actions-on-self-hosted-runner.md)). GCP 호스트의 목표 사양은 프로젝트 `project-b47cdba3-db5b-42a2-9a6`, asia-northeast3-a의 VM 한 대(`hopcharlie-github-runner`, e2-standard-8, 8 vCPU/32 GB/200 GB)와 runner 6개(`hopcharlie-gcp-runner-1`부터 `6`)다([ADR 0067](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md)). 실제 축소 적용·검증은 별도 승인을 받는다. 처음 쓴 AWS EC2 호스트(`Name=hopcharlie-github-runner`, t3.xlarge, runner `hopcharlie-runner-1`부터 `3`)는 GCP runner가 job을 받는 것을 확인한 뒤 지운다. 두 호스트의 label이 같아서 workflow는 바꾸지 않는다. 호스트가 없으면 job은 실패하지 않고 24시간까지 `queued`로 기다린다.
 
 GCP 호스트는 저장소 루트에서 아래 명령으로 올리고 내린다. gcloud에 로그인해 위 프로젝트를 활성 프로젝트로 두고(`gcloud config set project project-b47cdba3-db5b-42a2-9a6`), `admin:org` 권한이 있는 gh를 쓴다. Windows에서는 PowerShell이나 Git Bash에서 Windows용 `python`으로 실행한다. Git Bash의 `python3`(MSYS2)로 실행하면 gcloud가 뜨지 않는다.
 
 ```bash
 gh auth refresh -h github.com -s admin:org
 python scripts/github-runner/gcp_up.py --dry-run   # describe와 조회만 하고 바꿀 것을 출력한다
-python scripts/github-runner/gcp_up.py             # 방화벽 규칙과 VM을 만들고 IAP SSH로 runner 3개를 등록한 뒤 조직 runner 상태를 출력한다
+python scripts/github-runner/gcp_up.py             # 방화벽 규칙과 VM을 만들고 IAP SSH로 runner 6개를 등록한 뒤 조직 runner 상태를 출력한다
+python scripts/github-runner/gcp_up.py --resize    # 승인 후, 다른 사양의 기존 VM을 중지·변경·시작한다
+# 축소는 유휴 확인·7~9 서비스 중지/비활성화 후 수행하고, 조직 등록은 1~6 복구 확인 후 정리한다(ADR 0067).
 python scripts/github-runner/gcp_down.py           # 지울 것만 출력한다
 python scripts/github-runner/gcp_down.py --apply   # VM과 디스크, GCP runner 등록, 방화벽 규칙 2개를 지운다
 ```
@@ -928,6 +930,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
 | [docs/adr/0066-platform-reads-scc-findings.md](docs/adr/0066-platform-reads-scc-findings.md) | 플랫폼 API가 SCC Standard 결과를 읽기 전용으로 읽음 |
+| [docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md) | GCP runner 호스트를 최초의 2배인 8 vCPU/32 GB·동시 6개로 축소하고 디스크는 보존 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
