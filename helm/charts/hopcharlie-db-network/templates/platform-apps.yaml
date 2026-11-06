@@ -1,0 +1,94 @@
+{{- /*
+Shared objects for the database proxies of platform apps (infra ADR 0063).
+The hopcharlie-app chart puts each app's Tailscale Services in the app's
+namespace; the operator runs their proxies here with these ProxyClasses,
+which label the pods, so these policies admit every app's proxies through
+db-network-default-deny. The CNPG side is the app namespaces labelled
+hopcharlie.dev/db-topology: "true", which the app chart sets only for such
+apps.
+*/}}
+{{- if and .Values.enabled (.Values.platformApps | default dict).enabled }}
+{{- $appNamespaces := dict "hopcharlie.dev/db-topology" "true" }}
+{{- range $role := list "ingress" "egress" }}
+---
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: hopcharlie-app-db-{{ $role }}-{{ $.Values.clusterId }}
+spec:
+  statefulSet:
+    pod:
+      labels:
+        hopcharlie.dev/db-proxy: {{ $role }}
+      tailscaleContainer:
+        resources:
+          {{- toYaml $.Values.proxyResources | nindent 10 }}
+{{- end }}
+---
+# An app database's egress proxy: its replica (any CNPG pod of a topology
+# app) connects in on 5432 and the proxy reaches the peer over the tailnet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-app-db-egress-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/db-proxy: egress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $appNamespaces | nindent 14 }}
+          podSelector:
+            matchExpressions:
+              - {key: cnpg.io/cluster, operator: Exists}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    # Direct peers may use any destination UDP port after NAT.
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+---
+# An app database's ingress proxy: the peer's replica arrives over the
+# tailnet and the proxy forwards to the primary of a topology app.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-app-db-ingress-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/db-proxy: ingress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $appNamespaces | nindent 14 }}
+          podSelector:
+            matchLabels:
+              cnpg.io/instanceRole: primary
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- end }}

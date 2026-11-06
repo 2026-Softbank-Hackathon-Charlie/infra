@@ -272,6 +272,45 @@ class DatabaseNetworkTests(unittest.TestCase):
                     }],
                 })
 
+    def test_platform_apps_add_only_shared_proxyclasses_and_policies(self):
+        # ADR 0063: shared objects for the proxies of every platform app's database.
+        for cluster in ('eks', 'gke'):
+            with self.subTest(cluster=cluster):
+                values = values_for(cluster)
+                values['platformApps'] = {'enabled': True}
+                result = self.render(values)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                docs = [doc for doc in yaml.safe_load_all(result.stdout) if doc]
+                key = lambda d: (d['kind'], d['metadata']['name'])
+                base = {key(d): d for d in self.documents[cluster]}
+                added = {key(d): d for d in docs if key(d) not in base}
+                # The existing objects are unchanged.
+                self.assertEqual({key(d): d for d in docs if key(d) in base}, base)
+                self.assertEqual(sorted(added), [
+                    ('NetworkPolicy', 'platform-app-db-egress-proxy'),
+                    ('NetworkPolicy', 'platform-app-db-ingress-proxy'),
+                    ('ProxyClass', f'hopcharlie-app-db-egress-{cluster}'),
+                    ('ProxyClass', f'hopcharlie-app-db-ingress-{cluster}')])
+                for role in ('ingress', 'egress'):
+                    pod = added[('ProxyClass', f'hopcharlie-app-db-{role}-{cluster}')]['spec']['statefulSet']['pod']
+                    self.assertEqual(pod['labels'], {'hopcharlie.dev/db-proxy': role})
+                    policy = added[('NetworkPolicy', f'platform-app-db-{role}-proxy')]
+                    self.assertEqual(policy['metadata']['namespace'], NAMESPACE)
+                    self.assertEqual(policy['spec']['podSelector'], {'matchLabels': {'hopcharlie.dev/db-proxy': role}})
+                    egress = policy['spec']['egress']
+                    # DNS anywhere too: GKE NodeLocal DNSCache (ADR 0052).
+                    self.assertIn({'ports': [{'protocol': 'UDP', 'port': 53}, {'protocol': 'TCP', 'port': 53}]}, egress)
+                apps = {'hopcharlie.dev/db-topology': 'true'}
+                egress_in = added[('NetworkPolicy', 'platform-app-db-egress-proxy')]['spec']['ingress']
+                self.assertEqual(egress_in[0]['from'], [{'namespaceSelector': {'matchLabels': apps}, 'podSelector': {
+                    'matchExpressions': [{'key': 'cnpg.io/cluster', 'operator': 'Exists'}]}}])
+                ingress_out = added[('NetworkPolicy', 'platform-app-db-ingress-proxy')]['spec']['egress'][-1]
+                self.assertEqual(ingress_out, {'to': [{'namespaceSelector': {'matchLabels': apps}, 'podSelector': {
+                    'matchLabels': {'cnpg.io/instanceRole': 'primary'}}}], 'ports': [{'protocol': 'TCP', 'port': 5432}]})
+        values = values_for('management')
+        values['platformApps'] = {'enabled': True}
+        self.assertNotEqual(self.render(values).returncode, 0)
+
     def test_enabled_missing_or_invalid_config_fails_closed(self):
         cases = [
             {'enabled': True},

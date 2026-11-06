@@ -19,6 +19,16 @@ egress:
   # Each peer requires a unique local hostname and the remote ingress full FQDN.
   peers: {}
 
+# Workload profiles only (infra ADR 0063). Shared objects for the database
+# proxies of platform apps registered in two environments, so a new app needs
+# no change to this release: ProxyClasses hopcharlie-app-db-ingress-<clusterId>
+# and hopcharlie-app-db-egress-<clusterId>, which label their proxy pods
+# hopcharlie.dev/db-proxy: ingress|egress, and NetworkPolicies for those pods.
+# The app chart's Services in the app namespaces use them, with the tags
+# above (ingress.tag, egress.tag).
+platformApps:
+  enabled: false
+
 # Unmeasured starting point; size from the approved connectivity/load trial.
 proxyResources:
   requests:

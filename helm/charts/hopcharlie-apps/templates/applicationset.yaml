@@ -79,6 +79,14 @@ spec:
             - .spec.replica
             - .spec.externalClusters
             - .spec.certificates
+        # The Tailscale operator points a database egress Service (ADR 0063) at
+        # its proxy by rewriting externalName; selfHeal must not put the
+        # chart's placeholder back. Only ExternalName Services with a tailnet
+        # target match, so no other Service field or Service is ignored.
+        - group: ""
+          kind: Service
+          jqPathExpressions:
+            - select(.spec.type == "ExternalName" and .metadata.annotations["tailscale.com/tailnet-fqdn"] != null) | .spec.externalName
   templatePatch: |
     spec:
     {{- range $env, $e := $envs }}

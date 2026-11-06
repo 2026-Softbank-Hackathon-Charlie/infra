@@ -4,7 +4,8 @@
 # /hopcharlie/kube/eks; Argo CD does not manage it.
 #
 # Based on deploy/k8s/hopcharlie-platform.yaml of the platform repository, cut
-# down to the calls the platform makes today. Every rule only reads, and no
+# down to the calls the platform makes today. Every rule only reads (but the
+# migration role at the end, ADR 0063), and no
 # rule reads Secrets or ConfigMaps:
 #   services get                 deploy executor: the internal NLB address of
 #                                <app>-<service> in namespace <instance>, which
@@ -86,3 +87,78 @@ subjects:
   - kind: ServiceAccount
     name: hopcharlie-platform
     namespace: charlie-system
+---
+# Migrations of apps registered in two environments (ADR 0063). The migration
+# engine reads the CNPG Cluster (precheck) and merge-patches its
+# spec.replica.primary and promotionToken (demote, promote). RBAC cannot name
+# the namespaces of apps registered later, so the role covers every Cluster
+# and the ValidatingAdmissionPolicy below narrows patch: only in a namespace
+# the app chart labelled hopcharlie.dev/db-topology=true, and only those two
+# fields. RBAC cannot narrow get that way; a Cluster has no secret values, and
+# the token already lists every Cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hopcharlie-platform-migration
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hopcharlie-platform-migration
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hopcharlie-platform-migration
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: charlie-system
+---
+# Production databases (moimroom, charlie-apps) have no such label: there the
+# platform still needs scripts/db-migration-access.py (ADR 0048, 0060).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-migration
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: ["*"]
+        operations: [UPDATE]
+        resources: [clusters]
+  matchConditions:
+    - name: platform-service-account
+      expression: request.userInfo.username == 'system:serviceaccount:charlie-system:hopcharlie-platform'
+  validations:
+    - expression: >-
+        has(namespaceObject.metadata.labels) &&
+        'hopcharlie.dev/db-topology' in namespaceObject.metadata.labels &&
+        namespaceObject.metadata.labels['hopcharlie.dev/db-topology'] == 'true'
+      message: the platform may change only Clusters in namespaces labelled hopcharlie.dev/db-topology=true
+    - expression: >-
+        object.spec.all(k, k == 'replica' || (k in oldObject.spec && object.spec[k] == oldObject.spec[k])) &&
+        oldObject.spec.all(k, k == 'replica' || k in object.spec)
+      message: the platform may change only spec.replica
+    - expression: >-
+        has(oldObject.spec.replica) && has(object.spec.replica) &&
+        object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+        oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)
+      message: the platform may change only spec.replica.primary and promotionToken
+    - expression: >-
+        (has(object.metadata.labels) ? object.metadata.labels : {}) == (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
+        (has(object.metadata.annotations) ? object.metadata.annotations : {}) == (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+      message: the platform may not change the Cluster's labels or annotations
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-migration
+spec:
+  policyName: hopcharlie-platform-migration
+  validationActions: [Deny]
