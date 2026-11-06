@@ -11,7 +11,7 @@
   },
   "api": {
     "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
-    "dsnHostSuffixes": ".ts.net"
+    "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local"
   },
   "gcp": {
     "tokenAudience": "https://iam.googleapis.com/projects/414068132732/locations/global/workloadIdentityPools/charlie-platform/providers/management-eks",
