@@ -166,3 +166,32 @@ public service, and no env name that is also a sealed app secret.
 {{- fail (printf "values.services: only one service may be public (%s)" (join ", " $public)) -}}
 {{- end -}}
 {{- end -}}
+
+{{/* Namespace-independent OTel wiring; no credential in app values. */}}
+{{- define "hopcharlie-app.otelEnv" -}}
+{{- $o := .root.Values.profile.observability -}}
+{{- if $o.enabled -}}
+{{- range $key, $_ := .svc.env -}}
+{{- if hasPrefix "OTEL_" $key -}}
+{{- fail "OTEL_* is managed by the enabled environment observability profile" -}}
+{{- end -}}
+{{- end -}}
+{{- range $key, $value := .root.Values.values.sealedSecrets.app -}}
+{{- if hasPrefix "OTEL_" $key -}}
+{{- fail "OTEL_* sealed variables conflict with the environment observability profile" -}}
+{{- end -}}
+{{- end -}}
+- {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ $o.endpoint | quote }}}
+- {name: OTEL_EXPORTER_OTLP_PROTOCOL, value: "http/protobuf"}
+- {name: OTEL_EXPORTER_OTLP_CERTIFICATE, value: /etc/otel/ca/ca.crt}
+- {name: OTEL_EXPORTER_OTLP_INSECURE, value: "false"}
+- {name: OTEL_TRACES_EXPORTER, value: otlp}
+- {name: OTEL_METRICS_EXPORTER, value: none}
+- {name: OTEL_LOGS_EXPORTER, value: none}
+- {name: OTEL_SERVICE_NAME, value: {{ printf "%s-%s" .root.Values.values.app .svc.name | quote }}}
+- name: OTEL_K8S_POD_UID
+  valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+- name: OTEL_RESOURCE_ATTRIBUTES
+  value: {{ printf "service.version=%s,k8s.cluster.name=%s,k8s.namespace.name=%s,k8s.pod.uid=$(OTEL_K8S_POD_UID),cloud.provider=%s,cloud.region=%s,deployment.environment.name=%s" (.root.Values.commit | default "unknown") $o.clusterName .root.Release.Namespace $o.cloudProvider $o.region (.root.Values.env | default "unknown") | quote }}
+{{- end -}}
+{{- end -}}

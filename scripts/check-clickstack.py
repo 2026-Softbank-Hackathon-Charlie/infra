@@ -17,7 +17,7 @@ VERSIONS = json.loads((ROOT / 'helm/versions.json').read_text())
 def main():
     with tempfile.TemporaryDirectory(prefix='charlie-clickstack-check-') as tmp:
         env = dict(os.environ)
-        for key, name in (('CLICKSTACK_OPERATORS_CHART', 'clickstack-operators'), ('OTEL_CHART', 'opentelemetry-collector')):
+        for key, name in (('CLICKSTACK_OPERATORS_CHART', 'clickstack-operators'), ('OTEL_CHART', 'opentelemetry-collector'), ('ALLOY_CHART', 'alloy'), ('KPS_CHART', 'kube-prometheus-stack')):
             if env.get(key):
                 if not (Path(env[key]) / 'Chart.yaml').is_file():
                     raise SystemExit(f'{key} does not contain a chart')
@@ -32,6 +32,7 @@ def main():
                 bundle.extractall(tmp, filter='data')
             env[key] = str(Path(tmp) / name)
         subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-clickstack.py')], env=env, check=True)
+        subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-automatic-observability.py')], env=env, check=True)
 
 
 if __name__ == '__main__':

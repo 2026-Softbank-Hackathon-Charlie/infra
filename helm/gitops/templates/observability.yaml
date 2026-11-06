@@ -10,6 +10,9 @@ spec:
     - {{ .Values.repoURL | quote }}
     - https://clickhouse.github.io/ClickStack-helm-charts
     - https://open-telemetry.github.io/opentelemetry-helm-charts
+    {{- if (dig "automatic" "enabled" false .Values.observability) }}
+    - https://grafana.github.io/helm-charts
+    {{- end }}
   destinations:
     {{- range $purpose, $target := .Values.targets }}
     - {server: {{ $target.endpoint | quote }}, namespace: observability}
@@ -81,12 +84,12 @@ metadata:
 spec:
   project: charlie-observability
   sources:
-    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
-      chart: opentelemetry-collector
-      targetRevision: "0.175.0"
+    - repoURL: {{ if (dig "automatic" "enabled" false $.Values.observability) }}https://grafana.github.io/helm-charts{{ else }}https://open-telemetry.github.io/opentelemetry-helm-charts{{ end }}
+      chart: {{ if (dig "automatic" "enabled" false $.Values.observability) }}alloy{{ else }}opentelemetry-collector{{ end }}
+      targetRevision: {{ if (dig "automatic" "enabled" false $.Values.observability) }}"1.15.0"{{ else }}"0.175.0"{{ end }}
       helm:
         releaseName: observability-agent
-        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/opentelemetry-collector.yaml]
+        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/{{ if (dig "automatic" "enabled" false $.Values.observability) }}alloy{{ else }}opentelemetry-collector{{ end }}.yaml]
     - repoURL: {{ $.Values.repoURL | quote }}
       targetRevision: {{ $.Values.revision | quote }}
       ref: values
@@ -110,12 +113,35 @@ spec:
       targetRevision: "0.175.0"
       helm:
         releaseName: observability-gateway
-        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/otel-gateway.yaml]
+        valueFiles: [$values/clusters/aws-dev-{{ $purpose }}/values/{{ if (dig "automatic" "enabled" false $.Values.observability) }}otel-gateway-automatic{{ else }}otel-gateway{{ end }}.yaml]
     - repoURL: {{ $.Values.repoURL | quote }}
       targetRevision: {{ $.Values.revision | quote }}
       ref: values
   destination: {server: {{ $target.endpoint | quote }}, namespace: observability}
   syncPolicy:
     syncOptions: [ServerSideApply=true]
+{{- end }}
+{{- if (dig "automatic" "enabled" false .Values.observability) }}
+{{- range $purpose := .Values.observability.gatewayTargets }}
+{{- $target := index $.Values.targets $purpose }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: charlie-{{ $purpose }}-observability-boundary
+  namespace: argocd
+spec:
+  project: charlie-observability
+  source:
+    repoURL: {{ $.Values.repoURL | quote }}
+    targetRevision: {{ $.Values.revision | quote }}
+    path: helm/charts/observability-boundary
+    helm:
+      releaseName: observability-boundary
+      valueFiles: [../../../clusters/aws-dev-{{ $purpose }}/values/observability-boundary.yaml]
+  destination: {server: {{ $target.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- end }}
 {{- end }}
 {{- end }}

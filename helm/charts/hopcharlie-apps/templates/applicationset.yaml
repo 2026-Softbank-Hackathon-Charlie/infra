@@ -94,7 +94,11 @@ spec:
             valueFiles:
               - '{{`$gitops/{{ .path.path }}/{{ .path.filename }}`}}'
             valuesObject:
-              profile: {{ $e.profile | default dict | toJson }}
+              {{- $profile := deepCopy ($e.profile | default dict) }}
+              {{- if not (dig "observability" "enabled" false $profile) }}
+              {{- $_ := unset $profile "observability" }}
+              {{- end }}
+              profile: {{ $profile | toJson }}
         - repoURL: {{ $.Values.gitops.repoURL | quote }}
           targetRevision: {{ $.Values.gitops.revision | quote }}
           ref: gitops

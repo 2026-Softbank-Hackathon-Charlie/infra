@@ -114,6 +114,65 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "observability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "metricsEnabled": {
+              "type": "boolean"
+            },
+            "endpoint": {
+              "type": "string"
+            },
+            "caBundle": {
+              "type": "string"
+            },
+            "clusterName": {
+              "type": "string"
+            },
+            "cloudProvider": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "endpoint",
+                  "caBundle",
+                  "clusterName"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "pattern": "^https://[a-z0-9.-]+:443$"
+                  },
+                  "caBundle": {
+                    "pattern": "-----BEGIN CERTIFICATE-----"
+                  },
+                  "clusterName": {
+                    "pattern": "^[a-z0-9][a-z0-9.-]+$"
+                  }
+                }
+              }
+            }
+          ]
+        },
         "publicService": {
           "type": "object",
           "additionalProperties": false,

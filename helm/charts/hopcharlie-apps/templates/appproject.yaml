@@ -17,6 +17,9 @@ spec:
   destinations:
     {{- range $env, $e := .Values.environments }}
     {{- $cluster := required (printf "environments.%s.cluster needs server or name" $env) $e.cluster }}
+    {{- if (dig "observability" "enabled" false ($e.profile | default dict)) }}
+    - {{ merge (dict "namespace" "!hop-migrate") $cluster | toJson }}
+    {{- end }}
     {{- range $.Values.deniedNamespaces }}
     - {{ merge (dict "namespace" (printf "!%s" .)) $cluster | toJson }}
     {{- end }}
@@ -28,6 +31,19 @@ spec:
   clusterResourceWhitelist:
     - { group: "", kind: Namespace }
   namespaceResourceWhitelist:
+    {{- $otel := false }}
+    {{- $metrics := false }}
+    {{- range .Values.environments }}
+    {{- $profile := .profile | default dict }}
+    {{- $o := $profile.observability | default dict }}
+    {{- if $o.enabled }}{{ $otel = true }}{{- if $o.metricsEnabled }}{{ $metrics = true }}{{- end }}{{- end }}
+    {{- end }}
+    {{- if $otel }}
+    - { group: "", kind: ConfigMap }
+    {{- end }}
+    {{- if $metrics }}
+    - { group: monitoring.coreos.com, kind: PodMonitor }
+    {{- end }}
     - { group: apps, kind: Deployment }
     - { group: "", kind: Service }
     - { group: postgresql.cnpg.io, kind: Cluster }

@@ -1,0 +1,17 @@
+{{- if .Values.privateIngest.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickstack-otlp-private
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internal
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-subnets: {{ join "," .Values.privateIngest.privateSubnets | quote }}
+spec:
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.privateIngest.sourceRanges | nindent 4 }}
+  selector: {app.kubernetes.io/name: clickstack-collector}
+  ports: [{name: otlp-https, port: 443, targetPort: otlp-http}]
+{{- end }}

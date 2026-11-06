@@ -8,8 +8,17 @@
   ],
   "applicationNamespace": "charlie-apps",
   "networkPolicy": {
-    "systemCompatibilityNamespaces": ["kube-system", "observability", "cnpg-system", "cert-manager", "traefik"],
-    "cnpg": {"enabled": true}
+    "systemCompatibilityNamespaces": [
+      "kube-system",
+      "observability",
+      "cnpg-system",
+      "cert-manager",
+      "traefik"
+    ],
+    "cnpg": {
+      "enabled": true
+    },
+    "isolateObservabilityGateway": false
   },
   "externalAlb": {
     "enabled": false,

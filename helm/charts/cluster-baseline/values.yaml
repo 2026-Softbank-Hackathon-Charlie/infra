@@ -20,7 +20,8 @@
     "systemCompatibilityNamespaces": [],
     "cnpg": {
       "enabled": false
-    }
+    },
+    "isolateObservabilityGateway": false
   },
   "externalAlb": {
     "enabled": false,

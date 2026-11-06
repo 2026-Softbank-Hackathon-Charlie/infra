@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "metrics"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "privateSubnets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^subnet-[a-f0-9]+$"
+          }
+        },
+        "sourceRanges": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^10\\.40\\.[0-9]+\\.0/[0-9]+$"
+          }
+        },
+        "tlsSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^docker.io/nginxinc/nginx-unprivileged:[^@]+@sha256:[a-f0-9]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "privateSubnets": {
+                "minItems": 2,
+                "uniqueItems": true
+              },
+              "sourceRanges": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

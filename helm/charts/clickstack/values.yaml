@@ -160,6 +160,10 @@
           }
         }
       }
+    },
+    "queryTrust": {
+      "enabled": false,
+      "configMap": "observability-metrics-query-ca"
     }
   },
   "mongodb": {
@@ -573,5 +577,10 @@
     "size": "2Gi"
   },
   "fullnameOverride": "clickstack",
-  "additionalIngestTokenKeys": []
+  "additionalIngestTokenKeys": [],
+  "privateIngest": {
+    "enabled": false,
+    "privateSubnets": [],
+    "sourceRanges": []
+  }
 }
