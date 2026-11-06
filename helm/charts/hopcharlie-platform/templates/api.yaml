@@ -80,9 +80,9 @@ spec:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
       serviceAccountName: hopcharlie-platform
-      # The deploy executor patches Argo CD Applications in this cluster, and
-      # the AI runner's Jobs are created here (hopai.yaml).
-      automountServiceAccountToken: {{ or (not (empty .Values.deploy.builder)) .Values.hopai.enabled }}
+      # The deploy executor patches Argo CD Applications in this cluster, the AI
+      # runner's Jobs are created here (hopai.yaml), and app DB routes too (ADR 0064).
+      automountServiceAccountToken: {{ or (not (empty .Values.deploy.builder)) .Values.hopai.enabled (not (empty .Values.api.appDbTopology.route.tailnet)) }}
       securityContext:
         {{- include "hopcharlie.podSecurity" 10001 | nindent 8 }}
       initContainers:
@@ -119,6 +119,25 @@ spec:
             # PLATFORM_DSN_HOST_SUFFIXES (.hopcharlie-db-network.svc.cluster.local, infra #99).
             - {name: PLATFORM_APP_DB_HOST_TEMPLATES, value: {{ . | quote }}}
             {{- end }}
+            {{- with .route }}
+            {{- if or .tailnet .proxyClass .tag }}
+            {{- if not (and .tailnet .proxyClass .tag $.Values.api.appDbTopology.hostTemplates) }}
+            {{- fail "api.appDbTopology.route needs tailnet, proxyClass, tag and hostTemplates together" }}
+            {{- end }}
+            # The API creates and deletes each paired app's management egress Service
+            # (platform internal/dbroute). Turn on only after the app-db-routes release
+            # (infra ADR 0064) gives it the Role and admission policies.
+            - {name: PLATFORM_APP_DB_ROUTE_TAILNET, value: {{ .tailnet | quote }}}
+            - {name: PLATFORM_APP_DB_ROUTE_PROXY_CLASS, value: {{ .proxyClass | quote }}}
+            - {name: PLATFORM_APP_DB_ROUTE_TAG, value: {{ .tag | quote }}}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.api.appFiles.enabled }}
+            # Registered apps' files move with the platform identity through rclone
+            # remotes eks: (S3 Pod Identity) and gke: (the Google ADC above). Turn on only
+            # after the object IAM (ADR 0064) is applied.
+            - {name: PLATFORM_APP_FILES, value: "1"}
             {{- end }}
             {{- if .Values.hopai.enabled }}
             # POST /v1/ai-runs starts the AI runner from this Job template (hopai.yaml).

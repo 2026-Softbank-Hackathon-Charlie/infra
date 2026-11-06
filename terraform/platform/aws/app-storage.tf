@@ -95,6 +95,28 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Resource  = "${local.app_bucket_arn}/*"
         Condition = local.app_own_buckets
       },
+      # Move registered apps' files with rclone (remote eks:, platform
+      # PLATFORM_APP_FILES, ADR 0064): list, read and write objects. With the
+      # DeleteObject above, rclone sync can also remove extra objects.
+      {
+        Effect    = "Allow"
+        Action    = "s3:ListBucket"
+        Resource  = local.app_bucket_arn
+        Condition = local.app_own_buckets
+      },
+      {
+        Effect    = "Allow"
+        Action    = ["s3:GetObject", "s3:PutObject"]
+        Resource  = "${local.app_bucket_arn}/*"
+        Condition = local.app_own_buckets
+      },
+      # Backup buckets hopcharlie-eks-<app>---pg (platform ADR 0025) share the
+      # prefix; their objects are never read, written or removed by the platform.
+      {
+        Effect   = "Deny"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"]
+        Resource = "${local.app_bucket_arn}---pg/*"
+      },
       # Create a user, and change its inline policy, only with the boundary.
       # Nobody else creates users under this path (ADR 0035).
       {
