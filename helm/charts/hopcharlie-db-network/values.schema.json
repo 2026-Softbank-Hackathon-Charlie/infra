@@ -44,6 +44,22 @@
         "enabled": {"type": "boolean"}
       }
     },
+    "managementAppRoutes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "tag": {"$ref": "#/definitions/tag"},
+        "tailnet": {"type": "string"}
+      },
+      "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+      "then": {
+        "required": ["tag", "tailnet"],
+        "properties": {
+          "tailnet": {"pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.ts\\.net$"}
+        }
+      }
+    },
     "proxyResources": {
       "type": "object",
       "additionalProperties": false,

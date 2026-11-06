@@ -37,4 +37,17 @@ run "image_publish_contract" {
     condition     = aws_ecr_repository.moimroom.name == "hopcharlie/apps/moimroom" && aws_ecr_repository.moimroom.image_tag_mutability == "IMMUTABLE" && aws_ecr_repository.moimroom.force_delete == false && one(aws_ecr_repository.moimroom.encryption_configuration).encryption_type == "AES256" && output.moimroom_image_repository_name == "hopcharlie/apps/moimroom"
     error_message = "The moimroom repository must preserve immutable published tags without forced image deletion."
   }
+  assert {
+    condition = (
+      aws_iam_role.image_scan.name == "hopcharlie-image-scan" &&
+      length(jsondecode(aws_iam_role.image_scan.assume_role_policy).Statement) == 1 &&
+      jsondecode(aws_iam_role.image_scan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:2026-Softbank-Hackathon-Charlie@350278309/platform@1442049765:ref:refs/heads/main" &&
+      jsondecode(aws_iam_role.image_scan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com" &&
+      length(jsondecode(aws_iam_role_policy.image_scan.policy).Statement) == 2 &&
+      toset(jsondecode(aws_iam_role_policy.image_scan.policy).Statement[0].Action) == toset(["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]) &&
+      jsondecode(aws_iam_role_policy.image_scan.policy).Statement[0].Resource == "arn:aws:ecr:ap-northeast-2:123456789012:repository/*" &&
+      jsondecode(aws_iam_role_policy.image_scan.policy).Statement[1].Action == "ecr:GetAuthorizationToken"
+    )
+    error_message = "The image scan role must trust only the platform main branch and only pull images."
+  }
 }

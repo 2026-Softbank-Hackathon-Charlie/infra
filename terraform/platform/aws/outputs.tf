@@ -33,6 +33,12 @@ output "planner_token" {
   sensitive   = true
 }
 
+output "image_scanner_token" {
+  description = "Agent token of the platform image scan workflow (GitHub secret SCANNER_TOKEN; posts scans only by convention)."
+  value       = random_password.image_scanner.result
+  sensitive   = true
+}
+
 output "viewer_token" {
   description = "Read-only token (demo screen, judges)."
   value       = random_password.viewer.result
@@ -52,4 +58,9 @@ output "image_publish_role_arns" {
 output "app_permissions_boundary_arn" {
   description = "Permissions boundary of the IAM users the platform makes for app buckets; host/envs.yaml storage.permissionsBoundary must equal it."
   value       = aws_iam_policy.app_boundary.arn
+}
+
+output "image_scan_role_arn" {
+  description = "Platform repository variable AWS_IMAGE_SCAN_ROLE_ARN: the image scan workflow's ECR pull-only role"
+  value       = aws_iam_role.image_scan.arn
 }

@@ -45,8 +45,8 @@ run "bucket_permissions_are_limited_to_app_buckets" {
     error_message = "Bucket and object permissions apply only to hopcharlie-gke-* buckets."
   }
   assert {
-    condition     = length([for p in google_project_iam_custom_role.buckets.permissions : p if !startswith(p, "storage.buckets.") && !startswith(p, "storage.objects.")]) == 0 && !contains(google_project_iam_custom_role.buckets.permissions, "storage.objects.get") && !contains(google_project_iam_custom_role.buckets.permissions, "storage.objects.create")
-    error_message = "The platform empties and deletes app buckets; it does not read or write app files."
+    condition     = length([for p in google_project_iam_custom_role.buckets.permissions : p if !startswith(p, "storage.buckets.") && !startswith(p, "storage.objects.")]) == 0 && length(setsubtract(toset(["storage.objects.get", "storage.objects.create", "storage.objects.update", "storage.objects.delete", "storage.objects.list"]), toset(google_project_iam_custom_role.buckets.permissions))) == 0 && !contains(google_project_iam_custom_role.buckets.permissions, "storage.objects.setIamPolicy")
+    error_message = "The platform reads, writes and removes objects of app buckets only (rclone file moves, ADR 0064), never object ACLs."
   }
   assert {
     condition     = length(google_project_iam_member.identities.condition) == 0 && contains(google_project_iam_custom_role.identities.permissions, "storage.buckets.list") && length([for p in google_project_iam_custom_role.identities.permissions : p if !startswith(p, "iam.serviceAccounts.") && !startswith(p, "storage.hmacKeys.") && p != "storage.buckets.list"]) == 0 && !contains(google_project_iam_custom_role.buckets.permissions, "storage.buckets.list")

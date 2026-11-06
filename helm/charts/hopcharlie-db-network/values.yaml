@@ -29,6 +29,16 @@ egress:
 platformApps:
   enabled: false
 
+# Management EKS only, as its own release with enabled false (infra ADR 0064):
+# the ProxyClass hopcharlie-app-db-egress-management, a NetworkPolicy for its
+# proxies, and the Role and admission policies with which the platform API
+# (charlie-platform/hopcharlie-platform) creates and deletes the egress
+# Services db-<eks|gke>-<instance> of registered apps in this namespace.
+managementAppRoutes:
+  enabled: false
+  tag: tag:hop-db-client-management
+  tailnet: ""
+
 # Unmeasured starting point; size from the approved connectivity/load trial.
 proxyResources:
   requests:

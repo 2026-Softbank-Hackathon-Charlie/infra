@@ -55,6 +55,62 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         for cluster in ('management', 'eks', 'gke'):
             self.assertEqual(policy['tagOwners']['tag:hop-db-client-' + cluster], ['tag:hop-db-operator-' + cluster])
 
+    def test_management_operational_profile_is_disabled_and_scoped(self):
+        profile = ASSETS / 'management.yaml'
+        self.assertTrue(profile.is_file(), 'management operational profile is missing')
+        values = yaml.safe_load(profile.read_text(encoding='utf-8'))
+        self.assertIs(values['enabled'], False)
+        self.assertEqual(values['clusterId'], 'management')
+        self.assertNotIn('localDatabase', values)
+        self.assertNotIn('ingress', values)
+        spec = importlib.util.spec_from_file_location('db_network_tests', ROOT / 'scripts/tests/test-db-network.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        disabled = module.DatabaseNetworkTests.render(values)
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertEqual(list(filter(None, yaml.safe_load_all(disabled.stdout))), [])
+        values['enabled'] = True
+        result = module.DatabaseNetworkTests.render(values)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        docs = [doc for doc in yaml.safe_load_all(result.stdout) if doc]
+        kinds = [doc['kind'] for doc in docs]
+        self.assertEqual(sorted(kinds), sorted(['ProxyClass'] + ['Service'] * 2 + ['NetworkPolicy'] * 5))
+        services = {doc['metadata']['name']: doc for doc in docs if doc['kind'] == 'Service'}
+        self.assertEqual(set(services), {'db-eks', 'db-gke'})
+        client_labels = {'app.kubernetes.io/part-of': 'hopcharlie', 'app.kubernetes.io/component': 'api'}
+        client_source = {
+            'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'charlie-platform'}},
+            'podSelector': {'matchLabels': client_labels},
+        }
+        policies = {doc['metadata']['name']: doc for doc in docs if doc['kind'] == 'NetworkPolicy'}
+        client = policies['hopcharlie-db-network-management-client']
+        self.assertEqual(client['metadata']['namespace'], 'charlie-platform')
+        self.assertEqual(client['spec']['podSelector'], {'matchLabels': client_labels})
+        destinations = []
+        for peer, service in services.items():
+            target = peer.removeprefix('db-')
+            self.assertEqual(service['metadata']['namespace'], NAMESPACE)
+            self.assertEqual(service['metadata']['annotations'], {
+                'tailscale.com/tailnet-fqdn': f'hop-db-{target}-moimroom.tail567fe8.ts.net',
+                'tailscale.com/hostname': f'hop-db-management-to-{target}',
+                'tailscale.com/tags': 'tag:hop-db-client-management',
+                'tailscale.com/proxy-class': f'{NAMESPACE}-management',
+            })
+            proxy_labels = module.proxy_labels(peer, NAMESPACE)
+            proxy = policies[peer + '-proxy']
+            self.assertEqual(proxy['metadata']['namespace'], NAMESPACE)
+            self.assertEqual(proxy['spec']['podSelector'], {'matchLabels': proxy_labels})
+            self.assertEqual(proxy['spec']['ingress'][0], {
+                'from': [client_source], 'ports': [{'protocol': 'TCP', 'port': 5432}],
+            })
+            destinations.append({
+                'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}},
+                'podSelector': {'matchLabels': proxy_labels},
+            })
+        self.assertEqual(client['spec']['egress'], [{
+            'to': destinations, 'ports': [{'protocol': 'TCP', 'port': 5432}],
+        }])
+
     def test_operator_namespace_is_protected_from_app_deployment(self):
         apps = yaml.safe_load((ROOT / 'helm/charts/hopcharlie-apps/values.yaml').read_text(encoding='utf-8'))
         access = yaml.safe_load((ROOT / 'helm/charts/gcp-argocd-access/values.yaml').read_text(encoding='utf-8'))
@@ -88,6 +144,37 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         for environment, bucket in expected.items():
             with self.subTest(environment=environment):
                 self.assertEqual(app['environments'][environment]['bucket'], bucket)
+
+    def test_canonical_catalog_matches_management_services_and_preserves_workloads(self):
+        values = yaml.safe_load((ASSETS / 'management.yaml').read_text(encoding='utf-8'))
+        values['enabled'] = True
+        spec = importlib.util.spec_from_file_location('db_network_tests', ROOT / 'scripts/tests/test-db-network.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result = module.DatabaseNetworkTests.render(values)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        services = {doc['metadata']['name']: doc for doc in yaml.safe_load_all(result.stdout)
+                    if doc and doc['kind'] == 'Service'}
+        catalog = yaml.safe_load((ROOT / 'terraform/platform/aws/host/apps.yaml').read_text(encoding='utf-8'))
+        app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
+        expected = {
+            'eks': ('moimroom', 'moimroom-db', 'EKS_MOIMROOM_PGPASSWORD', 's3:hopcharlie-eks-moimroom'),
+            'gke': ('charlie-apps', 'moimroom-db-gke', 'GKE_MOIMROOM_PGPASSWORD', 'gcs:charlie-414068132732-moimroom-gcp'),
+        }
+        for peer, (namespace, cluster, password_env, bucket) in expected.items():
+            with self.subTest(peer=peer):
+                env = app['environments'][peer]
+                metadata = services['db-' + peer]['metadata']
+                self.assertEqual(env['dbHost'], f"{metadata['name']}.{metadata['namespace']}.svc.cluster.local")
+                self.assertEqual(env.get('namespace', app['namespace']), namespace)
+                self.assertEqual(env['cnpgCluster'], cluster)
+                self.assertEqual(env['passwordEnv'], password_env)
+                self.assertEqual(env['bucket'], bucket)
+                self.assertNotIn('password', env)
+
+    def test_active_management_allowlist_only_adds_db_network_namespace(self):
+        values = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text(encoding='utf-8'))
+        self.assertEqual(values['api']['dsnHostSuffixes'], '.ts.net,.hopcharlie-db-network.svc.cluster.local')
 
 
 if __name__ == '__main__':

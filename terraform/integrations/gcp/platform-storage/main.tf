@@ -13,6 +13,8 @@ locals {
 
   # What the gcs driver does to an app bucket (platform ADR 0016): make it,
   # label it, grant the app's service account on it, empty it and delete it.
+  # Also read and write its objects: rclone (remote gke:) moves registered
+  # apps' files with this identity (platform PLATFORM_APP_FILES, ADR 0064).
   bucket_permissions = [
     "storage.buckets.create",
     "storage.buckets.delete",
@@ -20,8 +22,11 @@ locals {
     "storage.buckets.getIamPolicy",
     "storage.buckets.setIamPolicy",
     "storage.buckets.update",
+    "storage.objects.create",
     "storage.objects.delete",
+    "storage.objects.get",
     "storage.objects.list",
+    "storage.objects.update",
   ]
   # Identity operations and bucket discovery need project-level permissions.
   # Listing proves project ownership in the gcs driver (ADR 0049); mutations

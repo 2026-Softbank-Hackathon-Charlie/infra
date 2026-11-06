@@ -56,6 +56,21 @@ Tailscale operator Helm chart `1.104.4`를 management EKS, workload EKS, workloa
 - 검증: 실제 5432·443 도달성과 TLS → standby catch-up → 제한된 권한 부여 → 시험 데이터 이전·검증·전환 → 원복 가능 경계 확인 → 임시 권한 회수 순서다. 운영 DB 삭제·덮어쓰기·자동 역전환은 포함하지 않는다.
 - 본 PR 완료는 경로·권한 **코드 준비 완료**다. #47의 실제 복제·전환 시험 완료와 구분한다.
 
+## 2026-11-06 관리 실행 경로 보완
+
+[이슈 #98](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/98)의 읽기 전용 점검에서 관리 EKS API의 기존 두 DB 주소가 `NXDOMAIN`이며 TCP 연결도 `bad address`로 끝났다. 원본 이름 수정(#94)은 이미 SSM과 API 카탈로그에 반영돼 있었다. DB 이름이 맞는 것과 관리 API에서 SQL 경로가 준비된 것은 별개의 조건이다.
+
+위 DB 경로 결정을 그대로 구체화한다. 새 아키텍처나 권한 확대를 추가하지 않는다.
+
+- [관리 프로필](../../helm/db-network/management.yaml)은 `enabled: false`이며 기존 management 차트를 독립 수동 Helm 릴리스로 사용한다. Argo Application/addon에는 등록하지 않는다.
+- 기존 EKS `db-gke`와 GKE `db-eks` Service annotation에서 상대 ingress FQDN을 읽어 프로필에 기록했다. Secret·OAuth 값은 조회하거나 포함하지 않았다. 이 관측은 관리 클러스터에서의 실제 통신 성공을 보장하지 않는다.
+- canonical `apps.yaml`의 GKE/EKS `dbHost`는 위에서 결정한 local `db-gke`/`db-eks` DNS를 사용한다. CNPG 이름·namespace·비밀번호 변수·bucket은 보존한다. 플랫폼 allowlist에는 `.hopcharlie-db-network.svc.cluster.local`만 추가하고 기존 `.ts.net`도 유지한다.
+- 프로필 기본값은 리소스 0개다. 명시적 활성화 시 management용 ProxyClass 1개, Service 2개, NetworkPolicy 5개만 만든다. 실제 설치에는 별도 승인이 필요하다.
+- **병합 영향:** 활성 platform values의 allowlist 변경은 기존 Argo 자동 sync에서 API 재시작을 일으킬 수 있다. 신규 proxy의 자동 설치와는 별개이며, 병합 시점과 아래 전환 순서를 운영자가 함께 승인해야 한다.
+- **적용 순서:** 승인된 operator/OAuth·tailnet 정책 준비 → management proxy 활성화와 Ready 확인 → local DNS/TCP5432/TLS·SQL 확인 → platform Terraform plan에서 catalog SSM 변경 검토·승인·반영 → API allowlist sync·재시작과 실제 catalog 확인 → 새 Plan 검토다. 실제 임시 CNPG 권한은 이전 직전에 기존 helper로 부여·회수한다.
+
+이번 보완은 코드와 검증 절차 준비다. 실제 설치·SSM 반영·Argo sync·권한 부여·DB 이전·strict 전환을 수행했다는 기록이 아니다. [구체 실행 순서](../runbooks/aws-gcp-db-migration.md#6-관리-eks의-moimroom-sql-경로-전환-98)를 따른다.
+
 ## 관련 자료
 
 - [실행 절차](../runbooks/aws-gcp-db-migration.md)

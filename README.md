@@ -774,6 +774,7 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/app-images/.terraform.lock.hcl](terraform/integrations/gcp/app-images/.terraform.lock.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/backend.hcl.example](terraform/integrations/gcp/app-images/backend.hcl.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/main.tf](terraform/integrations/gcp/app-images/main.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/image-scan.tf](terraform/integrations/gcp/app-images/image-scan.tf) | 이미지 스캐너의 GitHub OIDC 신뢰와 AR 저장소 읽기 권한(ADR 0065) |
 | [terraform/integrations/gcp/app-images/outputs.tf](terraform/integrations/gcp/app-images/outputs.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/terraform.tfvars.example](terraform/integrations/gcp/app-images/terraform.tfvars.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
@@ -844,6 +845,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
 | [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
 | [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
+| [docs/adr/0064-platform-creates-management-app-db-routes.md](docs/adr/0064-platform-creates-management-app-db-routes.md) | 관리 EKS의 등록 앱 DB egress Service를 플랫폼이 만들고(별도 릴리스의 Role, VAP) 앱 파일을 플랫폼 신원으로 옮기는 제안 |
 | [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
@@ -892,6 +894,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
+- [helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml](helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml)
 - [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
 - [helm/charts/hopcharlie-db-network/templates/platform-apps.yaml](helm/charts/hopcharlie-db-network/templates/platform-apps.yaml)
 - [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
@@ -903,6 +906,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
 - [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
 - [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
+- [helm/db-network/management.yaml](helm/db-network/management.yaml)
+- [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
 - [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
 - [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
 - [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
@@ -910,6 +915,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
 - [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
 - [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+- [docs/plans/2026-11-06-management-db-connectivity.md](docs/plans/2026-11-06-management-db-connectivity.md)
 
 ## rin 전용 GCP 이전
 
@@ -919,6 +925,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 |---|---|
 | [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |

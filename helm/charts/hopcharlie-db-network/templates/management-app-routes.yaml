@@ -1,0 +1,211 @@
+{{- /*
+Management EKS objects for the platform-created egress Services of registered
+apps (platform internal/dbroute). The platform API creates, in this namespace,
+one ExternalName Service db-<env>-<instance> per paired app environment and
+deletes it with the app; the operator runs its proxy with the ProxyClass
+below. Install as its own release (app-db-routes), never in the live
+db-network release that owns the static db-eks and db-gke proxies: with
+enabled false this chart renders only these objects, and none of their names
+overlap with that release.
+
+RBAC cannot narrow create and delete by label or annotation, so the two
+ValidatingAdmissionPolicies do: CREATE checks the new object, DELETE checks
+the stored one. The tag grants only TCP 5432 to the DB tags on the tailnet;
+these policies stop a Service that would reach another device or a delete
+of a Service the platform did not make.
+*/}}
+{{- $routes := .Values.managementAppRoutes | default dict }}
+{{- if $routes.enabled }}
+{{- if .Values.enabled }}
+{{- fail "managementAppRoutes is its own release: keep enabled false (the db-network release owns the static proxies)" }}
+{{- end }}
+{{- if ne .Release.Namespace "hopcharlie-db-network" }}
+{{- fail "managementAppRoutes must use the pre-existing hopcharlie-db-network namespace" }}
+{{- end }}
+{{- $name := "hopcharlie-app-db-egress-management" }}
+{{- $platform := "system:serviceaccount:charlie-platform:hopcharlie-platform" }}
+{{- /* Regex form for a CEL string: each dot becomes \\. */}}
+{{- $tailnet := replace "." "\\\\." $routes.tailnet }}
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: {{ $name }}
+spec:
+  statefulSet:
+    pod:
+      labels:
+        hopcharlie.dev/db-proxy: egress
+      tailscaleContainer:
+        resources:
+          {{- toYaml .Values.proxyResources | nindent 10 }}
+---
+# The platform API reaches each app's proxy on 5432; the proxy reaches the
+# workload ingress over the tailnet, like the static db-<peer>-proxy policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-app-db-egress-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/db-proxy: egress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: charlie-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: hopcharlie
+              app.kubernetes.io/component: api
+      ports:
+        - {protocol: TCP, port: 5432}
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    # Direct peers may use any destination UDP port after NAT.
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+---
+# No update or patch: the operator rewrites externalName and finalizers, so
+# the platform only creates and deletes (deletes and re-creates on drift).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hopcharlie-platform-app-db-routes
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, watch, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hopcharlie-platform-app-db-routes
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hopcharlie-platform-app-db-routes
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: charlie-platform
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-app-db-route-create
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    # The platform holds Service rights only here (the Role below).
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [services]
+  matchConditions:
+    - name: platform-service-account
+      expression: request.userInfo.username == '{{ $platform }}'
+  # Missing labels or annotations read as ''.
+  variables:
+    - name: labels
+      expression: 'has(object.metadata.labels) ? object.metadata.labels : {}'
+    - name: annotations
+      expression: 'has(object.metadata.annotations) ? object.metadata.annotations : {}'
+    - name: managedBy
+      expression: "'app.kubernetes.io/managed-by' in variables.labels ? variables.labels['app.kubernetes.io/managed-by'] : ''"
+    - name: route
+      expression: "'hopcharlie.dev/db-route' in variables.labels ? variables.labels['hopcharlie.dev/db-route'] : ''"
+    - name: app
+      expression: "'hopcharlie.dev/app' in variables.labels ? variables.labels['hopcharlie.dev/app'] : ''"
+    - name: tags
+      expression: "'tailscale.com/tags' in variables.annotations ? variables.annotations['tailscale.com/tags'] : ''"
+    - name: proxyClass
+      expression: "'tailscale.com/proxy-class' in variables.annotations ? variables.annotations['tailscale.com/proxy-class'] : ''"
+    - name: fqdn
+      expression: "'tailscale.com/tailnet-fqdn' in variables.annotations ? variables.annotations['tailscale.com/tailnet-fqdn'] : ''"
+    - name: hostname
+      expression: "'tailscale.com/hostname' in variables.annotations ? variables.annotations['tailscale.com/hostname'] : ''"
+  validations:
+    - expression: >-
+        variables.managedBy == 'hopcharlie-platform' &&
+        object.metadata.name.matches('^db-(eks|gke)-[a-z0-9][a-z0-9-]{0,40}$') &&
+        variables.route in ['eks', 'gke'] &&
+        object.metadata.name.startsWith('db-' + variables.route + '-') &&
+        variables.app.matches('^[a-z0-9][a-z0-9-]{0,62}$')
+      message: an app DB route is named db-<eks|gke>-<instance> and labelled app.kubernetes.io/managed-by=hopcharlie-platform, hopcharlie.dev/db-route and hopcharlie.dev/app
+    - expression: >-
+        object.spec.type == 'ExternalName' &&
+        has(object.spec.externalName) && object.spec.externalName == 'placeholder' &&
+        has(object.spec.ports) && size(object.spec.ports) == 1 &&
+        object.spec.ports[0].port == 5432 &&
+        (!has(object.spec.ports[0].protocol) || object.spec.ports[0].protocol == 'TCP')
+      message: an app DB route is an ExternalName placeholder Service with the one TCP port 5432
+    - expression: >-
+        variables.tags == '{{ $routes.tag }}' &&
+        variables.proxyClass == '{{ $name }}' &&
+        variables.fqdn.matches('^hop-db-(eks|gke)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.{{ $tailnet }}$') &&
+        variables.fqdn == 'hop-' + object.metadata.name + '.{{ $routes.tailnet }}' &&
+        variables.hostname.matches('^hop-db-management-to-(eks|gke)-[a-z0-9-]+$')
+      message: 'an app DB route uses tag {{ $routes.tag }}, proxy class {{ $name }}, the tailnet FQDN hop-<name>.{{ $routes.tailnet }} and a hop-db-management-to- hostname'
+    - expression: >-
+        variables.annotations.all(k, !k.startsWith('tailscale.com/') ||
+        k in ['tailscale.com/tags', 'tailscale.com/proxy-class', 'tailscale.com/tailnet-fqdn', 'tailscale.com/hostname'])
+      message: an app DB route carries no other Tailscale annotation (expose, tailnet-ip, proxy-group)
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-app-db-route-create
+spec:
+  policyName: hopcharlie-platform-app-db-route-create
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-app-db-route-delete
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    # The platform holds Service rights only here (the Role below).
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [DELETE]
+        resources: [services]
+  matchConditions:
+    - name: platform-service-account
+      expression: request.userInfo.username == '{{ $platform }}'
+  validations:
+    # The static db-eks and db-gke and the operator's headless Services lack the label.
+    - expression: >-
+        has(oldObject.metadata.labels) &&
+        'app.kubernetes.io/managed-by' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'hopcharlie-platform'
+      message: the platform deletes only the app DB routes it created (label app.kubernetes.io/managed-by=hopcharlie-platform)
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-app-db-route-delete
+spec:
+  policyName: hopcharlie-platform-app-db-route-delete
+  validationActions: [Deny]
+{{- end }}

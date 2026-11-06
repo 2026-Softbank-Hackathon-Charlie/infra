@@ -28,7 +28,7 @@ run "app_storage_contract" {
   }
   assert {
     condition = (
-      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 7 &&
+      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 10 &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Action == "s3:CreateBucket" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Resource == "arn:aws:s3:::hopcharlie-eks-*" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Condition == { StringEquals = { "s3:LocationConstraint" = "ap-northeast-2" } } &&
@@ -46,23 +46,32 @@ run "app_storage_contract" {
   }
   assert {
     condition = (
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Action) == toset(["iam:CreateUser", "iam:PutUserPolicy", "iam:DeleteUserPolicy"]) &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4].Condition == { StringEquals = { "iam:PermissionsBoundary" = "arn:aws:iam::123456789012:policy/hopcharlie-app-boundary" } } &&
-      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5].Action) == toset(["iam:TagUser", "iam:GetUser", "iam:DeleteUser", "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys"]) &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Action == "iam:GetUser" &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Resource == "arn:aws:iam::123456789012:user/hopcharlie-app-*" &&
-      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6].Condition)
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[7].Action) == toset(["iam:CreateUser", "iam:PutUserPolicy", "iam:DeleteUserPolicy"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[7].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[7].Condition == { StringEquals = { "iam:PermissionsBoundary" = "arn:aws:iam::123456789012:policy/hopcharlie-app-boundary" } } &&
+      toset(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[8].Action) == toset(["iam:TagUser", "iam:GetUser", "iam:DeleteUser", "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys"]) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[8].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Action == "iam:GetUser" &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Resource == "arn:aws:iam::123456789012:user/hopcharlie-app-*" &&
+      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Condition)
     )
     error_message = "The platform may create users and set their inline policy only under /hopcharlie-apps/ with the boundary, and may only read users by the path-less name pattern."
   }
   assert {
     condition = length(setintersection(
       toset(flatten([for st in jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement : st.Action])),
-      toset(["iam:AttachUserPolicy", "iam:PutUserPermissionsBoundary", "iam:DeleteUserPermissionsBoundary", "iam:UpdateUser", "iam:CreateLoginProfile", "iam:AddUserToGroup", "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:SetDefaultPolicyVersion", "iam:DeletePolicy", "s3:PutBucketPolicy", "s3:PutBucketAcl", "s3:PutBucketOwnershipControls", "s3:GetObject", "s3:PutObject"]),
+      toset(["iam:AttachUserPolicy", "iam:PutUserPermissionsBoundary", "iam:DeleteUserPermissionsBoundary", "iam:UpdateUser", "iam:CreateLoginProfile", "iam:AddUserToGroup", "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:SetDefaultPolicyVersion", "iam:DeletePolicy", "s3:PutBucketPolicy", "s3:PutBucketAcl", "s3:PutBucketOwnershipControls", "s3:PutObjectAcl"]),
     )) == 0
-    error_message = "The platform role must hold no escalation path (managed policies, boundary changes, logins, groups, policy edits), no bucket policy, ACL or ownership changes, and no GetObject or PutObject of its own."
+    error_message = "The platform role must hold no escalation path (managed policies, boundary changes, logins, groups, policy edits) and no bucket policy, ACL or ownership changes."
+  }
+  assert {
+    condition = (
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4] == { Effect = "Allow", Action = "s3:ListBucket", Resource = "arn:aws:s3:::hopcharlie-eks-*", Condition = { StringEquals = { "s3:ResourceAccount" = "123456789012" } } } &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5] == { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject"], Resource = "arn:aws:s3:::hopcharlie-eks-*/*", Condition = { StringEquals = { "s3:ResourceAccount" = "123456789012" } } } &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6] == { Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"], Resource = "arn:aws:s3:::hopcharlie-eks-*---pg/*" } &&
+      length([for st in jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement : st if st.Effect == "Allow" && contains(flatten([st.Action]), "s3:GetObject")]) == 1
+    )
+    error_message = "The platform may list, read and write objects of this account's hopcharlie-eks-* buckets for file moves (ADR 0064), never of the ---pg backup buckets."
   }
   assert {
     condition     = random_bytes.app_secrets_key.length == 32 && aws_ssm_parameter.app_secrets_key.name == "/hopcharlie/app-secrets-key" && aws_ssm_parameter.app_secrets_key.type == "SecureString"

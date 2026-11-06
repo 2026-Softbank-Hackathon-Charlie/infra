@@ -142,3 +142,58 @@ helper는 다른 내용의 기존 Role/RoleBinding을 인수하지 않는다. �
 파일 이전을 포함하면 catalog 반영 후 **새 Plan을 draft**하고 `files.source`/`files.target`가 방향에 맞게 EKS `s3:hopcharlie-eks-moimroom`, GKE `gcs:charlie-414068132732-moimroom-gcp`인지 확인한다. 기존 Plan의 파일 경로는 catalog 수정으로 자동 갱신되지 않는다. 실행 서버의 `s3`/`gcs` rclone remote 설정은 미확인이다. 별도 승인한 운영자가 실제 실행 서버에서 backend·계정·bucket 일치, 양쪽 목록·원본 읽기·대상 쓰기/삭제 권한과 대상 기존 파일의 삭제 영향을 검토하기 전에는 이전을 시작하지 않는다.
 
 이 PR의 로컬 렌더·mock tests는 경로·역할 설정의 계약만 검사한다. 실제 WAL 처리량, 복제 성공, 무손실 전환과 예산은 설치 후 시험 결과로 기록한다.
+
+## 6. 관리 EKS의 moimroom SQL 경로 전환 (#98)
+
+2026-11-06 실제 API Pod에서 기존 `moimroom-db-*-rw.moimroom.*.ts.net` 주소 두 개가 모두 `NXDOMAIN`/`bad address`였다. source 이름 수정은 SSM/API에 반영돼 있었으므로 이름만 다시 바꾸거나 기존 실패 실행을 재개해서 해결되지 않는다. [이슈 #98](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/98)은 아래 연결 설정 준비만 다룬다.
+
+| 환경 | CNPG Cluster | API가 사용할 local DB 주소 | 기존 peer Service에서 확인한 원격 ingress |
+|---|---|---|---|
+| GKE 원본 | `charlie-apps/moimroom-db-gke` | `db-gke.hopcharlie-db-network.svc.cluster.local` | `hop-db-gke-moimroom.tail567fe8.ts.net` |
+| EKS 대상 | `moimroom/moimroom-db` | `db-eks.hopcharlie-db-network.svc.cluster.local` | `hop-db-eks-moimroom.tail567fe8.ts.net` |
+
+[관리 프로필](../../helm/db-network/management.yaml)은 위 workload Service annotation에서 읽은 목적지이며 기본 비활성이다. management에서 일반 예제 대신 이 파일을 사용한다. 기존 ingress 장치가 재등록돼 이름이 달라졌으면 이 파일부터 검토·수정한다. 새 VM, API sidecar, workload DB 설정 변경은 포함하지 않는다.
+
+로컬에서 다음 명령은 렌더만 한다. 기본 프로필로는 0개, 명시적 활성화로는 ProxyClass 1개·Service 2개·NetworkPolicy 5개다.
+
+```powershell
+helm template db-network helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management.yaml
+helm template db-network helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management.yaml --set enabled=true
+```
+
+다음 실제 작업은 **별도 적용 승인 후** 진행한다. 이 PR을 만들었다는 이유로 실행하지 않는다.
+
+1. 관리 운영자 컨텍스트, namespace, 외부 `operator-oauth`, tag ownership·TCP5432 tailnet grant, Pod Security·노드 여유를 1~2절 기준으로 검토한다. 기존 allow-all을 두고 통신 격리가 됐다고 판단하지 않는다.
+2. 3절의 고정 operator를 설치하고 DB chart에는 `helm/db-network/management.yaml --set enabled=true`를 사용한다. operator와 두 proxy가 Ready인지, `db-gke`/`db-eks`의 `externalName`이 `placeholder`에서 실제 proxy Service로 바뀌었는지 확인한다. 이 수동 릴리스를 Argo에 등록하지 않는다.
+3. **기존 관리 API 실행 위치에서** 두 local 주소의 DNS, TCP5432, TLS·앱 SQL 계정 접속을 확인한다. workload 사이 복제나 로컬 port-forward 성공으로 대체하지 않는다. 실패하면 catalog 전환과 새 이전 실행을 보류한다. 인증서/Secret을 이슈·Git·로그에 남기지 않는다.
+4. catalog는 `terraform/platform/aws/host/apps.yaml`이 원본이다. 승인된 platform Terraform plan에서 `/hopcharlie/host/apps.yaml`의 의도한 주소 변경만 있는지 검토한 뒤 반영한다. SSM만 수동 수정하면 다음 apply가 Git 값으로 되돌린다. 이 단계에서 workload/strict apply를 함께 실행하지 않는다.
+5. allowlist는 활성 platform values의 `.ts.net,.hopcharlie-db-network.svc.cluster.local`을 사용한다. **이 값의 병합은 기존 Argo 자동 sync로 API 재시작을 일으킬 수 있으므로**, 병합과 동기화 시점을 위 준비 순서에 맞춰 별도로 승인한다. API는 시작 시 catalog를 읽으므로 SSM 반영 뒤 다시 시작하고, API의 실제 catalog와 새 Plan의 host·namespace·CNPG 이름을 대조한다. 이미 실패한 낡은 Plan을 재사용하지 않는다.
+6. 실제 이전 승인을 받은 뒤 4절의 세션별 `get/patch`를 원본·대상 한 개씩 부여하고 종료·실패·취소 뒤 회수한다. 상시 observer 권한은 확대하지 않는다.
+
+중단 시 새 Plan 실행을 막고 마지막으로 **통신이 검증된** 설정으로 돌아간다. 이전 경로가 없으면 실행을 보류하며, 카탈로그만 과거의 해석되지 않는 주소로 돌려 정상 복구라고 보고하지 않는다. 진행 중인 이전이 proxy를 사용하면 경로를 먼저 삭제하지 않는다. 운영 DB·PVC·토폴로지는 이 전환 작업으로 삭제하거나 바꾸지 않는다.
+
+## 7. 등록 앱의 관리 DB 경로를 플랫폼이 만들기 (ADR 0064)
+
+[ADR 0064](../adr/0064-platform-creates-management-app-db-routes.md). 6절의 `db-network` 릴리스(정적 `db-eks`, `db-gke`)는 그대로 두고, 별도 수동 릴리스 `app-db-routes`를 같은 namespace에 설치한다. 이 릴리스는 ProxyClass `hopcharlie-app-db-egress-management`, NetworkPolicy `platform-app-db-egress-proxy`, Role과 RoleBinding `hopcharlie-platform-app-db-routes`, VAP와 binding 두 쌍(`hopcharlie-platform-app-db-route-create`, `-delete`)만 만든다. Argo에 등록하지 않는다.
+
+다음은 **별도 적용 승인 후** 관리 EKS 컨텍스트에서 실행한다.
+
+```powershell
+helm template app-db-routes helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  --kube-version 1.35.0 -f helm/db-network/management-app-routes.yaml --set managementAppRoutes.enabled=true
+helm upgrade --install app-db-routes helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management-app-routes.yaml --set managementAppRoutes.enabled=true --wait --timeout 5m
+```
+
+확인한다. 두 번째 명령은 no, VAP 거부 시험 두 개는 모두 거부여야 한다.
+
+```powershell
+kubectl auth can-i create services -n hopcharlie-db-network --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl auth can-i create services -n default --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl delete service db-eks -n hopcharlie-db-network --dry-run=server --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl create service externalname db-eks-vaptest -n hopcharlie-db-network --external-name placeholder --tcp 5432:5432 --dry-run=server --as system:serviceaccount:charlie-platform:hopcharlie-platform
+```
+
+그 뒤 플랫폼 운영 값에 `api.appDbTopology.route`(`tail567fe8.ts.net`, `hopcharlie-app-db-egress-management`, `tag:hop-db-client-management`)를 별도 PR로 넣는다. 파일 이전(`api.appFiles.enabled`)은 `terraform/platform/aws`와 `terraform/integrations/gcp/platform-storage` apply 뒤에 켠다. 되돌릴 때는 플랫폼 값을 먼저 끄고, 플랫폼이 만든 Service를 지운 뒤(operator가 장치를 정리) `helm uninstall app-db-routes -n hopcharlie-db-network`를 한다.
