@@ -38,7 +38,20 @@ spec:
   # CNPG restarts a newly promoted primary with a smart shutdown that waits for
   # every client session up to this many seconds. The default 180 keeps the new
   # primary down for minutes after a migration (migration-engine ADR 0009).
+  {{- if $topo.cluster }}
+  # Paired databases (ADR 0063) use 1: the demoted primary restarts as a
+  # replica during the write hold, and 5 seconds of smart shutdown made the
+  # switchover about 4 seconds longer (migration-engine ADR 0013).
+  smartShutdownTimeout: 1
+  postgresql:
+    parameters:
+      # The new primary waits for the demoted one's shutdown checkpoint over
+      # streaming replication; after the old primary restarts, a replica
+      # retries the connection after this interval (PostgreSQL default 5s).
+      wal_retrieve_retry_interval: 1s
+  {{- else }}
   smartShutdownTimeout: 5
+  {{- end }}
   storage:
     {{- if $topo.cluster }}
     size: {{ $profile.topologyStorageSize | default $profile.storageSize | default "1Gi" }}
