@@ -25,3 +25,5 @@ compiled 파일에 종속되므로 원본 SHA·교체 횟수·문법이 일치�
 ## 관련 자료
 
 - [패치 및 원격 검증 준비](../../images/hyperdx-prometheus-auth/README.md)
+
+원격 검증 결과: CodeBuild42019641-7966-41f1-b967-30c2bb57a48b에서 patched17pass/0fail, 원본5pass/12fail을 확인했다. 로컬컨테이너실행 없이 원격 image build와 실제 compiled route를 검증했다. 게시·배포는 미실행이다.
