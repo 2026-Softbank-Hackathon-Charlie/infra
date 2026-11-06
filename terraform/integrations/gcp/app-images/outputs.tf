@@ -26,3 +26,11 @@ output "federation_config" {
     }
   }
 }
+output "image_scan_workload_identity_provider" {
+  description = "Platform repository variable GCP_IMAGE_SCAN_PROVIDER."
+  value       = google_iam_workload_identity_pool_provider.image_scan.name
+}
+output "image_scan_service_account" {
+  description = "Platform repository variable GCP_IMAGE_SCAN_SERVICE_ACCOUNT."
+  value       = google_service_account.image_scanner.email
+}

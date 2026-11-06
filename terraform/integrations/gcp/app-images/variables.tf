@@ -57,3 +57,28 @@ variable "service_account_id" {
     error_message = "Use a valid 6-30 character Google service account ID."
   }
 }
+variable "github_owner_id" {
+  type        = string
+  description = "Immutable numeric ID of the GitHub organization that owns the platform repository."
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "Use the immutable numeric owner ID."
+  }
+}
+variable "platform_repository_id" {
+  type        = string
+  description = "Immutable numeric ID of the platform repository whose scan-images workflow reads app images."
+  validation {
+    condition     = can(regex("^[0-9]+$", var.platform_repository_id))
+    error_message = "Use the immutable numeric repository ID."
+  }
+}
+variable "image_scan_extra_repositories" {
+  type        = list(string)
+  default     = ["charlie-apps"]
+  description = "Other Artifact Registry repositories in this project and region the image scanner may read."
+  validation {
+    condition     = alltrue([for r in var.image_scan_extra_repositories : can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", r))])
+    error_message = "Use exact repository IDs; wildcards are not allowed."
+  }
+}

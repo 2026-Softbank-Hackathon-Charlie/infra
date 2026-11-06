@@ -774,6 +774,7 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/app-images/.terraform.lock.hcl](terraform/integrations/gcp/app-images/.terraform.lock.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/backend.hcl.example](terraform/integrations/gcp/app-images/backend.hcl.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/main.tf](terraform/integrations/gcp/app-images/main.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/image-scan.tf](terraform/integrations/gcp/app-images/image-scan.tf) | 이미지 스캐너의 GitHub OIDC 신뢰와 AR 저장소 읽기 권한(ADR 0065) |
 | [terraform/integrations/gcp/app-images/outputs.tf](terraform/integrations/gcp/app-images/outputs.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/terraform.tfvars.example](terraform/integrations/gcp/app-images/terraform.tfvars.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
 | [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
@@ -924,6 +925,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 |---|---|
 | [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
