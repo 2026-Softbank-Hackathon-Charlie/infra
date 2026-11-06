@@ -53,3 +53,8 @@ output "app_permissions_boundary_arn" {
   description = "Permissions boundary of the IAM users the platform makes for app buckets; host/envs.yaml storage.permissionsBoundary must equal it."
   value       = aws_iam_policy.app_boundary.arn
 }
+
+output "image_scan_role_arn" {
+  description = "Platform repository variable AWS_IMAGE_SCAN_ROLE_ARN: the image scan workflow's ECR pull-only role"
+  value       = aws_iam_role.image_scan.arn
+}
