@@ -175,6 +175,10 @@ class DatabaseNetworkTests(unittest.TestCase):
                 'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}],
                 'ports': [{'protocol': 'TCP', 'port': 443}],
             })
+            # GKE NodeLocal DNSCache is hostNetwork: DNS must not depend on the kube-dns podSelector.
+            self.assertEqual(operator['egress'][2], {
+                'ports': [{'protocol': 'UDP', 'port': 53}, {'protocol': 'TCP', 'port': 53}],
+            })
 
     def test_proxy_policy_selects_exact_parent_and_supports_direct_and_derp(self):
         for cluster, docs in self.documents.items():
@@ -245,7 +249,7 @@ class DatabaseNetworkTests(unittest.TestCase):
                     'ports': postgres,
                 }, proxy['ingress'])
                 self.assertEqual(len(proxy['ingress']), 2)
-                self.assertEqual(len(proxy['egress']), 3)
+                self.assertEqual(len(proxy['egress']), 4)  # control (kube-dns, 443, any-DNS) + peer UDP
             if cluster != 'management':
                 shadow = f'{NAMESPACE}-{cluster}-ingress'
                 incoming = self.policy(cluster, shadow + '-proxy')
