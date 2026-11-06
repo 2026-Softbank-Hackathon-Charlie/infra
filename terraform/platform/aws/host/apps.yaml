@@ -8,7 +8,7 @@
 #     namespace     optional, the CNPG Cluster's namespace in this environment
 #                   when it is not the app's namespace (platform#68)
 #     cnpgCluster   CNPG Cluster resource name
-#     dbHost        host of the cluster's -rw service (over Tailscale)
+#     dbHost        SQL endpoint reachable from the management API
 #     dbPort        optional, default 5432
 #     passwordEnv   server environment variable with the database password; plans
 #                   refer to it as ${VAR}, only as the password of a DSN to this
@@ -17,11 +17,13 @@
 #                   it must be URL-safe (CNPG-generated passwords are)
 #     bucket        optional rclone remote:bucket of the app's files; files move
 #                   when both environments of a route have one
+# EKS/GKE use local DB proxy Services. Bring up the approved management profile
+# and verify both SQL paths before applying this catalog and restarting the API.
 apps:
   - name: moimroom
     namespace: moimroom
     database: {name: app, user: app, schemas: [app]}
     environments:
-      gke:    {namespace: charlie-apps, cnpgCluster: moimroom-db-gke, dbHost: moimroom-db-gke-rw.moimroom.gke.ts.net,       passwordEnv: GKE_MOIMROOM_PGPASSWORD,    bucket: "gcs:moimroom-photos-gke"}
-      eks:    {cnpgCluster: moimroom-db,        dbHost: moimroom-db-eks-rw.moimroom.eks.ts.net,       passwordEnv: EKS_MOIMROOM_PGPASSWORD,    bucket: "s3:moimroom-photos-eks"}
+      gke:    {namespace: charlie-apps, cnpgCluster: moimroom-db-gke, dbHost: db-gke.hopcharlie-db-network.svc.cluster.local, passwordEnv: GKE_MOIMROOM_PGPASSWORD,    bucket: "gcs:moimroom-photos-gke"}
+      eks:    {cnpgCluster: moimroom-db,        dbHost: db-eks.hopcharlie-db-network.svc.cluster.local, passwordEnv: EKS_MOIMROOM_PGPASSWORD,    bucket: "s3:moimroom-photos-eks"}
       onprem: {cnpgCluster: moimroom-db-onprem, dbHost: moimroom-db-onprem-rw.moimroom.onprem.ts.net, passwordEnv: ONPREM_MOIMROOM_PGPASSWORD, bucket: "minio:moimroom-photos"}
