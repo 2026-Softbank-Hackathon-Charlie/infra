@@ -34,7 +34,7 @@ HELM=/path/to/helm python3 scripts/render-observability-activation.py \
 | charlie-management-observability-gateway / charlie-workload-observability-gateway | Application |
 | charlie-management-observability-boundary / charlie-workload-observability-boundary | Application |
 
-이외 root 렌더18개는 제외한다. ClickStack operator·기존 관리 KPS·일반 addon·플랫폼·앱 ApplicationSet은 root 선택 반영 대상이 아니다.
+이외 root 렌더 자원은 모두 제외한다. ClickStack operator·기존 관리 KPS·일반 addon·플랫폼·앱 ApplicationSet은 root 선택 반영 대상이 아니다.
 
 ## 리소스별 적용 순서
 

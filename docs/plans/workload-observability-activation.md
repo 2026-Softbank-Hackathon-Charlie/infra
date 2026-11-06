@@ -112,7 +112,7 @@ Pending/attach/quota·TLS/auth·기존 앱/DB readiness·중앙 저장·namespac
 
 ## C1 구현 결과
 
-공유 기본 파일을 바꾸지 않고 root/ClickStack/baseline에 cluster 전용 override를 추가했다. root 자동 관측 모드에서 workload KPS Application만 manual로 유지해 RBAC/CRD 준비 전 자동 설치를 방지한다. API/apply 기능이 없는 renderer가 immutable SHA와 공개 target metadata를 검증하고 AppProject1+수동 Application8만 출력한다. 다른18개 root 자원은 제외한다. 최종 앱/Job flags는 off다.
+공유 기본 파일을 바꾸지 않고 root/ClickStack/baseline에 cluster 전용 override를 추가했다. root 자동 관측 모드에서 workload KPS Application만 manual로 유지해 RBAC/CRD 준비 전 자동 설치를 방지한다. API/apply 기능이 없는 renderer가 immutable SHA와 공개 target metadata를 검증하고 AppProject1+수동 Application8만 출력한다. 선택 외 root 자원은 제외한다. 최종 앱/Job flags는 off다.
 
 `make helm-check`(기존 ClickStack15+자동 관측10+CNPG/기존 addon 검사), inventory와 diff 검사를 통과했다. 별도 적용안에 선택 필드/리소스 순서/복구/합성 namespace·Pod/DB/PVC/fixture·cleanup 명세를 기록했다. 실제 SDK image digest는 모임룸8 머지/게시 후 채워야 하며 placeholder로 실행하지 않는다. 실제 Secret/credential 발급·조회·Argo/클러스터/NLB 변경은 없었다.
 
