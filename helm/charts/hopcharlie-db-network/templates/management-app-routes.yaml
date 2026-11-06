@@ -142,10 +142,10 @@ spec:
   validations:
     - expression: >-
         variables.managedBy == 'hopcharlie-platform' &&
-        object.metadata.name.matches('^db-(eks|gke)-[a-z][a-z0-9-]{0,40}$') &&
+        object.metadata.name.matches('^db-(eks|gke)-[a-z0-9][a-z0-9-]{0,40}$') &&
         variables.route in ['eks', 'gke'] &&
         object.metadata.name.startsWith('db-' + variables.route + '-') &&
-        variables.app.matches('^[a-z][a-z0-9-]{0,62}$')
+        variables.app.matches('^[a-z0-9][a-z0-9-]{0,62}$')
       message: an app DB route is named db-<eks|gke>-<instance> and labelled app.kubernetes.io/managed-by=hopcharlie-platform, hopcharlie.dev/db-route and hopcharlie.dev/app
     - expression: >-
         object.spec.type == 'ExternalName' &&
