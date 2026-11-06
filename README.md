@@ -882,6 +882,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
 - [docs/adr/0050-let-migrations-own-app-database-topology.md](docs/adr/0050-let-migrations-own-app-database-topology.md)
 - [docs/adr/0052-allow-db-network-dns-through-node-local-cache.md](docs/adr/0052-allow-db-network-dns-through-node-local-cache.md)
+- [docs/adr/0053-migrate-gke-moimroom-into-new-standby.md](docs/adr/0053-migrate-gke-moimroom-into-new-standby.md)
 - [docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md](docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md)
 - [docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md](docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
