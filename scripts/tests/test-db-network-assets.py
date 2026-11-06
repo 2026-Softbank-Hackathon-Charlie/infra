@@ -55,6 +55,62 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         for cluster in ('management', 'eks', 'gke'):
             self.assertEqual(policy['tagOwners']['tag:hop-db-client-' + cluster], ['tag:hop-db-operator-' + cluster])
 
+    def test_management_operational_profile_is_disabled_and_scoped(self):
+        profile = ASSETS / 'management.yaml'
+        self.assertTrue(profile.is_file(), 'management operational profile is missing')
+        values = yaml.safe_load(profile.read_text(encoding='utf-8'))
+        self.assertIs(values['enabled'], False)
+        self.assertEqual(values['clusterId'], 'management')
+        self.assertNotIn('localDatabase', values)
+        self.assertNotIn('ingress', values)
+        spec = importlib.util.spec_from_file_location('db_network_tests', ROOT / 'scripts/tests/test-db-network.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        disabled = module.DatabaseNetworkTests.render(values)
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertEqual(list(filter(None, yaml.safe_load_all(disabled.stdout))), [])
+        values['enabled'] = True
+        result = module.DatabaseNetworkTests.render(values)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        docs = [doc for doc in yaml.safe_load_all(result.stdout) if doc]
+        kinds = [doc['kind'] for doc in docs]
+        self.assertEqual(sorted(kinds), sorted(['ProxyClass'] + ['Service'] * 2 + ['NetworkPolicy'] * 5))
+        services = {doc['metadata']['name']: doc for doc in docs if doc['kind'] == 'Service'}
+        self.assertEqual(set(services), {'db-eks', 'db-gke'})
+        client_labels = {'app.kubernetes.io/part-of': 'hopcharlie', 'app.kubernetes.io/component': 'api'}
+        client_source = {
+            'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'charlie-platform'}},
+            'podSelector': {'matchLabels': client_labels},
+        }
+        policies = {doc['metadata']['name']: doc for doc in docs if doc['kind'] == 'NetworkPolicy'}
+        client = policies['hopcharlie-db-network-management-client']
+        self.assertEqual(client['metadata']['namespace'], 'charlie-platform')
+        self.assertEqual(client['spec']['podSelector'], {'matchLabels': client_labels})
+        destinations = []
+        for peer, service in services.items():
+            target = peer.removeprefix('db-')
+            self.assertEqual(service['metadata']['namespace'], NAMESPACE)
+            self.assertEqual(service['metadata']['annotations'], {
+                'tailscale.com/tailnet-fqdn': f'hop-db-{target}-moimroom.tail567fe8.ts.net',
+                'tailscale.com/hostname': f'hop-db-management-to-{target}',
+                'tailscale.com/tags': 'tag:hop-db-client-management',
+                'tailscale.com/proxy-class': f'{NAMESPACE}-management',
+            })
+            proxy_labels = module.proxy_labels(peer, NAMESPACE)
+            proxy = policies[peer + '-proxy']
+            self.assertEqual(proxy['metadata']['namespace'], NAMESPACE)
+            self.assertEqual(proxy['spec']['podSelector'], {'matchLabels': proxy_labels})
+            self.assertEqual(proxy['spec']['ingress'][0], {
+                'from': [client_source], 'ports': [{'protocol': 'TCP', 'port': 5432}],
+            })
+            destinations.append({
+                'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}},
+                'podSelector': {'matchLabels': proxy_labels},
+            })
+        self.assertEqual(client['spec']['egress'], [{
+            'to': destinations, 'ports': [{'protocol': 'TCP', 'port': 5432}],
+        }])
+
     def test_operator_namespace_is_protected_from_app_deployment(self):
         apps = yaml.safe_load((ROOT / 'helm/charts/hopcharlie-apps/values.yaml').read_text(encoding='utf-8'))
         access = yaml.safe_load((ROOT / 'helm/charts/gcp-argocd-access/values.yaml').read_text(encoding='utf-8'))
