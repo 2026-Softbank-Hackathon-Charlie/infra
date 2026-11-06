@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 export STACK AWS_ACCOUNT_ID
 PYTHON ?= python3
-.PHONY: clickstack-check config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward
+.PHONY: clickstack-check config-check tf-verify help check tf-fmt tf-fmt-check tf-check tf-test tf-init tf-plan tf-apply helm-check ci-test inventory-check aws-tunnel argo-port-forward render-gke-moimroom
 help:
 	@echo 'make check                          정적 검사·mock test·Helm render'
 	@echo 'make clickstack-check               ClickStack·operator·수집 계약 검사 (클러스터 접근 없음)'
@@ -10,6 +10,10 @@ help:
 	@echo 'make tf-plan / tf-apply STACK=... AWS_ACCOUNT_ID=...'
 	@echo 'make aws-tunnel [CLUSTER=management|workload]  AWS SSM 터널 (foreground)'
 	@echo 'make argo-port-forward                Argo CD → https://localhost:8080'
+	@echo 'make render-gke-moimroom MOIMROOM_CHART=...  GKE 기존 앱 Deployment만 출력 (클러스터 접근 없음)'
+render-gke-moimroom:
+	@$(if $(strip $(MOIMROOM_CHART)),,$(error MOIMROOM_CHART must point to the moimroom deploy/helm/moimroom chart))
+	@helm template moimroom-gcp "$(MOIMROOM_CHART)" --namespace charlie-apps --show-only templates/deployment.yaml -f clusters/gcp-dev-workload/values/moimroom-gcp.yaml
 aws-tunnel argo-port-forward: export CLUSTER ?= management
 aws-tunnel argo-port-forward: export AWS_PROFILE ?=
 aws-tunnel argo-port-forward: export EKS_LOCAL_PORT ?=
@@ -54,6 +58,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-headlamp-google-config.py
 	@$(PYTHON) scripts/tests/test-argocd-gcp.py
 	@$(PYTHON) scripts/tests/test-app-routing.py
+	@$(PYTHON) scripts/tests/test-gke-moimroom.py
 	@$(PYTHON) scripts/tests/test-register-traefik.py
 	@$(PYTHON) scripts/tests/test-db-network.py
 	@$(PYTHON) scripts/tests/test-db-network-assets.py
