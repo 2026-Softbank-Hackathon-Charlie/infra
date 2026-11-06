@@ -108,6 +108,18 @@ spec:
             - {name: PLATFORM_CORS_ORIGINS, value: {{ .Values.api.corsOrigins | quote }}}
             - {name: PLATFORM_DSN_HOST_SUFFIXES, value: {{ .Values.api.dsnHostSuffixes | quote }}}
             - {name: PLATFORM_AWS_REGION, value: {{ .Values.awsRegion | quote }}}
+            {{- with .Values.api.appDbTopology }}
+            {{- if .enabled }}
+            # Apps registered in two environments get born-paired databases (infra ADR 0063).
+            # Turn on only after the workload db-network, access and dbNetwork profile steps.
+            - {name: PLATFORM_APP_DB_TOPOLOGY, value: "1"}
+            {{- end }}
+            {{- with .hostTemplates }}
+            # <env>=<management DB host with {instance}>,...; the hosts must also match
+            # PLATFORM_DSN_HOST_SUFFIXES (.hopcharlie-db-network.svc.cluster.local, infra #99).
+            - {name: PLATFORM_APP_DB_HOST_TEMPLATES, value: {{ . | quote }}}
+            {{- end }}
+            {{- end }}
             {{- if .Values.hopai.enabled }}
             # POST /v1/ai-runs starts the AI runner from this Job template (hopai.yaml).
             - {name: PLATFORM_AIRUN_JOB_TEMPLATE, value: /etc/hopai/job.yaml}

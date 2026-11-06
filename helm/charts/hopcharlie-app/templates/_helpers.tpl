@@ -175,6 +175,11 @@ public service, and no env name that is also a sealed app secret.
 {{- fail (printf "values.dbTopology: Service %s is also an app service's Service" .) -}}
 {{- end -}}
 {{- end -}}
+{{- range list $topo.ingressHost $topo.egressHost $topo.peerHost -}}
+{{- if gt (len .) 63 -}}
+{{- fail (printf "values.dbTopology: Tailscale hostname %s is longer than 63 characters" .) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -192,8 +197,10 @@ platform, which builds the same names for the migration engine:
   egressService    <cluster>-to-<other env>, the peer's database through the
                    tailnet host hop-db-<env>-<instance>-to-<other env>
 
-other is the environment of the file that is not env: peer, or primary when
-this file is the born replica. Fails on values the platform must not write.
+other is the environment of the file that is not env. The platform writes peer
+as the environment born a replica, the same value in both files; a peer that
+is the other environment seen from this file is accepted too. Fails on values
+the platform must not write.
 */}}
 {{- define "hopcharlie-app.dbTopology" -}}
 {{- $t := .Values.values.dbTopology -}}

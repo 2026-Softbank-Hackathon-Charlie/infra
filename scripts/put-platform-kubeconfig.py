@@ -44,7 +44,8 @@ FIELD_MANAGER = 'put-platform-kubeconfig'
 # What the platform's token must and must not be allowed to do (ADR 0036).
 # CNPG Cluster get and patch are for migrations (ADR 0063); RBAC allows patch
 # everywhere and the manifest's ValidatingAdmissionPolicy, which can-i does
-# not see, keeps it to spec.replica in labelled namespaces.
+# not see, keeps it to spec.replica in labelled namespaces or Clusters with
+# a db-migration-access.py session (verb migrate, never standing).
 ALLOWED = [['get', 'services', '-n', 'default'], ['list', 'services', '-A'], ['list', 'nodes'],
            ['list', 'pods', '-A'], ['list', 'networkpolicies.networking.k8s.io', '-A'],
            ['list', 'clusterrolebindings.rbac.authorization.k8s.io'],
@@ -54,7 +55,8 @@ DENIED = [['get', 'secrets', '-n', NAMESPACE], ['list', 'secrets', '-A'], ['list
           ['patch', 'services', '-n', 'default'], ['create', 'deployments', '-n', 'default'],
           ['create', 'clusters.postgresql.cnpg.io', '-A'], ['delete', 'clusters.postgresql.cnpg.io', '-A'],
           ['patch', 'clusters.postgresql.cnpg.io', '-A', '--subresource=status'],
-          ['patch', 'objectstores.barmancloud.cnpg.io', '-A'], ['delete', 'namespaces']]
+          ['patch', 'objectstores.barmancloud.cnpg.io', '-A'], ['delete', 'namespaces'],
+          ['migrate', 'clusters.postgresql.cnpg.io', '-A']]
 
 
 class Refused(Exception):

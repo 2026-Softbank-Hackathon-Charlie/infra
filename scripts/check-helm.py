@@ -355,6 +355,17 @@ def main():
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        # Born-paired app databases (ADR 0063) stay off until the rollout steps; the
+        # values only render the platform's two settings when set.
+        assert "PLATFORM_APP_DB_TOPOLOGY" not in env and "PLATFORM_APP_DB_HOST_TEMPLATES" not in env, env
+        topo_values = work / "platform-app-db-topology.json"
+        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+        topo_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": True, "hostTemplates": hosts}}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(topo_values)))
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        topo_env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert topo_env["PLATFORM_APP_DB_TOPOLOGY"] == "1" and topo_env["PLATFORM_APP_DB_HOST_TEMPLATES"] == hosts, topo_env
+        assert topo_env["PLATFORM_DSN_HOST_SUFFIXES"] == env["PLATFORM_DSN_HOST_SUFFIXES"]
         two = work / "platform-two-templates.json"
         two.write_text(json.dumps({"deploy": {"backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,gke=https://{app}-{service}.{instance}.gke.test:{port}/?env={env}"}}))
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(two)))
@@ -582,7 +593,7 @@ def main():
         pg_app = {k: "AgBwZy1hcHAK" for k in ("username", "password", "dbname", "host", "port", "uri", "jdbc-uri")}
         pg_ca = {"ca.crt": "AgBjYS1jcnQK", "ca.key": "AgBjYS1rZXkK"}
         topo_files = {}
-        for env, peer in (("gke", "eks"), ("eks", "gke")):
+        for env, peer in (("gke", "eks"), ("eks", "eks")):  # peer: the env born a replica
             topo = copy.deepcopy(stateful)
             topo.pop("profile")
             topo["env"] = env

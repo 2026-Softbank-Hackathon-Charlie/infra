@@ -40,13 +40,13 @@
 values:
   dbTopology:
     primary: gke   # 태어날 때 primary인 환경
-    peer: eks      # 파일의 env에서 본 다른 환경
+    peer: eks      # replica로 태어나는 환경. 두 파일에 같은 값
   sealedSecrets:
     pgApp: {username, password, dbname, host, port, uri, jdbc-uri}   # 봉인값
     pgCA: {ca.crt, ca.key}                                           # 봉인값
 ```
 
-- `other`는 파일의 env가 아닌 쪽이다(`env == primary`면 `peer`, 아니면 `primary`). 차트는 `peer`가 `other` 또는 env이고 `other`가 env와 다를 때만 그린다.
+- `other`는 파일의 env가 아닌 쪽이다(`env == primary`면 `peer`, 아니면 `primary`). 플랫폼은 `peer`를 replica로 태어나는 환경으로 두 파일에 같게 쓴다. 차트는 `peer`가 `other` 또는 env이고 `other`가 env와 다를 때만 그린다. Service 이름과 Tailscale 호스트 이름이 63자를 넘으면 렌더링을 실패시킨다.
 - primary 쪽은 `bootstrap.initdb`, 다른 쪽은 `bootstrap.pg_basebackup`(source `<cluster>-<primary>`)로 태어난다. 둘 다 앱 계정 Secret `<cluster>-app`(봉인, `kubernetes.io/basic-auth`)을 쓰므로 CNPG가 app Secret을 만들지 않고 서비스의 DB 변수는 그대로다.
 - `certificates.serverCASecret`과 `clientCASecret`은 둘 다 `app-pg-ca`다. 두 DB가 같은 CA를 쓰므로 각자의 `-replication` 인증서가 상대에서도 통과하고, 클러스터 사이에 Secret을 복사하지 않는다. `serverAltDNSNames`는 상대가 부르는 `<cluster>-to-<env>.<ns>.svc[.cluster.local]`이다.
 - `replica`는 `self: <cluster>-<env>`, `primary: <cluster>-<primary>`, `source: <cluster>-<other>`이다. `externalClusters`는 자기(`<cluster>-rw`)와 상대(`<cluster>-to-<other>.<ns>.svc.cluster.local`)이고 둘 다 `sslmode: verify-full`이다.
@@ -72,10 +72,12 @@ values:
 워크로드마다 `hopcharlie-platform-access.yaml`에 다음을 더한다.
 
 - ClusterRole `hopcharlie-platform-migration`: `postgresql.cnpg.io` `clusters`의 `get`, `patch`. ClusterRoleBinding으로 `charlie-system/hopcharlie-platform`에 묶는다.
-- ValidatingAdmissionPolicy `hopcharlie-platform-migration`(Binding은 `Deny`): 이 계정의 Cluster UPDATE는 네임스페이스에 `hopcharlie.dev/db-topology=true`가 있을 때만, `spec`에서는 `replica`만, `replica`에서는 `primary`와 `promotionToken`만 바뀔 때, 레이블과 어노테이션이 그대로일 때만 통과한다. 엔진의 patch(`SetPrimary`, merge patch로 이 두 필드)만 들어간다.
+- ValidatingAdmissionPolicy `hopcharlie-platform-migration`(Binding은 `Deny`): 이 계정의 Cluster UPDATE는 두 조건을 모두 만족해야 통과한다.
+  - 범위: 네임스페이스에 `hopcharlie.dev/db-topology=true`가 있거나, 이 계정이 그 Cluster에 사용자 정의 verb `migrate` 권한을 가진다(VAP의 `authorizer` 변수로 확인한다).
+  - 필드: `spec`에서는 `replica`만, `replica`에서는 `primary`와 `promotionToken`만 바뀌고, 레이블과 어노테이션은 그대로다. 엔진의 patch(`SetPrimary`, merge patch로 이 두 필드)만 들어간다.
 - `get`은 VAP가 막을 수 없어 클러스터 전체다. Cluster spec에는 비밀값이 없고 이 계정은 이미 모든 Cluster를 `list`할 수 있다.
 
-ADR 0048, 0060과의 관계: 운영 moimroom(EKS `moimroom`, GKE `charlie-apps`)은 레이블이 없으므로 이 권한으로 patch할 수 없다. 운영 DB 이전은 지금처럼 `scripts/db-migration-access.py`의 임시 Role로 한다. 이 ADR은 새로 등록한 두 환경 앱에만 상시 권한을 준다. 범위는 레이블이 붙은 네임스페이스의 `spec.replica.primary`와 `promotionToken`이다.
+ADR 0048, 0060과의 관계: VAP는 RBAC 뒤에 돌기 때문에, 레이블 조건만 두면 `db-migration-access.py`의 임시 Role이 있어도 운영 DB patch가 거부된다. 그래서 helper가 만드는 Role에 `get`, `patch`와 함께 `migrate`를 넣는다. 운영 moimroom(EKS `moimroom`, GKE `charlie-apps`)은 레이블이 없으므로 helper 세션이 있는 동안에만 patch할 수 있고, 회수하면 다시 거부된다. ADR 0060의 "운영 DB에 상시 쓰기 권한 없음"은 그대로다. 예전 helper로 만든 `get`, `patch` 세션은 `revoke`로 지울 수 있고, 다시 `grant`하면 새 세션을 만든다. 상시 토큰에 `migrate`가 없다는 것은 `put-platform-kubeconfig.py`의 can-i 확인에 넣었다.
 
 ### 남는 수동 작업
 
@@ -90,12 +92,13 @@ ADR 0048, 0060과의 관계: 운영 moimroom(EKS `moimroom`, GKE `charlie-apps`)
   - VAP가 spec 전체를 비교하므로 CNPG 기본값 웹훅이 UPDATE 때 다른 필드를 바꾸면 엔진의 patch가 거부된다. 저장된 객체는 이미 기본값을 거쳤으므로 보통은 같다. 이전 중 승격 patch가 거부되면 두 DB가 모두 replica로 남는다. live 시험에서 확인한다.
   - 두 Application이 같은 커밋으로 sync되면 replica의 pg_basebackup이 primary와 프록시보다 먼저 시도해 실패할 수 있다. CNPG Job 재시도 한도는 live에서 잰다.
   - Tailscale operator가 멈추면 Service 파이널라이저 때문에 앱 삭제가 끝나지 않는다.
-- 필요한 후속 작업 및 검증:
-  1. 이 PR 병합(CI가 기존 앱 렌더가 같은지, 토폴로지 렌더와 거부 경우를 검사한다).
-  2. 두 워크로드에 `platformApps.enabled=true`로 db-network 업그레이드, ProxyClass `ProxyClassValid` 확인, 접근 매니페스트 적용(PR 본문의 명령).
-  3. 프로필 `dbNetwork.enabled: true` PR.
-  4. platform의 `PLATFORM_APP_DB_TOPOLOGY`를 켜고 moimroom-mig를 다시 등록해 `pg_is_in_recovery`, streaming, `kubectl auth can-i`, VAP 거부를 확인한다.
-  5. 관리 프로필의 앱별 peer 두 항목(#99 이후).
+- 필요한 후속 작업 및 검증(순서대로):
+  1. 두 워크로드에 `platformApps.enabled=true`로 db-network 업그레이드, ProxyClass Ready 확인.
+  2. 접근 매니페스트 적용과 서버 dry-run 확인(PR 본문의 명령).
+  3. 프로필 `dbNetwork.enabled: true` PR 병합과 sync.
+  4. platform 값 PR: `hopcharlie-platform` 차트의 `api.appDbTopology.enabled`, `hostTemplates`(이 PR에서 값만 만들고 끈 상태). 관리 경로의 DSN 호스트가 `PLATFORM_DSN_HOST_SUFFIXES`에 맞아야 하며 이 값은 #99가 바꾼다.
+  5. 그 뒤에만 moimroom-mig를 다시 등록해 `pg_is_in_recovery`, streaming, VAP 거부를 확인한다.
+  6. #99 이후 김동윤 님이 관리 프로필에 `eks-moimroom-mig`, `gke-moimroom-mig` peer를 더한다.
 
 ## 관련 자료
 

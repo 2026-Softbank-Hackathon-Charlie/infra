@@ -92,10 +92,13 @@ subjects:
 # engine reads the CNPG Cluster (precheck) and merge-patches its
 # spec.replica.primary and promotionToken (demote, promote). RBAC cannot name
 # the namespaces of apps registered later, so the role covers every Cluster
-# and the ValidatingAdmissionPolicy below narrows patch: only in a namespace
-# the app chart labelled hopcharlie.dev/db-topology=true, and only those two
-# fields. RBAC cannot narrow get that way; a Cluster has no secret values, and
-# the token already lists every Cluster.
+# and the ValidatingAdmissionPolicy below narrows patch to those two fields,
+# and to a namespace the app chart labelled hopcharlie.dev/db-topology=true or
+# a Cluster on which the platform holds the custom verb migrate. Only
+# scripts/db-migration-access.py grants migrate, for one Cluster at a time
+# (ADR 0048, 0060), so production databases keep no standing write access.
+# RBAC cannot narrow get that way; a Cluster has no secret values, and the
+# token already lists every Cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -119,7 +122,7 @@ subjects:
     namespace: charlie-system
 ---
 # Production databases (moimroom, charlie-apps) have no such label: there the
-# platform still needs scripts/db-migration-access.py (ADR 0048, 0060).
+# platform can patch only during a db-migration-access.py session.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -137,10 +140,11 @@ spec:
       expression: request.userInfo.username == 'system:serviceaccount:charlie-system:hopcharlie-platform'
   validations:
     - expression: >-
-        has(namespaceObject.metadata.labels) &&
+        (has(namespaceObject.metadata.labels) &&
         'hopcharlie.dev/db-topology' in namespaceObject.metadata.labels &&
-        namespaceObject.metadata.labels['hopcharlie.dev/db-topology'] == 'true'
-      message: the platform may change only Clusters in namespaces labelled hopcharlie.dev/db-topology=true
+        namespaceObject.metadata.labels['hopcharlie.dev/db-topology'] == 'true') ||
+        authorizer.group('postgresql.cnpg.io').resource('clusters').namespace(request.namespace).name(request.name).check('migrate').allowed()
+      message: the platform may change a Cluster only in a namespace labelled hopcharlie.dev/db-topology=true or during a db-migration-access session (verb migrate)
     - expression: >-
         object.spec.all(k, k == 'replica' || (k in oldObject.spec && object.spec[k] == oldObject.spec[k])) &&
         oldObject.spec.all(k, k == 'replica' || k in object.spec)
