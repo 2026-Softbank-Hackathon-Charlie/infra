@@ -984,3 +984,5 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
 - [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
 - [docs/adr/0068-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0068-patch-hyperdx-prometheus-basic-auth.md)
+
+- [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
