@@ -79,11 +79,17 @@ class AutomaticObservability(unittest.TestCase):
             with self.assertRaises(ValueError): render('hopcharlie-app',v)
         v=self.app();v['values']['services'][0].setdefault('env',{})['OTEL_EXPORTER_OTLP_HEADERS']='must-not-render'
         with self.assertRaises(ValueError): render('hopcharlie-app',v)
-    def test_all_activation_gates_off(self):
+    def test_only_eks_application_and_job_enrollment_enabled(self):
         self.assertFalse(load('helm/gitops/values.yaml')['observability']['automatic']['enabled'])
-        for environment in load('clusters/aws-dev-management/values/hopcharlie-apps.yaml')['environments'].values():
-            self.assertFalse(environment['profile']['observability']['enabled'])
-        self.assertFalse(load('clusters/aws-dev-management/values/hopcharlie-platform.yaml')['observability']['automaticJobs'])
+        environments=load('clusters/aws-dev-management/values/hopcharlie-apps.yaml')['environments']
+        eks=environments['eks']['profile']['observability']
+        self.assertTrue(eks['enabled'])
+        self.assertTrue(eks['metricsEnabled'])
+        self.assertEqual(eks['clusterName'],'charlie-dev-workload')
+        self.assertEqual(eks['endpoint'],'https://observability-gateway.observability.svc:443')
+        self.assertIn('-----BEGIN CERTIFICATE-----',eks['caBundle'])
+        self.assertFalse(environments['gke']['profile']['observability']['enabled'])
+        self.assertTrue(load('clusters/aws-dev-management/values/hopcharlie-platform.yaml')['observability']['automaticJobs'])
         for purpose in ('management','workload'):
             self.assertFalse(load(f'clusters/aws-dev-{purpose}/values/baseline.yaml')['networkPolicy']['isolateObservabilityGateway'])
     def test_platform_job_enrollment_and_retention(self):
@@ -139,7 +145,9 @@ class AutomaticObservability(unittest.TestCase):
         cr=of(prom,'Prometheus')[0];self.assertEqual(cr['spec']['podMonitorNamespaceSelector']['matchLabels']['observability.hopcharlie.dev/enabled'],'true')
         args=of(prom,'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
         self.assertIn('--watch-referenced-objects-in-all-namespaces=false',args)
+        self.assertFalse(any(a.startswith('--kubelet-service=') for a in args))
         self.assertIn('--prometheus-instance-namespaces=observability',args)
+        self.assertIn('--alertmanager-config-namespaces=observability',args)
         operator=of(prom,'Deployment')[0]['spec']['template']['spec']
         self.assertFalse([v for v in (operator.get('volumes') or []) if v.get('secret',{}).get('secretName')=='monitoring-admission'])
         container=operator['containers'][0]

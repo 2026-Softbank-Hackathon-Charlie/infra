@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """AWS 기본 chart를 임시 디렉터리에서 lint/render하고 GitOps·이미지 계약을 검사합니다."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -537,6 +538,8 @@ def main():
                 for doc in (d for d in docs if d["kind"] == "Deployment"):
                     pod = doc["spec"]["template"]
                     expected = {"hopcharlie.dev/secrets-checksum": sealed_values["appChecksum"]} if "app" in sealed_values else None
+                    if profile.get("observability", {}).get("enabled"):
+                        expected = {**(expected or {}), "checksum/observability-ca": hashlib.sha256(profile["observability"]["caBundle"].encode()).hexdigest()}
                     assert pod["metadata"].get("annotations") == expected, pod["metadata"]
                     for container in pod["spec"]["containers"]:
                         assert container.get("envFrom") == ([{"secretRef": {"name": "app-secrets"}}] if "app" in sealed_values else None), container.get("envFrom")

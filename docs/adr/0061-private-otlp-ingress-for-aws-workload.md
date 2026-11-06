@@ -1,7 +1,7 @@
 # 0061. AWS workload 관측은 전용 사설 전송·조회 경로로 연결한다
 
 - 날짜: 2026-11-06
-- 상태: 채택 — v3 개발 계획 승인; 코드 준비 B에 적용, 실제 배포 C 미승인
+- 상태: 채택 — C2 사설 backend·agent 배포 및 합성 저장 검증 완료; HyperDX 원격 Prometheus 인증 전달 미완료
 - 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md), [0062 자동 연결](0062-automatically-observe-platform-workloads.md)
 
 ## 배경과 제약
@@ -38,4 +38,7 @@
 - [NGINX BasicAuth](https://docs.nginx.com/nginx/admin-guide/security-controls/configuring-http-basic-authentication/)
 - [기존 ClickStack](../../helm/charts/clickstack/), [workload gateway](../../clusters/aws-dev-workload/values/otel-gateway.yaml)
 
-구현 및 로컬 검증 결과와 실행 전 관문은 [자동 관측 운영 안내](../operations/automatic-workload-observability.md)에 기록한다. 새 CI를 추가하지 않았으며 모든 기존 환경의 activation을 off로 유지한다.
+C1 준비 시점의 구현·검증 결과와 실행 전 관문은 [자동 관측 운영 안내](../operations/automatic-workload-observability.md)에 기록했다. 당시 모든 기존 환경의 activation은 off였으며, 이후 C2 결과와 최종 활성화 PR 상태는 아래 최신 적용 기록을 따른다. 새 CI는 추가하지 않았다.
+
+
+2026-11-06 적용 상태: [C2 결과·최종 활성화 관문](../operations/workload-observability-activation.md#c2-배포-결과와-최종-활성화-pr-2026-11-06)을 따른다. 기존 결정을 구현하며 새 아키텍처나 권한 확대는 채택하지 않았다.

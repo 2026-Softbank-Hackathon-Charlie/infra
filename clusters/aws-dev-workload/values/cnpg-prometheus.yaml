@@ -132,7 +132,13 @@
     ],
     "tls": {
       "enabled": false
-    }
+    },
+    "kubeletService": {
+      "enabled": false
+    },
+    "alertmanagerConfigNamespaces": [
+      "observability"
+    ]
   },
   "kubelet": {
     "enabled": false
