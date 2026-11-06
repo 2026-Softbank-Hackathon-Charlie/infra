@@ -8,7 +8,9 @@ def aws(*args,allow_not_found=False):
     p=subprocess.run(['aws','--region',REGION,*args,'--output','json'],capture_output=True,text=True,check=False)
     if p.returncode:
         if allow_not_found and ('RepositoryNotFoundException' in p.stderr or 'ImageNotFoundException' in p.stderr):return None
-        raise RuntimeError('Registry request failed; response suppressed')
+        import re
+        code=re.search(r'An error occurred \(([^)]+)\)',p.stderr)
+        raise RuntimeError('Registry '+args[0]+' '+args[1]+' failed ('+(code.group(1) if code else 'unknown')+'); response suppressed')
     return json.loads(p.stdout)
 def publish(source_sha):
     import re
@@ -21,7 +23,7 @@ def publish(source_sha):
     repo=repository['repositories'][0]
     if repo['repositoryUri']!=f'{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com/{REPOSITORY}' or repo['imageTagMutability']!='IMMUTABLE':raise RuntimeError('Unexpected registry configuration')
     tag='2.39.1-prom-auth-'+source_sha[:12]
-    if aws('ecr','describe-images','--repository-name',REPOSITORY,'--image-ids','imageTag='+tag,allow_not_found=True):raise RuntimeError('Immutable image tag already exists; refusing overwrite')
+    if aws('ecr','batch-get-image','--repository-name',REPOSITORY,'--image-ids','imageTag='+tag).get('images'):raise RuntimeError('Immutable image tag already exists; refusing overwrite')
     registry=f'{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com';uri=repo['repositoryUri']+':'+tag
     docker_config=tempfile.mkdtemp(prefix='hyperdx-registry-');env={**os.environ,'DOCKER_CONFIG':docker_config}
     try:
@@ -31,7 +33,7 @@ def publish(source_sha):
         subprocess.run(['docker','tag','hyperdx-prometheus-auth:verified',uri],check=True,env=env)
         subprocess.run(['docker','push',uri],check=True,env=env)
     finally:shutil.rmtree(docker_config)
-    image=aws('ecr','describe-images','--repository-name',REPOSITORY,'--image-ids','imageTag='+tag)['imageDetails'][0]
+    image=aws('ecr','batch-get-image','--repository-name',REPOSITORY,'--image-ids','imageTag='+tag)['images'][0]['imageId']
     print(json.dumps({'sourceSha':source_sha,'image':repo['repositoryUri']+'@'+image['imageDigest'],'tag':tag}))
 if __name__=='__main__':
     import sys
