@@ -45,7 +45,7 @@
     "quay.io/jetstack/cert-manager-acmesolver:v1.21.3": "sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7",
     "docker.io/grafana/alloy:v1.21.3": "sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
     "docker.io/nginxinc/nginx-unprivileged:stable-alpine": "sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:b917180": "sha256:2a80b68ca10385f6e4de679ae881050fad2e4931d02a5625ce9adb9a00b753a2",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:99ac7e7": "sha256:5663413895f0b50790faa84233896248ac9bde07c1fab2d54751451b3e18cbb6"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:99ac7e7": "sha256:5663413895f0b50790faa84233896248ac9bde07c1fab2d54751451b3e18cbb6",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:c3ca89a": "sha256:898c9ca39b3b055d7e712a84c0c071377576c880121611e2080191dd24df5274"
   }
 }
