@@ -73,7 +73,7 @@
           ]
         },
         "dbNetwork": {
-          "enabled": false,
+          "enabled": true,
           "tailnetDomain": "tail567fe8.ts.net",
           "ingressTag": "tag:hop-db-eks",
           "egressTag": "tag:hop-db-client-eks",
@@ -158,7 +158,7 @@
           ]
         },
         "dbNetwork": {
-          "enabled": false,
+          "enabled": true,
           "tailnetDomain": "tail567fe8.ts.net",
           "ingressTag": "tag:hop-db-gke",
           "egressTag": "tag:hop-db-client-gke",
