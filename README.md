@@ -975,3 +975,12 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)
 
 - [helm/charts/observability-boundary/templates/_helpers.tpl](helm/charts/observability-boundary/templates/_helpers.tpl) — query 설정과 Pod checksum 공유
+
+### HyperDX Prometheus 인증 수정 준비
+
+- [images/hyperdx-prometheus-auth/Dockerfile](images/hyperdx-prometheus-auth/Dockerfile)
+- [images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs](images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs)
+- [images/hyperdx-prometheus-auth/render-buildspec.py](images/hyperdx-prometheus-auth/render-buildspec.py)
+- [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
+- [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
+- [docs/adr/0068-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0068-patch-hyperdx-prometheus-basic-auth.md)
