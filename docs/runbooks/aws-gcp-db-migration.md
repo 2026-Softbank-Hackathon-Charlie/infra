@@ -173,3 +173,27 @@ helm template db-network helm/charts/hopcharlie-db-network --namespace hopcharli
 6. 실제 이전 승인을 받은 뒤 4절의 세션별 `get/patch`를 원본·대상 한 개씩 부여하고 종료·실패·취소 뒤 회수한다. 상시 observer 권한은 확대하지 않는다.
 
 중단 시 새 Plan 실행을 막고 마지막으로 **통신이 검증된** 설정으로 돌아간다. 이전 경로가 없으면 실행을 보류하며, 카탈로그만 과거의 해석되지 않는 주소로 돌려 정상 복구라고 보고하지 않는다. 진행 중인 이전이 proxy를 사용하면 경로를 먼저 삭제하지 않는다. 운영 DB·PVC·토폴로지는 이 전환 작업으로 삭제하거나 바꾸지 않는다.
+
+## 7. 등록 앱의 관리 DB 경로를 플랫폼이 만들기 (ADR 0064)
+
+[ADR 0064](../adr/0064-platform-creates-management-app-db-routes.md). 6절의 `db-network` 릴리스(정적 `db-eks`, `db-gke`)는 그대로 두고, 별도 수동 릴리스 `app-db-routes`를 같은 namespace에 설치한다. 이 릴리스는 ProxyClass `hopcharlie-app-db-egress-management`, NetworkPolicy `platform-app-db-egress-proxy`, Role과 RoleBinding `hopcharlie-platform-app-db-routes`, VAP와 binding 두 쌍(`hopcharlie-platform-app-db-route-create`, `-delete`)만 만든다. Argo에 등록하지 않는다.
+
+다음은 **별도 적용 승인 후** 관리 EKS 컨텍스트에서 실행한다.
+
+```powershell
+helm template app-db-routes helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  --kube-version 1.35.0 -f helm/db-network/management-app-routes.yaml --set managementAppRoutes.enabled=true
+helm upgrade --install app-db-routes helm/charts/hopcharlie-db-network --namespace hopcharlie-db-network `
+  -f helm/db-network/management-app-routes.yaml --set managementAppRoutes.enabled=true --wait --timeout 5m
+```
+
+확인한다. 두 번째 명령은 no, VAP 거부 시험 두 개는 모두 거부여야 한다.
+
+```powershell
+kubectl auth can-i create services -n hopcharlie-db-network --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl auth can-i create services -n default --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl delete service db-eks -n hopcharlie-db-network --dry-run=server --as system:serviceaccount:charlie-platform:hopcharlie-platform
+kubectl create service externalname db-eks-vaptest -n hopcharlie-db-network --external-name placeholder --tcp 5432:5432 --dry-run=server --as system:serviceaccount:charlie-platform:hopcharlie-platform
+```
+
+그 뒤 플랫폼 운영 값에 `api.appDbTopology.route`(`tail567fe8.ts.net`, `hopcharlie-app-db-egress-management`, `tag:hop-db-client-management`)를 별도 PR로 넣는다. 파일 이전(`api.appFiles.enabled`)은 `terraform/platform/aws`와 `terraform/integrations/gcp/platform-storage` apply 뒤에 켠다. 되돌릴 때는 플랫폼 값을 먼저 끄고, 플랫폼이 만든 Service를 지운 뒤(operator가 장치를 정리) `helm uninstall app-db-routes -n hopcharlie-db-network`를 한다.

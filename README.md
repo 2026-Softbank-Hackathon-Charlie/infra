@@ -844,6 +844,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
 | [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
 | [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
+| [docs/adr/0064-platform-creates-management-app-db-routes.md](docs/adr/0064-platform-creates-management-app-db-routes.md) | 관리 EKS의 등록 앱 DB egress Service를 플랫폼이 만들고(별도 릴리스의 Role, VAP) 앱 파일을 플랫폼 신원으로 옮기는 제안 |
 | [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
@@ -892,6 +893,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
 - [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
 - [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
+- [helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml](helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml)
 - [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
 - [helm/charts/hopcharlie-db-network/templates/platform-apps.yaml](helm/charts/hopcharlie-db-network/templates/platform-apps.yaml)
 - [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
@@ -904,6 +906,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
 - [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
 - [helm/db-network/management.yaml](helm/db-network/management.yaml)
+- [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
 - [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
 - [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
 - [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)

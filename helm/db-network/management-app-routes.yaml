@@ -1,0 +1,11 @@
+# Management EKS objects for the platform-created app DB routes (infra ADR 0064).
+# A separate manual Helm release (app-db-routes) next to the live db-network
+# release; it never renders or changes db-eks, db-gke or their policies.
+# Disabled profile only; install with --set managementAppRoutes.enabled=true
+# after approval (docs/runbooks/aws-gcp-db-migration.md).
+enabled: false
+managementAppRoutes:
+  enabled: false
+  tag: tag:hop-db-client-management
+  # The tailnet of the workload ingress devices (management.yaml FQDNs).
+  tailnet: tail567fe8.ts.net

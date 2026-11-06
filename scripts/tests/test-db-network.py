@@ -355,5 +355,139 @@ class DatabaseNetworkTests(unittest.TestCase):
         self.assertNotEqual(self.render(values).returncode, 0)
 
 
+ROUTE_VALUES = {
+    'enabled': False,
+    'managementAppRoutes': {'enabled': True, 'tag': 'tag:hop-db-client-management',
+                            'tailnet': 'tail567fe8.ts.net'},
+}
+PLATFORM_SA = 'system:serviceaccount:charlie-platform:hopcharlie-platform'
+
+
+class ManagementAppRoutesTests(unittest.TestCase):
+    """ADR 0064: the separate management release for platform-created app DB routes."""
+
+    @classmethod
+    def setUpClass(cls):
+        result = DatabaseNetworkTests.render(ROUTE_VALUES)
+        if result.returncode:
+            raise AssertionError(result.stderr)
+        cls.docs = {(d['kind'], d['metadata']['name']): d for d in yaml.safe_load_all(result.stdout) if d}
+
+    def test_renders_only_route_objects_apart_from_the_live_release(self):
+        self.assertEqual(sorted(self.docs), [
+            ('NetworkPolicy', 'platform-app-db-egress-proxy'),
+            ('ProxyClass', 'hopcharlie-app-db-egress-management'),
+            ('Role', 'hopcharlie-platform-app-db-routes'),
+            ('RoleBinding', 'hopcharlie-platform-app-db-routes'),
+            ('ValidatingAdmissionPolicy', 'hopcharlie-platform-app-db-route-create'),
+            ('ValidatingAdmissionPolicy', 'hopcharlie-platform-app-db-route-delete'),
+            ('ValidatingAdmissionPolicyBinding', 'hopcharlie-platform-app-db-route-create'),
+            ('ValidatingAdmissionPolicyBinding', 'hopcharlie-platform-app-db-route-delete'),
+        ])
+        for doc in self.docs.values():
+            if doc['kind'] in ('NetworkPolicy', 'Role', 'RoleBinding'):
+                self.assertEqual(doc['metadata']['namespace'], NAMESPACE)
+        # Nothing the live management db-network release owns, and that
+        # release renders exactly as before.
+        live = yaml.safe_load((ROOT / 'helm/db-network/management.yaml').read_text(encoding='utf-8'))
+        live['enabled'] = True
+        result = DatabaseNetworkTests.render(live)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        owned = {(d['kind'], d['metadata']['name']) for d in yaml.safe_load_all(result.stdout) if d}
+        self.assertEqual(len(owned), 8)
+        self.assertFalse(owned & set(self.docs))
+        self.assertNotIn('management-app-routes.yaml', result.stdout)
+
+    def test_profile_file_is_disabled_and_matches_tested_values(self):
+        profile = yaml.safe_load((ROOT / 'helm/db-network/management-app-routes.yaml').read_text(encoding='utf-8'))
+        self.assertIs(profile['enabled'], False)
+        self.assertIs(profile['managementAppRoutes']['enabled'], False)
+        disabled = DatabaseNetworkTests.render(profile)
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertEqual(list(filter(None, yaml.safe_load_all(disabled.stdout))), [])
+        profile['managementAppRoutes']['enabled'] = True
+        self.assertEqual(profile, ROUTE_VALUES)
+        # The same tailnet as the live static management routes.
+        live = yaml.safe_load((ROOT / 'helm/db-network/management.yaml').read_text(encoding='utf-8'))
+        for peer in live['egress']['peers'].values():
+            self.assertTrue(peer['tailnetFQDN'].endswith('.' + ROUTE_VALUES['managementAppRoutes']['tailnet']))
+        self.assertEqual(live['egress']['tag'], ROUTE_VALUES['managementAppRoutes']['tag'])
+
+    def test_proxy_class_labels_pods_for_the_shared_policy(self):
+        pod = self.docs[('ProxyClass', 'hopcharlie-app-db-egress-management')]['spec']['statefulSet']['pod']
+        self.assertEqual(pod['labels'], {'hopcharlie.dev/db-proxy': 'egress'})
+        self.assertEqual(pod['tailscaleContainer']['resources'],
+                         {'requests': {'cpu': '50m', 'memory': '128Mi'}, 'limits': {'memory': '512Mi'}})
+
+    def test_policy_admits_the_platform_api_like_the_static_proxies(self):
+        policy = self.docs[('NetworkPolicy', 'platform-app-db-egress-proxy')]['spec']
+        self.assertEqual(policy['podSelector'], {'matchLabels': {'hopcharlie.dev/db-proxy': 'egress'}})
+        self.assertEqual(policy['policyTypes'], ['Ingress', 'Egress'])
+        self.assertEqual(policy['ingress'][0], {
+            'from': [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'charlie-platform'}},
+                      'podSelector': {'matchLabels': {'app.kubernetes.io/part-of': 'hopcharlie',
+                                                      'app.kubernetes.io/component': 'api'}}}],
+            'ports': [{'protocol': 'TCP', 'port': 5432}],
+        })
+        static = DatabaseNetworkTests.render(values_for('management'))
+        proxy = next(d['spec'] for d in yaml.safe_load_all(static.stdout)
+                     if d and d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'db-eks-proxy')
+        self.assertEqual(policy['ingress'], proxy['ingress'])
+        self.assertEqual(policy['egress'], proxy['egress'])
+
+    def test_platform_may_only_get_list_watch_create_delete_services_here(self):
+        role = self.docs[('Role', 'hopcharlie-platform-app-db-routes')]
+        self.assertEqual(role['rules'], [{'apiGroups': [''], 'resources': ['services'],
+                                          'verbs': ['get', 'list', 'watch', 'create', 'delete']}])
+        binding = self.docs[('RoleBinding', 'hopcharlie-platform-app-db-routes')]
+        self.assertEqual(binding['roleRef'], {'apiGroup': 'rbac.authorization.k8s.io', 'kind': 'Role',
+                                              'name': 'hopcharlie-platform-app-db-routes'})
+        self.assertEqual(binding['subjects'], [{'kind': 'ServiceAccount', 'name': 'hopcharlie-platform',
+                                                'namespace': 'charlie-platform'}])
+
+    def test_admission_create_checks_object_and_delete_checks_old_object(self):
+        for op in ('create', 'delete'):
+            name = f'hopcharlie-platform-app-db-route-{op}'
+            spec = self.docs[('ValidatingAdmissionPolicy', name)]['spec']
+            self.assertEqual(spec['failurePolicy'], 'Fail')
+            self.assertEqual(spec['matchConstraints']['resourceRules'], [{
+                'apiGroups': [''], 'apiVersions': ['v1'], 'operations': [op.upper()], 'resources': ['services']}])
+            self.assertEqual(spec['matchConstraints']['namespaceSelector'],
+                             {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}})
+            self.assertEqual(spec['matchConditions'], [{
+                'name': 'platform-service-account',
+                'expression': f"request.userInfo.username == '{PLATFORM_SA}'"}])
+            text = '\n'.join(item['expression'] for item in spec.get('variables', []) + spec['validations'])
+            if op == 'create':
+                self.assertNotIn('oldObject', text)
+                for needle in ("'tag:hop-db-client-management'", "'hopcharlie-app-db-egress-management'",
+                               "'ExternalName'", "'placeholder'", '5432', "'hopcharlie-platform'",
+                               "'^hop-db-(eks|gke)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\\\.tail567fe8\\\\.ts\\\\.net$'",
+                               "'hop-' + object.metadata.name + '.tail567fe8.ts.net'"):
+                    self.assertIn(needle, text)
+            else:
+                self.assertNotIn('object.', text.replace('oldObject.', ''))
+                self.assertIn("oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'hopcharlie-platform'", text)
+            binding = self.docs[('ValidatingAdmissionPolicyBinding', name)]['spec']
+            self.assertEqual(binding, {'policyName': name, 'validationActions': ['Deny']})
+
+    def test_invalid_route_settings_fail_closed(self):
+        routes = ROUTE_VALUES['managementAppRoutes']
+        both = values_for('management')
+        both['managementAppRoutes'] = routes
+        cases = [
+            (both, NAMESPACE),
+            (ROUTE_VALUES, 'charlie-platform'),
+            (dict(ROUTE_VALUES, managementAppRoutes=dict(routes, tailnet='')), NAMESPACE),
+            (dict(ROUTE_VALUES, managementAppRoutes=dict(routes, tailnet='example.com')), NAMESPACE),
+            (dict(ROUTE_VALUES, managementAppRoutes=dict(routes, tag='plain')), NAMESPACE),
+        ]
+        for values, namespace in cases:
+            with self.subTest(values=values, namespace=namespace):
+                result = DatabaseNetworkTests.render(values, namespace)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.strip(), '')
+
+
 if __name__ == '__main__':
     unittest.main()

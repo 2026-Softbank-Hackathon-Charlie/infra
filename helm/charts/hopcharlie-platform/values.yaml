@@ -17,7 +17,15 @@
     "dsnHostSuffixes": ".ts.net",
     "appDbTopology": {
       "enabled": false,
-      "hostTemplates": ""
+      "hostTemplates": "",
+      "route": {
+        "tailnet": "",
+        "proxyClass": "",
+        "tag": ""
+      }
+    },
+    "appFiles": {
+      "enabled": false
     }
   },
   "appDomain": "",
