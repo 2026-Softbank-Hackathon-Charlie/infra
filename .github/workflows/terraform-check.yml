@@ -95,10 +95,13 @@ jobs:
   scripts:
     runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 10
+    outputs:
+      aws_changed: ${{ steps.aws-scope.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Read pinned Terraform version
         id: tf-version
         shell: bash
@@ -113,6 +116,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Detect AWS deployment input changes
+        id: aws-scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python3 scripts/aws-apply-scope.py >> "$GITHUB_OUTPUT"
       # ci-test runs helm and node; GitHub-hosted images had them, the self-hosted runner does not.
       - uses: azure/setup-helm@v4.3.1
         with:
@@ -125,6 +134,8 @@ jobs:
   check:
     if: always()
     needs: [terraform, helm, scripts]
+    outputs:
+      aws_changed: ${{ needs.scripts.outputs.aws_changed }}
     runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 5
     steps:
@@ -137,7 +148,7 @@ jobs:
           [[ "$TERRAFORM_RESULT" == success && "$HELM_RESULT" == success && "$SCRIPTS_RESULT" == success ]]
   deploy:
     needs: check
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.action == 'plan' || inputs.action == 'apply')))
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.check.outputs.aws_changed == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.action == 'plan' || inputs.action == 'apply')))
     runs-on: [self-hosted, hopcharlie]
     timeout-minutes: 120
     concurrency:
