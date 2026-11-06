@@ -210,9 +210,9 @@ AWS workload mode의 canonical 입력은 `config/project.json`의 `workload_netw
 - push/PR: Terraform 6개 root의 validate/mock을 matrix(최대 동시 3개)로 실행하고 Helm·스크립트 검사를 병렬 실행합니다. 모든 검사에 AWS 인증을 부여하지 않습니다. fork PR도 공통 설정 검증을 수행합니다.
 - `check`는 모든 검증의 성공만 허용하는 집계 job이며 실패·skip·취소 시 배포하지 않습니다. 기존 필수 검사 이름을 유지합니다. Terraform은 정제된 임시 복사본에서 root당 init 한 번(총 6회)을 수행합니다. OS/아키텍처/CLI/root/lock별 provider 전용 캐시를 사용하고 state·plan·tfvars·전체 `.terraform`는 캐시하지 않습니다. runner별 캐시는 독립적입니다.
 - 각 Terraform root의 경과 시간을 로그에 출력합니다. cold/warm 실행 비교는 실제 GitHub 실행 후 확인해야 하며 특정 속도 향상을 보장하지 않습니다. 병렬 runner 사용 분이 증가할 수 있습니다.
-- main 머지/push: check 성공 후 `all-runtime`을 순서대로 plan하고 Terraform 변경이 있는 stack만 자동 apply합니다. 변경이 없으면 apply를 생략하며 별도 dispatch는 필요하지 않습니다.
+- main 머지/push: AWS 배포 입력 경로가 바뀌고 check가 성공한 경우에만 `all-runtime`을 순서대로 plan하고 Terraform 변경이 있는 stack만 자동 apply합니다. GCP 전용 설정·문서·테스트·CI 정의만 바뀌면 배포 job을 생략합니다. 변경이 없으면 apply를 생략하며 별도 dispatch는 필요하지 않습니다([ADR 0069](docs/adr/0069-limit-aws-auto-apply-to-deployment-inputs.md)).
 - 수동 실행: main에서 `action=plan|apply`, `stack=bootstrap|foundation|management|workload|all-runtime`을 선택합니다. 기본값은 **`plan + bootstrap`**이며 리소스를 적용하지 않습니다. 기존 `apply` boolean 입력은 이 두 choice 입력으로 대체했습니다.
-- check 성공 후에만 OIDC로 인증하고 선택한 stack을 실행합니다. 개별 선택은 의존 stack을 자동 생성하지 않습니다. main 자동 실행과 수동 `all-runtime` 선택은 bootstrap → foundation → management → workload를 순차 실행하며 account는 관리자 로컬 전용입니다. apply는 저장한 plan을 사용하고 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체 guard를 유지합니다.
+- 배포 job이 선택되고 check가 성공한 경우에만 OIDC로 인증하고 선택한 stack을 실행합니다. 개별 선택은 의존 stack을 자동 생성하지 않습니다. main 자동 실행과 수동 `all-runtime` 선택은 bootstrap → foundation → management → workload를 순차 실행하며 account는 관리자 로컬 전용입니다. apply는 저장한 plan을 사용하고 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체 guard를 유지합니다.
 - `bootstrap`은 state S3와 보호 설정만 관리합니다. `foundation` apply는 VPC·NAT·SSM bridge·IAM·Loki S3를, `management`/`workload` apply는 각 EKS를 포함합니다. `all-runtime + apply`는 두 EKS까지 포함합니다.
 - PR 및 main 이외 브랜치의 push에서는 AWS 배포를 실행하지 않습니다. main 자동 실행과 수동 plan/apply에는 기존 S3 backend·CI 역할이 필요하며 state 잠금 파일을 일시 생성할 수 있습니다. workflow는 `.github/workflows/terraform-check.yml`에 정의되어 있습니다.
 
@@ -377,7 +377,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 | 파일 | 역할 |
 | --- | --- |
-| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 main의 Terraform 자동 apply·수동 실행 |
+| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
 | [.gitignore](.gitignore) | 로컬 비밀값·state·plan·kubeconfig·다운로드 산출물의 Git 추적 방지 |
 | [.terraform-version](.terraform-version) | Terraform CLI 버전 고정 |
 | [Makefile](Makefile) | 인프라 검증·로컬 Terraform·SSM 터널·Argo CD 접속 명령 진입점 |
@@ -425,8 +425,9 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [scripts/terraform-check.sh](scripts/terraform-check.sh) | 정제 임시 복사본에서 backend 없는 init/validate |
 | [scripts/terraform-test.sh](scripts/terraform-test.sh) | 실제 state·tfvars를 제외한 임시 복사본의 Terraform mock test |
 | [scripts/tests/test-tf-ci.py](scripts/tests/test-tf-ci.py) | fake CLI로 순서·state key·계정·실패·삭제 guard·임시 plan 정리 검증 |
-| [scripts/tests/test-workflow.py](scripts/tests/test-workflow.py) | 이벤트/브랜치/apply 입력 조합별 CI 배포 gate 검증 |
+| [scripts/tests/test-workflow.py](scripts/tests/test-workflow.py) | 이벤트·AWS 변경 경로·출력 연결·수동 입력별 CI 배포 gate 검증 |
 | [scripts/tf-ci.sh](scripts/tf-ci.sh) | CI의 stack 순서·state 분리·saved plan apply·삭제 guard 실행 |
+| [scripts/aws-apply-scope.py](scripts/aws-apply-scope.py) | 전체 push의 변경 경로로 AWS 자동 배포 입력 변경 여부 판정 |
 | [scripts/tf-stack.sh](scripts/tf-stack.sh) | 계정 확인을 포함한 로컬 init/plan/apply; apply 대화형 승인 유지 |
 | [terraform/account/aws/.terraform.lock.hcl](terraform/account/aws/.terraform.lock.hcl) | 고정 provider 버전과 플랫폼별 package checksum |
 | [terraform/account/aws/backend.hcl.example](terraform/account/aws/backend.hcl.example) | 공통 JSON backend 입력으로 이관하는 안내 |
@@ -512,7 +513,8 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [docs/adr/0003-share-project-inputs-between-local-and-ci.md](docs/adr/0003-share-project-inputs-between-local-and-ci.md) | 로컬/CI 공통 설정 결정 |
 | [docs/adr/0004-parallelize-infrastructure-checks.md](docs/adr/0004-parallelize-infrastructure-checks.md) | CI 병렬화·provider 캐시 결정 |
 | [docs/adr/0007-register-account-github-oidc-provider.md](docs/adr/0007-register-account-github-oidc-provider.md) | 계정 공용 GitHub OIDC provider 등록과 Terraform의 기존 ARN 참조 결정 |
-| [docs/adr/0008-select-terraform-stack-and-action.md](docs/adr/0008-select-terraform-stack-and-action.md) | main 자동 apply와 stack별 수동 Terraform 실행 결정 |
+| [docs/adr/0008-select-terraform-stack-and-action.md](docs/adr/0008-select-terraform-stack-and-action.md) | 기존 main 자동 apply·수동 stack 선택 이력; 현재 범위는 ADR0069 |
+| [docs/adr/0069-limit-aws-auto-apply-to-deployment-inputs.md](docs/adr/0069-limit-aws-auto-apply-to-deployment-inputs.md) | CI 검증을 유지하고 AWS 배포 입력 변경 때만 main 자동 apply |
 | [terraform/account/aws/ci-administrator.tf](terraform/account/aws/ci-administrator.tf) | main OIDC Terraform 역할의 계정 전체 AdministratorAccess 연결 |
 | [docs/adr/0009-grant-ci-terraform-administrator-access.md](docs/adr/0009-grant-ci-terraform-administrator-access.md) | CI에 계정 전체 관리자 권한을 부여하는 결정 |
 | [docs/adr/0010-grant-eks-operator-access.md](docs/adr/0010-grant-eks-operator-access.md) | 기존 IAM 사용자의 두 EKS 관리자 접근 결정 |
