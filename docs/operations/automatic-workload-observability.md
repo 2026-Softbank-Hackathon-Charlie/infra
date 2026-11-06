@@ -77,7 +77,7 @@ HELM=/path/to/helm NGINX_BINARY=/path/to/nginx-1.30.6 python3 scripts/tests/proo
 
 확인 결과: 새 임의 이름/서비스/replica/DB의 공통 설정, CA 교체 checksum, OTEL 충돌 거부, CNPG selector/9187, Job label/최소 TTL, 최소 권한 및 pinned upstream 렌더 통과. 실제 Alloy에서 metadata 지연 중 reader/positions 미생성, 완료 Pod의 첫 로그3개, 포트 중복 방지, native trace/span ID, 파일 회전, SIGKILL 후 queue 복구, 비소유 파일 미등록, 삭제된 Pod 수집 중단 통과. 실제 NGINX1.30.6에서 TLS/BasicAuth 성공·실패, GET/POST query, 인증·Cookie 헤더 제거, 금지 API/method 및 잘못된 CA/hostname 거부 통과. Collector0.161.0의 양쪽 gateway 설정 validate 통과. 모임룸 전체 Go race 검사와 vet 통과.
 
-기존 main8d59c09 기준 앱 stateless/stateful, ApplicationSet, platform, 두 baseline, ClickStack, root GitOps의 YAML object 렌더가 모두 같았다. 실제 클러스터 신규 배포/DB scrape/HyperDX 연계 증거는 아직 없다.
+기존 main875ce37 기준 앱 stateless/stateful, ApplicationSet, platform, 두 baseline, ClickStack, root GitOps의 YAML object 렌더가 모두 같았다. 실제 클러스터 신규 배포/DB scrape/HyperDX 연계 증거는 아직 없다.
 
 ## C 실행 전·후 확인
 

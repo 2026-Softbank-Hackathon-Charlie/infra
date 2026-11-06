@@ -34,7 +34,8 @@ spec:
     {{- $otel := false }}
     {{- $metrics := false }}
     {{- range .Values.environments }}
-    {{- $o := .profile.observability | default dict }}
+    {{- $profile := .profile | default dict }}
+    {{- $o := $profile.observability | default dict }}
     {{- if $o.enabled }}{{ $otel = true }}{{- if $o.metricsEnabled }}{{ $metrics = true }}{{- end }}{{- end }}
     {{- end }}
     {{- if $otel }}
