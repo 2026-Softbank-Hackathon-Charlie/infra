@@ -72,6 +72,10 @@ kubectl --kubeconfig $OperatorKubeconfig --context $Context --namespace hopcharl
   rollout status deployment/operator --timeout=5m
 ```
 
+이미 설치된 릴리스의 값을 바꿀 때(예: 대상 DB를 다른 앱으로 전환) Helm 4 기본 server-side apply는 operator가 소유한 egress Service의 `spec.externalName`과 충돌해 실패한다. `helm upgrade ... --server-side=false`를 쓴다(2026-11-05 moimroom 이전에서 확인). 실패한 시도는 일부 객체만 적용될 수 있으므로 `helm history`와 실제 객체를 확인한다.
+
+GKE는 NodeLocal DNSCache(hostNetwork)가 kube-dns ClusterIP를 응답하므로 kube-dns podSelector만으로는 operator의 DNS가 막힌다. 차트는 53 포트를 목적지 제한 없이 허용한다([ADR 0052](../adr/0052-allow-db-network-dns-through-node-local-cache.md)).
+
 CNPG가 만든 `-rw`가 아닌 별도 primary selector Service를 사용한다. 일반 클라이언트는 local `db-eks`/`db-gke` Service에 연결하고, proxy만 remote tailnet FQDN을 사용한다. operator는 ExternalName Service의 `externalName`을 headless Service 이름으로 변경한다. 별도 Argo Application이 이 필드를 `placeholder`로 self-heal하지 않게 한다. 장치 이름 중복으로 tailnet 이름에 suffix가 붙으면 예제 FQDN이 맞지 않으므로 실제 이름을 확인한다.
 
 Tailscale proxy의 TCP443·DNS·가변 목적지 UDP는 control/DERP/direct transport용이다. DB 데이터 grant는 TCP5432만이다. 설치된 proxy의 부모 Service labels, CNPG primary label, CNI의 SNAT 뒤 출발지와 실제 허용/거부를 확인한다. direct 연결이 안 되고 DERP만 된다면 base backup·WAL 처리량과 HTTP 영향부터 측정한다.
