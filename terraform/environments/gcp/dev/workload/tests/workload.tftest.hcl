@@ -19,12 +19,20 @@ run "private_nodes_restricted_api_and_storage" {
     error_message = "NetworkPolicy enforcement, PD CSI and GKE workload identity must be enabled."
   }
   assert {
-    condition     = google_container_node_pool.workload.location == "asia-northeast3-a" && google_container_node_pool.workload.node_count == 1 && google_container_node_pool.workload.node_config[0].service_account == var.node_service_account_email && google_container_node_pool.workload.node_config[0].workload_metadata_config[0].mode == "GKE_METADATA" && google_container_node_pool.workload.node_config[0].shielded_instance_config[0].enable_secure_boot
-    error_message = "Use one zonal node by default, dedicated identity, GKE metadata and shielded secure boot."
+    condition     = google_container_node_pool.workload.location == "asia-northeast3-a" && google_container_node_pool.workload.node_count == 3 && google_container_node_pool.workload.node_config[0].machine_type == "e2-standard-2" && google_container_node_pool.workload.node_config[0].service_account == var.node_service_account_email && google_container_node_pool.workload.node_config[0].workload_metadata_config[0].mode == "GKE_METADATA" && google_container_node_pool.workload.node_config[0].shielded_instance_config[0].enable_secure_boot
+    error_message = "Use three e2-standard-2 zonal nodes by default, dedicated identity, GKE metadata and shielded secure boot."
   }
   assert {
     condition     = !google_compute_network.workload.auto_create_subnetworks && google_compute_subnetwork.workload.private_ip_google_access && google_compute_router_nat.egress.source_subnetwork_ip_ranges_to_nat == "LIST_OF_SUBNETWORKS"
     error_message = "Use a custom VPC and scope private-node egress NAT to the workload subnet."
+  }
+}
+run "allow_explicit_single_node_override" {
+  command = plan
+  variables { node_count = 1 }
+  assert {
+    condition     = google_container_node_pool.workload.node_count == 1
+    error_message = "Explicit node-count overrides must remain supported."
   }
 }
 run "reject_public_api_allowlist" {
