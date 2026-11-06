@@ -84,6 +84,8 @@ Tailscale proxy의 TCP443·DNS·가변 목적지 UDP는 control/DERP/direct tran
 
 권한 helper는 기본 render-only이며 파일·kubeconfig를 읽거나 외부 호출을 하지 않는다.
 
+`charlie-apps` 같은 인프라 보호 네임스페이스는 helper가 거부한다. 예외는 코드의 `PROTECTED_EXCEPTIONS`에 정확히 일치하는 `(네임스페이스, CNPG Cluster)` 한 쌍뿐이며 지금은 GKE 운영 DB `charlie-apps/moimroom-db-gke`만 있다([ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)). 같은 네임스페이스의 다른 Cluster(예: 낡은 `moimroom-gcp-db`)는 계속 거부한다.
+
 ```powershell
 python scripts/db-migration-access.py render --kubeconfig $OperatorKubeconfig --context $Context `
   --namespace $DbNamespace --cluster $CnpgCluster --session $Session
