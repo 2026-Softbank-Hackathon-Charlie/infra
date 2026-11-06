@@ -70,6 +70,12 @@
   2. 조직 runner 목록에서 `hopcharlie-gcp-runner-1`부터 `3`까지 `online`인지 확인하고, "Set up job" 로그의 Runner name이 `hopcharlie-gcp-runner-N`인 job이 성공하는지 본다. docker를 쓰는 job(platform CI, 이미지 게시)도 하나 이상 확인한다.
   3. `python scripts/github-runner/down.py`로 지울 AWS 자원을 확인하고 `python scripts/github-runner/down.py --apply`로 AWS 호스트와 `hopcharlie-runner-1`부터 `3`까지의 등록을 지운다. AWS runner가 그때 돌리던 job은 실패하므로 다시 실행한다.
 
+### 2026-11-06 증설
+
+- runner 3개로는 platform, infra, 다른 세션의 CI가 함께 기다려서 GCP VM을 e2-standard-8(vCPU 8개, 메모리 32 GB)로 키우고 runner를 `hopcharlie-gcp-runner-1`부터 `6`까지 6개로 늘린다. 비용은 하루 약 8달러로 늘어난다고 추정한다(가격표를 확인하지 않은 추정).
+- `gcp_up.py`는 기존 VM의 머신 유형이 다르면 `--resize`를 줄 때만 VM을 멈추고 바꾼다. 우리 runner 중 하나라도 job을 돌리고 있으면 멈추지 않는다. 다시 켠 뒤 bootstrap.sh가 없는 runner만 추가한다.
+- 디스크(80 GB)와 swap(8 GiB)은 그대로 둔다. 동시에 도는 job이 늘어 Docker 이미지와 빌드 캐시가 디스크를 채우면 따로 늘린다.
+
 ### bootstrap.sh(두 호스트 공통)
 
 - bootstrap.sh는 root로 돌고 다시 실행해도 안전하며 다음을 한다.

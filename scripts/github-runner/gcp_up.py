@@ -5,13 +5,17 @@ In project project-b47cdba3-db5b-42a2-9a6, zone asia-northeast3-a, it reuses or
 creates two firewall rules on the default network for the network tag
 hopcharlie-github-runner (allow tcp:22 from the IAP range at priority 800, deny
 all other ingress at priority 900, so default-allow-ssh/rdp at 65534 do not
-reach the VM) and one VM hopcharlie-github-runner: e2-standard-4, Ubuntu 24.04,
+reach the VM) and one VM hopcharlie-github-runner: e2-standard-8, Ubuntu 24.04,
 80 GB pd-balanced, an ephemeral external IP for egress, no service account (job
 code gets no GCP credentials), shielded VM, OS Login and no project SSH keys.
 When IAP SSH works, it copies bootstrap.sh and a file with an org registration
-token to the VM and runs bootstrap.sh with sudo: tools, three runners
-hopcharlie-gcp-runner-1..3 with the label hopcharlie, and a daily Docker prune.
+token to the VM and runs bootstrap.sh with sudo: tools, six runners
+hopcharlie-gcp-runner-1..6 with the label hopcharlie, and a daily Docker prune.
 Last it lists the org's runners.
+
+An existing VM of another machine type is resized only with --resize: the VM
+stops, so the run refuses while one of its runners is busy. bootstrap.sh then
+adds the missing runners and leaves the configured ones alone.
 
 Safe to run again: existing resources are reused and configured runners are
 skipped. --dry-run only reads (gcloud config get-value and describe, gh GET
@@ -45,7 +49,8 @@ HERE = Path(__file__).resolve().parent
 PROJECT, ZONE, NETWORK = 'project-b47cdba3-db5b-42a2-9a6', 'asia-northeast3-a', 'default'
 NAME = 'hopcharlie-github-runner'  # VM name and the network tag the firewall rules target
 LABELS = {'project': 'hopcharlie', 'component': 'github-runner', 'managed-by': 'infra-scripts-github-runner'}
-MACHINE_TYPE, DISK_GB, DISK_TYPE = 'e2-standard-4', 80, 'pd-balanced'
+# e2-standard-8 (8 vCPU, 32 GB) for six runners; it was e2-standard-4 with three until 2026-11-06.
+MACHINE_TYPE, DISK_GB, DISK_TYPE = 'e2-standard-8', 80, 'pd-balanced'
 IMAGE_FAMILY, IMAGE_PROJECT = 'ubuntu-2404-lts-amd64', 'ubuntu-os-cloud'
 IAP_RANGE = '35.235.240.0/20'
 # name: (priority, action, rules, source range); both INGRESS on NETWORK for the tag NAME.
@@ -54,7 +59,7 @@ FIREWALLS = {
     f'{NAME}-deny-ingress': (900, 'deny', 'all', '0.0.0.0/0'),
 }
 RUNNER_PREFIX = 'hopcharlie-gcp-runner'
-RUNNER_NAMES = [f'{RUNNER_PREFIX}-{n}' for n in (1, 2, 3)]
+RUNNER_NAMES = [f'{RUNNER_PREFIX}-{n}' for n in range(1, 7)]
 REMOTE_DIR = 'hopcharlie-runner-bootstrap'  # in the OS Login user's home, mode 700
 
 
@@ -148,6 +153,20 @@ def instance_problem(vm):
     if not all(n.get('network', '').endswith(f'/networks/{NETWORK}') for n in vm.get('networkInterfaces', [])):
         return f'VM {NAME} is not on the {NETWORK} network'
     return ''
+
+
+def machine_type(vm):
+    return vm.get('machineType', '').rsplit('/', 1)[-1]
+
+
+def resize_instance(runners):
+    """Stops the VM and sets MACHINE_TYPE; wait_running() starts it again."""
+    busy = sorted(r['name'] for r in runners if r['name'].startswith(RUNNER_PREFIX + '-') and r['busy'])
+    require(not busy, f"runners {', '.join(busy)} are running jobs; stopping the VM would fail them. Run again when they are idle")
+    gcloud('compute', 'instances', 'stop', NAME, f'--zone={ZONE}')
+    print(f'stopped VM {NAME}')
+    gcloud('compute', 'instances', 'set-machine-type', NAME, f'--zone={ZONE}', f'--machine-type={MACHINE_TYPE}')
+    print(f'set VM {NAME} to {MACHINE_TYPE}')
 
 
 def show_runners(runners):
@@ -244,6 +263,8 @@ def bootstrap(token, version, sha256):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--dry-run', action='store_true', help='only read and print what would change')
+    parser.add_argument('--resize', action='store_true',
+                        help=f'stop an existing VM of another machine type and set {MACHINE_TYPE}')
     args = parser.parse_args(argv)
     try:
         account = check_tools_and_project()
@@ -262,8 +283,11 @@ def main(argv=None):
         print(f'project {PROJECT} (gcloud account {account}), zone {ZONE}')
         for name, rule in rules.items():
             print(f"firewall rule {name}: {'exists' if rule else 'create'} ({describe_firewall(name, *FIREWALLS[name])})")
+        resize = bool(vm) and machine_type(vm) != MACHINE_TYPE
         if vm:
-            print(f"VM {NAME}: {vm['status']}{', start it' if vm['status'] in ('TERMINATED', 'SUSPENDED') else ''}")
+            print(f"VM {NAME}: {vm['status']}, {machine_type(vm)}"
+                  f"{', start it' if vm['status'] in ('TERMINATED', 'SUSPENDED') else ''}"
+                  f"{f', stop and resize to {MACHINE_TYPE} (needs --resize)' if resize else ''}")
         else:
             image = gcloud('compute', 'images', 'describe-from-family', IMAGE_FAMILY, project=IMAGE_PROJECT)['name']
             print(f'VM {NAME}: create {MACHINE_TYPE}, {image}, {DISK_GB} GB {DISK_TYPE}, {NETWORK} network with an'
@@ -278,6 +302,8 @@ def main(argv=None):
         if args.dry_run:
             print('Nothing changed (--dry-run).')
             return 0
+        require(not resize or args.resize, f'VM {NAME} is {machine_type(vm) if vm else ""}, not {MACHINE_TYPE}; '
+                                           'run again with --resize to stop and resize it')
 
         # Firewall first, so default-allow-ssh/rdp never reach the VM.
         for name, rule in rules.items():
@@ -285,6 +311,9 @@ def main(argv=None):
                 create_firewall(name)
         if vm is None:
             create_instance()
+        elif resize:
+            require(runners is not None, f'gh cannot list the org runners ({gh_error}), so busy runners are unknown')
+            resize_instance(runners)
         wait_running()
         wait_ssh()
 
