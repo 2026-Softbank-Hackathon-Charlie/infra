@@ -10,8 +10,10 @@ mock_provider "google" {
   }
 }
 variables {
-  project_id     = "charlie-test-project"
-  aws_account_id = "111122223333"
+  project_id             = "charlie-test-project"
+  aws_account_id         = "111122223333"
+  github_owner_id        = "350278309"
+  platform_repository_id = "1442049765"
 }
 run "only_the_build_role_is_trusted" {
   command = plan
@@ -68,4 +70,33 @@ run "reject_moimroom_repository" {
   command = plan
   variables { repository_id = "charlie-apps" }
   expect_failures = [var.repository_id]
+}
+run "only_the_platform_scan_workflow_on_main_reads_images" {
+  command = plan
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.image_scan.attribute_condition == "assertion.repository_id == '1442049765' && assertion.repository_owner_id == '350278309' && assertion.ref == 'refs/heads/main' && assertion.workflow_ref.endsWith('/.github/workflows/scan-images.yml@refs/heads/main')" && google_iam_workload_identity_pool_provider.image_scan.oidc[0].issuer_uri == "https://token.actions.githubusercontent.com"
+    error_message = "Trust only the platform repository's scan-images workflow on main."
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool.image_scan.workload_identity_pool_id != google_iam_workload_identity_pool.build.workload_identity_pool_id
+    error_message = "Keep the scanner's GitHub pool separate from the CodeBuild pool."
+  }
+  assert {
+    condition     = google_service_account_iam_member.image_scanner.role == "roles/iam.workloadIdentityUser" && endswith(google_service_account_iam_member.image_scanner.member, "/attribute.repository_id/1442049765")
+    error_message = "Only the platform repository may impersonate the scanner."
+  }
+  assert {
+    condition     = toset(keys(google_artifact_registry_repository_iam_member.image_scanner)) == toset(["hopcharlie-apps", "charlie-apps"]) && alltrue([for m in google_artifact_registry_repository_iam_member.image_scanner : m.role == "roles/artifactregistry.reader"])
+    error_message = "The scanner reads the two app image repositories and nothing else."
+  }
+}
+run "reject_bad_platform_repository" {
+  command = plan
+  variables { platform_repository_id = "platform" }
+  expect_failures = [var.platform_repository_id]
+}
+run "reject_wildcard_scan_repository" {
+  command = plan
+  variables { image_scan_extra_repositories = ["*"] }
+  expect_failures = [var.image_scan_extra_repositories]
 }
