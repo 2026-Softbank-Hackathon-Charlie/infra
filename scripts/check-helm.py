@@ -230,7 +230,42 @@ def check_traefik(docs):
     assert services["traefik-no-route"]["spec"]["selector"] == {"hopcharlie.dev/no-route": "none"}
 
 
+def check_hopai_langfuse():
+    chart = ROOT / "helm/charts/hopcharlie-platform"
+    values = ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml"
+    for enabled in (True, False):
+        docs = render(chart, values, "hopcharlie-platform", "charlie-platform",
+                      ("--set", "hopai.langfuse.enabled=" + str(enabled).lower()))
+        cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-hopai-job")
+        job = yaml.safe_load(cm["data"]["job.yaml"])
+        spec = job["spec"]["template"]["spec"]
+        assert spec["serviceAccountName"] == "hopcharlie-hopai"
+        container = next(c for c in spec["containers"] if c["name"] == "hopai")
+        env = {e["name"]: e for e in container["env"]}
+        for name, key in (("LANGFUSE_PUBLIC_KEY", "public-key"), ("LANGFUSE_SECRET_KEY", "secret-key")):
+            assert (name in env) == enabled
+            if enabled:
+                assert env[name] == {"name": name, "valueFrom": {"secretKeyRef": {"name": "hopcharlie-langfuse-auth", "key": key}}}
+        assert ("LANGFUSE_BASE_URL" in env) == enabled
+        assert ("HOPCHARLIE_RUN_ID" in env) == enabled
+        if enabled:
+            assert env["LANGFUSE_BASE_URL"]["value"] == "http://langfuse-web.langfuse.svc.cluster.local:3000"
+            assert env["HOPCHARLIE_RUN_ID"]["valueFrom"]["fieldRef"] == {"apiVersion": "v1", "fieldPath": "metadata.labels['job-name']"}
+        policies = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-langfuse-egress"]
+        assert len(policies) == int(enabled)
+        if enabled:
+            spec = policies[0]["spec"]
+            assert spec["podSelector"]["matchLabels"] == {"app.kubernetes.io/part-of": "hopcharlie", "app.kubernetes.io/component": "hopai"}
+            assert spec["policyTypes"] == ["Egress"]
+            assert spec["egress"] == [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "langfuse"}}, "podSelector": {"matchLabels": {"app.kubernetes.io/component": "web", "app.kubernetes.io/instance": "langfuse", "app.kubernetes.io/name": "langfuse"}}}], "ports": [{"protocol": "TCP", "port": 3000}]}]
+        for d in docs:
+            if d["kind"] in ("Deployment", "StatefulSet"):
+                for c in d["spec"]["template"]["spec"]["containers"]:
+                    assert not any(e["name"].startswith("LANGFUSE_") for e in c.get("env", [])), "Project keys belong only to hopai"
+
+
 def main():
+    check_hopai_langfuse()
     check_system_network_policy()
     assert helm("version", "--short").startswith("v" + VERSIONS["helm"]), "Use the pinned Helm version"
     subprocess.run([os.environ.get("PYTHON", "python3"), str(ROOT / "scripts/check-clickstack.py")], check=True)
