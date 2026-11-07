@@ -1072,3 +1072,4 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
 | [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
 | [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+| [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |

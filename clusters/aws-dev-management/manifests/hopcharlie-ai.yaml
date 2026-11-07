@@ -1,0 +1,176 @@
+# AI gateway for the moimroom AI guide (moimroom-mig POST /api/spaces/{id}/ai-brief).
+#
+# The traffic gateway registers app ai-gateway (host ai-gateway.<domain>) and
+# forwards to this namespace's Service ai-gateway:8000. The AI gateway is the
+# platform gateway binary in AI demo mode (platform internal/gateway/ai_demo.go):
+# it sends every native /api/chat request to one backend, gcp (the GCP L4 VM
+# through an SSH forward) or laptop (the on-prem laptop's Ollama through the
+# tailnet).
+#
+# With -ai-follow-* (platform #148) the AI route follows the moimroom-mig write
+# backend that the traffic gateway reports on its unauthenticated /metrics:
+# onprem -> laptop, gke and eks -> gcp. A manual POST /v1/route (admin on pod
+# loopback 9901) pins the route; POST /v1/follow {"enabled":true} resumes it.
+#
+# An operator applies this file by hand (kubectl --context
+# charlie-dev-management apply -f); Argo CD does not manage it. The Secrets are
+# created out of band and never stored here:
+#   ai-gateway-tokens  AI_GATEWAY_TOKEN, GATEWAY_ADMIN_TOKEN
+#   ai-gateway-ssh     id_key, known_hosts of the GCP L4 VM
+# The Tailscale operator rewrites ai-laptop-ollama's externalName to its proxy;
+# re-apply that Service only when creating it (later applies would reset it to
+# the placeholder until the operator reconciles again).
+# The traffic gateway's egress to this namespace is the platform chart's
+# NetworkPolicy hopcharlie-gateway-ai-egress (aiGateway in the values).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hopcharlie-ai
+  labels:
+    app.kubernetes.io/part-of: hopcharlie
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway
+  namespace: hopcharlie-ai
+  labels: {app.kubernetes.io/name: ai-gateway, app.kubernetes.io/part-of: hopcharlie}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: ai-gateway}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ai-gateway, app.kubernetes.io/part-of: hopcharlie}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: gateway
+          command: [/usr/local/bin/hopcharlie-gateway]
+          image: 525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:52c4508@sha256:4652a73f48746c0d824864623bfa9e4d76056e24766e1be2a7a9ea4288ce0240
+          args:
+            - -ai-app=moimroom-ai
+            - -default-app=moimroom-ai
+            - -listen=:8000                       # inference: POST /api/chat only, reached by the traffic gateway
+            - -admin-addr=127.0.0.1:9901          # admin (/v1/route, /v1/follow, /v1/ai/requests): pod loopback only
+            - -backends=gcp=http://127.0.0.1:18434,laptop=http://ai-laptop-ollama.hopcharlie-ai.svc.cluster.local:80
+            - -initial-backend=gcp
+            - -write-timeout=12s                  # enforced by checkAI
+            - -health-path=/api/version           # Ollama has no /healthz
+            - -state-file=/state/gateway-state.json
+            - -ai-follow-app=moimroom-mig
+            - -ai-follow-url=http://hopcharlie-gateway.charlie-platform.svc.cluster.local:9901
+            - -ai-follow-map=onprem=laptop,gke=gcp,eks=gcp
+          envFrom: [{secretRef: {name: ai-gateway-tokens}}]
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe:
+            exec: {command: [wget, -qO, /dev/null, "http://127.0.0.1:9901/healthz"]}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: state, mountPath: /state}]
+        - name: fwd-gcp           # backend gcp: pod 127.0.0.1:18434 -> L4 VM loopback 11434
+          image: docker.io/alpine/git:v2.54.0@sha256:ac6c828f15d82775d204d3d75112e1d34af8945da80ccf922713c9891ba68e7a
+          command: [ssh]
+          args: ["-N", "-F", "/dev/null", "-i", "/ssh/id_key",
+                 "-o", "UserKnownHostsFile=/ssh/known_hosts", "-o", "StrictHostKeyChecking=yes",
+                 "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
+                 "-L", "127.0.0.1:18434:127.0.0.1:11434", "gpu_poc@35.194.104.167"]
+          env: [{name: HOME, value: /tmp}]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: ssh, mountPath: /ssh, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: state, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        - {name: ssh, secret: {secretName: ai-gateway-ssh, defaultMode: 0440}}
+---
+# Only the traffic gateway calls this. No admin port here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway
+  namespace: hopcharlie-ai
+spec:
+  selector: {app.kubernetes.io/name: ai-gateway}
+  ports: [{name: http, protocol: TCP, port: 8000, targetPort: 8000}]
+---
+# Backend laptop: the Tailscale operator's egress proxy to the laptop k3s
+# Service hopcharlie-ai/ai-laptop-ollama (tailnet name hop-app-onprem-ai-laptop),
+# which fronts the laptop's Windows Ollama.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-laptop-ollama
+  namespace: hopcharlie-ai
+  annotations:
+    tailscale.com/tailnet-fqdn: hop-app-onprem-ai-laptop.tail567fe8.ts.net
+    tailscale.com/hostname: hop-ai-management-to-laptop
+    tailscale.com/tags: tag:hop-db-client-management
+spec:
+  type: ExternalName
+  externalName: placeholder   # the operator rewrites it to its proxy
+  ports: [{name: http, protocol: TCP, port: 80}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: hopcharlie-ai}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ai-gateway-from-traffic-gateway, namespace: hopcharlie-ai}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ai-gateway}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: charlie-platform}}
+          podSelector: {matchLabels: {app.kubernetes.io/part-of: hopcharlie, app.kubernetes.io/component: gateway}}
+      ports: [{protocol: TCP, port: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ai-gateway-egress, namespace: hopcharlie-ai}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ai-gateway}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: 35.194.104.167/32}}]       # GCP L4 VM ssh (deleted 2026-11-08 23:59 KST)
+      ports: [{protocol: TCP, port: 22}]
+    - to:                                              # laptop Ollama through the Tailscale egress proxy
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: hopcharlie-db-network}}
+          podSelector:
+            matchLabels:
+              tailscale.com/parent-resource: ai-laptop-ollama
+              tailscale.com/parent-resource-ns: hopcharlie-ai
+      ports: [{protocol: TCP, port: 80}]
+    - to:                                              # -ai-follow-url: the traffic gateway's /metrics
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: charlie-platform}}
+          podSelector: {matchLabels: {app.kubernetes.io/part-of: hopcharlie, app.kubernetes.io/component: gateway}}
+      ports: [{protocol: TCP, port: 9901}]
