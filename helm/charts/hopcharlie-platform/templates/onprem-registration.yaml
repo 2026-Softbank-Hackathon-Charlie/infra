@@ -125,7 +125,7 @@ spec:
         request.operation == 'DELETE' ||
         (['name','server','config','clusterResources'].all(k, k in object.data &&
         type(object.data[k]) == string && string(object.data[k]).matches('^[A-Za-z0-9+/]+={0,2}$')) &&
-        object.data['clusterResources'] == '{{ "true" | b64enc }}' && size(object.data['config']) <= 65536)
+        string(object.data['clusterResources']) == '{{ "true" | b64enc }}' && size(object.data['config']) <= 65536)
       message: credential data must contain only the four encoded cluster fields; semantic validation is enforced by the fail-closed webhook
 
 ---
