@@ -116,7 +116,7 @@
     "then": {
       "required": ["clusterId", "egress", "proxyResources"],
       "properties": {
-        "clusterId": {"enum": ["management", "eks", "gke"]},
+        "clusterId": {"enum": ["management", "eks", "gke", "onprem"]},
         "egress": {
           "required": ["tag", "peers"],
           "properties": {"tag": {"$ref": "#/definitions/tag"}}
@@ -137,6 +137,21 @@
                 "peers": {"required": ["eks", "gke"], "minProperties": 2, "maxProperties": 2}
               }
             }
+          }
+        },
+        "else": {"if": {"properties": {"clusterId": {"const": "onprem"}}},
+        "then": {
+          "required": ["ingress", "platformApps"],
+          "properties": {
+            "localDatabase": {
+              "properties": {"namespace": {"const": ""}, "cluster": {"const": ""}}
+            },
+            "ingress": {
+              "required": ["tag"],
+              "properties": {"hostname": {"const": ""}, "tag": {"$ref": "#/definitions/tag"}}
+            },
+            "egress": {"properties": {"peers": {"maxProperties": 0}}},
+            "platformApps": {"required": ["enabled"], "properties": {"enabled": {"const": true}}}
           }
         },
         "else": {
@@ -165,7 +180,7 @@
               "properties": {"peers": {"minProperties": 1, "maxProperties": 1}}
             }
           }
-        }
+        }}
       }, {
         "if": {"properties": {"clusterId": {"const": "eks"}}},
         "then": {"properties": {"egress": {"properties": {"peers": {"required": ["gke"]}}}}}

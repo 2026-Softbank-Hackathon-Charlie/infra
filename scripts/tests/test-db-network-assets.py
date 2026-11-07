@@ -173,6 +173,34 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         values = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text(encoding='utf-8'))
         self.assertEqual(values['api']['dsnHostSuffixes'], '.ts.net,.hopcharlie-db-network.svc.cluster.local')
 
+    def test_onprem_is_a_paired_database_environment(self):
+        platform = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text(encoding='utf-8'))
+        templates = dict(t.split('=', 1) for t in platform['api']['appDbTopology']['hostTemplates'].split(','))
+        self.assertEqual(templates, {
+            env: f'db-{env}-{{instance}}.{NAMESPACE}.svc.cluster.local' for env in ('eks', 'gke', 'onprem')
+        })
+        profiles = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text(encoding='utf-8'))
+        self.assertLessEqual(set(templates), set(profiles['environments']))
+        onprem = profiles['environments']['onprem']
+        self.assertEqual(onprem['cluster'], {'name': 'charlie-dev-onprem-workload'})
+        profile = onprem['profile']
+        self.assertEqual(profile['postgres']['storageClass'], 'local-path')
+        self.assertIs(profile['postgres']['backup']['enabled'], False)
+        self.assertIs(profile['ingress']['enabled'], False)
+        self.assertEqual(profile['publicService']['type'], 'ClusterIP')
+        self.assertIs(profile['observability']['enabled'], False)
+        # The app chart's proxies use the shared objects of the onprem db-network release.
+        release = yaml.safe_load((ASSETS / 'onprem.yaml').read_text(encoding='utf-8'))
+        self.assertEqual(profile['dbNetwork'], {
+            'enabled': True,
+            'tailnetDomain': 'tail567fe8.ts.net',
+            'ingressTag': release['ingress']['tag'],
+            'egressTag': release['egress']['tag'],
+            'ingressProxyClass': 'hopcharlie-app-db-ingress-onprem',
+            'egressProxyClass': 'hopcharlie-app-db-egress-onprem',
+            'proxyNamespace': NAMESPACE,
+        })
+
 
 if __name__ == '__main__':
     unittest.main()

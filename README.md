@@ -910,6 +910,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
 - [helm/db-network/management.yaml](helm/db-network/management.yaml)
 - [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
+- [helm/db-network/onprem.yaml](helm/db-network/onprem.yaml)
 - [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
 - [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
 - [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
@@ -985,5 +986,6 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
 - [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
 - [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
+- [docs/adr/0072-add-onprem-as-paired-database-environment.md](docs/adr/0072-add-onprem-as-paired-database-environment.md)
 
 - [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시

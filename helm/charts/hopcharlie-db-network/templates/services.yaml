@@ -1,6 +1,6 @@
 {{- if .Values.enabled }}
 {{- $proxyClass := printf "hopcharlie-db-network-%s" .Values.clusterId }}
-{{- if ne .Values.clusterId "management" }}
+{{- if not (has .Values.clusterId (list "management" "onprem")) }}
 ---
 apiVersion: v1
 kind: Service

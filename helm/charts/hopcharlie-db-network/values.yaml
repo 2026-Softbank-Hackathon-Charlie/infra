@@ -1,7 +1,7 @@
 # Install manually only after the pinned operator and its CRDs exist in
 # hopcharlie-db-network; this chart never creates a Namespace or a Secret.
 enabled: false
-clusterId: "" # management, eks or gke
+clusterId: "" # management, eks, gke or onprem
 
 # Workload profiles only. The namespace and CNPG Cluster must already exist.
 localDatabase:
@@ -15,11 +15,12 @@ ingress:
 
 egress:
   tag: ""
-  # management: eks + gke; eks: gke; gke: eks.
+  # management: eks + gke; eks: gke; gke: eks; onprem: none (infra ADR 0072).
   # Each peer requires a unique local hostname and the remote ingress full FQDN.
   peers: {}
 
-# Workload profiles only (infra ADR 0063). Shared objects for the database
+# Workload profiles only (infra ADR 0063); required for onprem, which has
+# no static database path and renders only these objects (infra ADR 0072). Shared objects for the database
 # proxies of platform apps registered in two environments, so a new app needs
 # no change to this release: ProxyClasses hopcharlie-app-db-ingress-<clusterId>
 # and hopcharlie-app-db-egress-<clusterId>, which label their proxy pods
@@ -33,7 +34,7 @@ platformApps:
 # the ProxyClass hopcharlie-app-db-egress-management, a NetworkPolicy for its
 # proxies, and the Role and admission policies with which the platform API
 # (charlie-platform/hopcharlie-platform) creates and deletes the egress
-# Services db-<eks|gke>-<instance> of registered apps in this namespace.
+# Services db-<eks|gke|onprem>-<instance> of registered apps in this namespace.
 managementAppRoutes:
   enabled: false
   tag: tag:hop-db-client-management

@@ -176,6 +176,87 @@
           "region": "ap-northeast-2"
         }
       }
+    },
+    "onprem": {
+      "cluster": {
+        "name": "charlie-dev-onprem-workload"
+      },
+      "profile": {
+        "publicService": {
+          "type": "ClusterIP",
+          "port": 80
+        },
+        "ingress": {
+          "enabled": false
+        },
+        "progressDeadlineSeconds": 300,
+        "postgres": {
+          "storageClass": "local-path",
+          "storageSize": "4Gi",
+          "resources": {
+            "requests": {
+              "memory": "256Mi"
+            },
+            "limits": {
+              "memory": "512Mi"
+            }
+          },
+          "backup": {
+            "enabled": false
+          },
+          "topologyStorageSize": "4Gi"
+        },
+        "s3": {
+          "endpoint": "https://s3.ap-northeast-2.amazonaws.com",
+          "region": "ap-northeast-2",
+          "bucketPrefix": "hopcharlie-eks-",
+          "credentialsSecret": "app-s3"
+        },
+        "quota": {
+          "enabled": true,
+          "hard": {
+            "requests.cpu": "2",
+            "requests.memory": "4Gi",
+            "limits.memory": "8Gi",
+            "pods": "20",
+            "persistentvolumeclaims": "4",
+            "requests.storage": "20Gi",
+            "services.loadbalancers": "0"
+          }
+        },
+        "limitRange": {
+          "enabled": true,
+          "default": {
+            "memory": "256Mi"
+          },
+          "defaultRequest": {
+            "cpu": "50m",
+            "memory": "64Mi"
+          }
+        },
+        "networkPolicy": {
+          "enabled": true,
+          "gatewayFrom": []
+        },
+        "dbNetwork": {
+          "enabled": true,
+          "tailnetDomain": "tail567fe8.ts.net",
+          "ingressTag": "tag:hop-db-onprem",
+          "egressTag": "tag:hop-db-client-onprem",
+          "ingressProxyClass": "hopcharlie-app-db-ingress-onprem",
+          "egressProxyClass": "hopcharlie-app-db-egress-onprem",
+          "proxyNamespace": "hopcharlie-db-network"
+        },
+        "observability": {
+          "enabled": false,
+          "metricsEnabled": false,
+          "endpoint": "",
+          "caBundle": "",
+          "clusterName": "",
+          "cloudProvider": "aws",
+          "region": "ap-northeast-2"
+        }
+      }
     }
   },
   "platform": {

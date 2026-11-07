@@ -1,4 +1,5 @@
-{{- if .Values.enabled }}
+{{- /* onprem has no static database path (infra ADR 0072): only platformApps. */}}
+{{- if and .Values.enabled (ne .Values.clusterId "onprem") }}
 apiVersion: tailscale.com/v1alpha1
 kind: ProxyClass
 metadata:
