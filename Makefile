@@ -57,6 +57,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-app-routing.py
 	@$(PYTHON) scripts/tests/test-platform-written-tokens.py
 	@$(PYTHON) scripts/tests/test-platform-parity.py
+	@$(PYTHON) scripts/tests/test-hopai-recommendations.py
 	@$(PYTHON) scripts/tests/test-register-traefik.py
 	@$(PYTHON) scripts/tests/test-db-network.py
 	@$(PYTHON) scripts/tests/test-db-network-assets.py
