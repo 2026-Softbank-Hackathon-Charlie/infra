@@ -489,7 +489,7 @@ def main():
         assert runner["spec"]["matchConstraints"]["resourceRules"] == [{"apiGroups": ["batch"], "apiVersions": ["*"], "operations": ["CREATE", "UPDATE"], "resources": ["jobs"]}]
         assert "system:serviceaccount:charlie-platform:hopcharlie-platform" in runner["spec"]["matchConditions"][0]["expression"]
         rules = " ".join(v["expression"] for v in runner["spec"]["validations"])
-        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-platform'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom",
+        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-hopai'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom",
                      "['hopcharlie-hopai-fetch', 'hopai-onboarding']", "'^hopai-onb-[0-9a-f]{12}$'"):
             assert want in rules, want
         # An onboarding's hopai input ConfigMap and stopping its Job (infra ADR 0082).
@@ -785,7 +785,7 @@ def main():
             svc["replicas"] = 0
         onb["values"]["postgres"] = {"image": "ghcr.io/cloudnative-pg/postgresql:17.11-standard-bookworm@sha256:" + "a" * 64,
                                      "database": "moimroom", "owner": "moimroom", "storageSize": "3Gi",
-                                     "parameters": {"max_connections": "200", "max_wal_senders": "10", "wal_retrieve_retry_interval": "2s"}}
+                                     "parameters": {"max_connections": "200", "max_wal_senders": "10"}}
         onb["values"]["dbTopology"] = {"primary": "eks", "peer": "gke", "peerPresent": False, "external": {
             "name": "legacy", "host": "hop-db-legacy-moimroom", "user": "hopcharlie_replicator", "passwordSecret": "moimroom-db-legacy", "sslmode": "prefer"}}
         onb["values"]["onboardingCold"] = True
@@ -800,8 +800,8 @@ def main():
             assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
         spec = next(d for d in docs if d["kind"] == "Cluster")["spec"]
         assert spec["imageName"] == onb["values"]["postgres"]["image"] and spec["storage"]["size"] == "3Gi"
-        # values.postgres.parameters merge into the chart's; a given key wins.
-        assert spec["postgresql"]["parameters"] == {"wal_retrieve_retry_interval": "2s", "max_connections": "200", "max_wal_senders": "10"}, spec["postgresql"]
+        # values.postgres.parameters merge into the chart's parameters.
+        assert spec["postgresql"]["parameters"] == {"wal_retrieve_retry_interval": "1s", "max_connections": "200", "max_wal_senders": "10"}, spec["postgresql"]
         assert spec["bootstrap"] == {"pg_basebackup": {"source": "legacy", "database": "moimroom", "owner": "moimroom", "secret": {"name": "moimroom-db-app"}}}, spec["bootstrap"]
         assert spec["replica"] == {"self": "moimroom-db-eks", "primary": "legacy", "source": "legacy"}, spec["replica"]
         assert spec["certificates"]["serverCASecret"] == "app-pg-ca" and spec["certificates"]["clientCASecret"] == "app-pg-ca"
@@ -844,7 +844,7 @@ def main():
         alone_file = work / "onboarding-alone.json"
         alone_file.write_text(json.dumps(alone))
         spec = next(d for d in render(ROOT / "helm/charts/hopcharlie-app", alone_file, "moimroom", "moimroom", ("-f", eks_on)) if d["kind"] == "Cluster")["spec"]
-        assert spec["postgresql"] == {"parameters": {"max_connections": "200", "max_wal_senders": "10", "wal_retrieve_retry_interval": "2s"}}, spec.get("postgresql")
+        assert spec["postgresql"] == {"parameters": {"max_connections": "200", "max_wal_senders": "10"}}, spec.get("postgresql")
         assert spec["bootstrap"] == {"initdb": {"database": "moimroom", "owner": "moimroom"}}, spec["bootstrap"]
         assert ("Service", "moimroom-db-to-legacy") not in objects and ("NetworkPolicy", "moimroom-db-to-legacy") not in objects
         assert ("SealedSecret", "moimroom-db-legacy") in objects
@@ -861,6 +861,9 @@ def main():
             ("pgLegacy without a postgres resource", lambda v: (v["values"].pop("dbTopology"), v["values"]["sealedSecrets"].pop("pgApp"),
                                                                 v["values"]["sealedSecrets"].pop("pgCA"), v["values"].update(resources=[{"name": "photos", "type": "s3"}]))),
             ("negative replicas", lambda v: v["values"]["services"][0].update(replicas=-1)),
+            ("a postgres parameter outside the allowlist", lambda v: v["values"]["postgres"]["parameters"].update(archive_mode="off")),
+            ("a postgres parameter that is not a number", lambda v: v["values"]["postgres"]["parameters"].update(max_connections="lots")),
+            ("an app label over 32 characters", lambda v: v["values"]["dbTopology"]["external"].update(host="hop-db-legacy-" + "a" * 33)),
         ):
             values = copy.deepcopy(onb)
             change(values)

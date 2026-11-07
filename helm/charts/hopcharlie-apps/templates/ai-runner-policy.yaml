@@ -5,7 +5,7 @@ limit what a created Job runs, so without this policy the API could start any
 pod in the namespace: with another component's labels (the console and
 gateway Services select on them and would send it their traffic), another
 ServiceAccount, the namespace's Secrets or any image. This keeps its Jobs to
-the runner: label hopai, the platform ServiceAccount, the runner's images, and
+the runner: label hopai, the runner's ServiceAccount, the runner's images, and
 no Secret, hostPath, projected or claimed volumes or secret env. ConfigMap
 volumes are the runner's scripts and an onboarding's input (infra ADR 0082),
 the only ConfigMaps the second policy lets the API create or delete; it may
@@ -40,8 +40,8 @@ spec:
       message: the platform creates AI runner Jobs only in its own namespace
     - expression: "has(object.spec.template.metadata.labels) && object.spec.template.metadata.labels['app.kubernetes.io/component'] == 'hopai'"
       message: an AI runner pod must carry app.kubernetes.io/component=hopai and no other component
-    - expression: {{ printf "has(variables.pod.serviceAccountName) && variables.pod.serviceAccountName == '%s'" .Values.platform.serviceAccount | quote }}
-      message: an AI runner pod runs as the platform ServiceAccount
+    - expression: {{ printf "has(variables.pod.serviceAccountName) && variables.pod.serviceAccountName == '%s'" (required "platform.aiRunner.serviceAccount is required with platform.aiRunner.enabled" .Values.platform.aiRunner.serviceAccount) | quote }}
+      message: an AI runner pod runs as the runner's own ServiceAccount, never the platform's (infra ADR 0082)
     - expression: {{ printf "variables.containers.all(c, %s.exists(p, c.image.startsWith(p)))" $allowed | quote }}
       message: an AI runner pod runs only the runner's images
     - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.secret) && !has(v.hostPath) && !has(v.projected) && !has(v.persistentVolumeClaim))"

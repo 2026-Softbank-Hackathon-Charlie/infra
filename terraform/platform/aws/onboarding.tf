@@ -10,19 +10,24 @@
 
 locals {
   onboarding_tag = "hopcharlie-onboarding"
-  instance_arn   = "arn:aws:ec2:*:${data.aws_caller_identity.me.account_id}:instance/*"
+  instance_arn   = [for r in [var.region, var.onboarding_second_region] : "arn:aws:ec2:${r}:${data.aws_caller_identity.me.account_id}:instance/*"]
+  # Instances of this account's own stacks (Component default tag): the SSM
+  # bridge (access), the Tailscale subnet router (app-private-network) and EKS.
+  infra_components = ["access", "app-private-network", "eks"]
 
   # The patterns repeat the scripts' own checks (terraform/platform/aws/
   # onboarding/*.sh), so SendCommand refuses what the script would.
-  public_key_rule = "^[A-Za-z0-9+/]{198,1200}={0,2}$" # base64 DER of the one-time RSA key, 200..1200 characters
+  public_key_rule = "^([A-Za-z0-9+/]{200,1200}|[A-Za-z0-9+/]{199,1199}=|[A-Za-z0-9+/]{198,1198}==)$" # base64 DER of the one-time RSA key, 200..1200 characters
   docker_name     = "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
-  app_label       = "^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$"
+  app_label       = "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" # an app name, at most 32 characters
 
   # Each document carries its script base64-encoded, so SSM interpolates
   # nothing in it, and every parameter reaches it only as SSM_<name>
   # (interpolationType ENV_VAR), which each step maps to the script's HC_*
-  # variables. The first step writes the script to /run once; later steps of
-  # the same command run it with their own mode.
+  # variables. The first step writes the script once into the command's own
+  # directory (the parent of the step's, which SSM makes per command id), so
+  # two commands never share it; later steps run it with their own mode and
+  # the last one removes it.
   onboarding_documents = {
     Inspect = {
       script      = "inspect.sh"
@@ -48,7 +53,7 @@ locals {
         network          = { description = "The compose network of the database container.", allowedPattern = local.docker_name }
         subnet           = { description = "That network's IPv4 subnet, for the hba line.", allowedPattern = "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$" }
         tailscaleAuthKey = { description = "One-time, preauthorized, tag:hop-legacy auth key that expires in an hour.", allowedPattern = "^tskey-auth-[A-Za-z0-9_-]{10,200}$" }
-        hostname         = { description = "Tailnet hostname, hop-db-legacy-<appLabel>.", allowedPattern = "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$" }
+        hostname         = { description = "Tailnet hostname, hop-db-legacy-<appLabel>.", allowedPattern = "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" }
         publicKey        = { description = "Base64 DER of the one-time RSA public key the replication password is encrypted with.", allowedPattern = local.public_key_rule }
         appLabel         = { description = "The app's name.", allowedPattern = local.app_label }
       }
@@ -88,8 +93,10 @@ locals {
         inputs = {
           timeoutSeconds = d.timeout
           runCommand = [join("; ", compact([
-            "f=/run/hopcharlie-onboarding-doc/${trimsuffix(d.script, ".sh")}-${substr(filesha256("${path.module}/onboarding/${d.script}"), 0, 16)}.sh",
-            i == 0 ? "mkdir -p -m 700 /run/hopcharlie-onboarding-doc && echo '${filebase64("${path.module}/onboarding/${d.script}")}' | base64 -d > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" || exit 1" : "",
+            "c=\"$(cd \"$(dirname \"$0\")/..\" && pwd -P)\" || exit 1",
+            "case \"$c\" in /var/lib/amazon/ssm/*) ;; *) echo \"not run by SSM Run Command ($c)\" >&2; exit 1 ;; esac",
+            "f=\"$c/hopcharlie-${trimsuffix(d.script, ".sh")}.sh\"",
+            i == 0 ? "echo '${filebase64("${path.module}/onboarding/${d.script}")}' | base64 -d > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" || exit 1" : "",
             "[ -f \"$f\" ] || { echo \"the ${d.script} of this command is missing\" >&2; exit 1; }",
             i == length(d.steps) - 1 ? "trap 'rm -f \"$f\"' EXIT" : "",
             "${s.mode == "" ? "" : "${s.mode} "}${d.env} bash \"$f\"",
@@ -137,22 +144,15 @@ resource "aws_iam_policy" "platform_onboarding" {
         Resource = concat([for d in aws_ssm_document.onboarding : d.arn], [for d in aws_ssm_document.onboarding_second : d.arn])
       },
       # SendCommand authorizes the document and each instance separately, and
-      # IAM cannot tie one to the other: Inspect needs every instance, so this
-      # statement also lets Connect and Disconnect reach an untagged one. The
-      # deny below and the fixed scripts are the boundary; the tag statement
-      # states the platform's promise and holds alone without this one.
+      # IAM cannot tie one to the other: Inspect needs every instance, so
+      # Connect and Disconnect reach them too. The platform runs those only on
+      # the instance it tagged; the boundary here is the denies below and the
+      # fixed scripts.
       {
-        Sid      = "InspectAnyInstance"
+        Sid      = "CommandsOnInstances"
         Effect   = "Allow"
         Action   = "ssm:SendCommand"
         Resource = local.instance_arn
-      },
-      {
-        Sid       = "ConnectTaggedInstances"
-        Effect    = "Allow"
-        Action    = "ssm:SendCommand"
-        Resource  = local.instance_arn
-        Condition = { Null = { "ssm:resourceTag/${local.onboarding_tag}" = "false" } }
       },
       {
         Sid      = "OnlyTheOnboardingTag"
@@ -191,6 +191,20 @@ resource "aws_iam_policy" "platform_onboarding" {
         Action    = "ssm:SendCommand"
         Resource  = local.instance_arn
         Condition = { Null = { "ssm:resourceTag/eks:cluster-name" = "false" } }
+      },
+      {
+        Sid       = "NeverInfrastructureInstances"
+        Effect    = "Deny"
+        Action    = ["ec2:CreateTags", "ec2:DeleteTags", "ec2:StopInstances"]
+        Resource  = local.instance_arn
+        Condition = { StringEquals = { "aws:ResourceTag/Component" = local.infra_components } }
+      },
+      {
+        Sid       = "NeverCommandsOnInfrastructureInstances"
+        Effect    = "Deny"
+        Action    = "ssm:SendCommand"
+        Resource  = local.instance_arn
+        Condition = { StringEquals = { "ssm:resourceTag/Component" = local.infra_components } }
       },
       {
         Sid       = "NeverCommandsOnAutoScalingInstances"

@@ -172,7 +172,9 @@ spec:
     - expression: >-
         has(oldObject.spec.replica) && has(object.spec.replica) &&
         ((object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
-          oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)) ||
+          oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica) &&
+          (!(has(oldObject.spec.replica.source) && oldObject.spec.replica.source == 'legacy') ||
+           (has(object.spec.replica.primary) && has(oldObject.spec.replica.self) && object.spec.replica.primary == oldObject.spec.replica.self))) ||
          (has(oldObject.spec.replica.source) && oldObject.spec.replica.source == 'legacy' &&
           has(oldObject.spec.replica.primary) && has(oldObject.spec.replica.self) &&
           oldObject.spec.replica.primary == oldObject.spec.replica.self &&

@@ -31,6 +31,53 @@ resource "aws_iam_role_policy" "platform_pod_own_parameters" {
   policy = local.own_parameters_policy
 }
 
+# The AI runner Jobs (hopcharlie-platform hopai.yaml) run as their own
+# ServiceAccount: hopai runs model-driven work, so it must not hold the
+# platform role (SSM commands, instance stop, buckets, IAM users). Its role
+# reads only what the Job's fetch step gets (infra ADR 0082).
+resource "aws_iam_role" "hopai_pod" {
+  name = "${local.name}-hopai-pod"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "pods.eks.amazonaws.com" }
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "hopai_pod_parameters" {
+  name = "read-hopai-parameters"
+  role = aws_iam_role.hopai_pod.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "ssm:GetParameter"
+        Resource = [
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.me.account_id}:parameter${local.prefix}/hopai/*",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.me.account_id}:parameter${local.prefix}/platform-tokens",
+        ]
+      },
+      {
+        Effect    = "Allow"
+        Action    = "kms:Decrypt"
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" } }
+      },
+    ]
+  })
+}
+
+resource "aws_eks_pod_identity_association" "hopai" {
+  cluster_name    = var.management_cluster
+  namespace       = "charlie-platform"
+  service_account = "hopcharlie-hopai"
+  role_arn        = aws_iam_role.hopai_pod.arn
+}
+
 resource "aws_eks_pod_identity_association" "platform" {
   cluster_name    = var.management_cluster
   namespace       = "charlie-platform"

@@ -30,7 +30,7 @@ platform ADR 0042는 플랫폼 밖 VM 한 대에서 docker compose로 돌던 앱
 
 gitops 값의 모양은 platform `internal/deploy/gitops.go`의 `PostgresValues` 주석을 그대로 따른다. 값이 없으면 기존 출력과 바이트 단위로 같다(`scripts/check-helm.py` 전체 렌더를 origin/main 차트와 비교해 확인).
 
-- `values.postgres.parameters`(문자열 맵)는 Cluster `spec.postgresql.parameters`에 합친다. 차트가 이미 두는 값(짝 DB의 `wal_retrieve_retry_interval`)은 같은 키가 있을 때만 values가 이긴다. 플랫폼은 온보딩한 앱의 replica가 원본보다 작지 않도록 `max_connections`, `max_wal_senders`, `max_worker_processes`, `max_prepared_transactions`, `max_locks_per_transaction`을 여기에 쓴다.
+- `values.postgres.parameters`는 Cluster `spec.postgresql.parameters`에 합친다. schema는 `max_connections`, `max_wal_senders`, `max_worker_processes`, `max_prepared_transactions`, `max_locks_per_transaction`만, 값은 숫자 문자열만 받는다. 차트가 두는 짝 DB의 `wal_retrieve_retry_interval`은 그대로다. 플랫폼은 온보딩한 앱의 replica가 원본보다 작지 않도록 `max_connections`, `max_wal_senders`, `max_worker_processes`, `max_prepared_transactions`, `max_locks_per_transaction`을 여기에 쓴다.
 - `values.postgres.image`는 Cluster `imageName`, `database`와 `owner`는 bootstrap의 값(없으면 `app`), `storageSize`는 PVC 크기로 `profile.postgres.topologyStorageSize`와 `storageSize`보다 먼저 쓴다. 토폴로지가 없는 Cluster는 `database`나 `owner`가 있을 때만 `bootstrap.initdb`를 그린다.
 - `values.dbTopology.external`은 primary 파일에만 쓸 수 있고(세 멤버와 함께 쓸 수 없다), `sealedSecrets.pgLegacy`와 `profile.dbNetwork.enabled`가 필요하다. 그러면 Cluster는 다음과 같다.
   - `bootstrap.pg_basebackup {source: legacy, database, owner, secret: <cluster>-app}`
@@ -52,7 +52,7 @@ gitops 값의 모양은 platform `internal/deploy/gitops.go`의 `PostgresValues`
 
 ### 승인 정책
 
-- 워크로드 `hopcharlie-platform-migration`(aws, gcp, onprem의 `hopcharlie-platform-access.yaml`): `replica.source`가 `legacy`이고 이미 승격된(`primary == self`) Cluster에서, `source`만 `<metadata.name>-`로 시작하고 `externalClusters`에 있으며 `legacy`도 자기 자신도 아닌 이름으로 바꾸는 것을 더 허용한다. 다른 필드를 같이 바꾸면 거부한다.
+- 워크로드 `hopcharlie-platform-migration`(aws, gcp, onprem의 `hopcharlie-platform-access.yaml`): `replica.source`가 `legacy`인 동안 `primary`는 자기 이름으로만 바꿀 수 있다(승격만, 짝으로 강등하지 않는다). 또 `replica.source`가 `legacy`이고 이미 승격된(`primary == self`) Cluster에서, `source`만 `<metadata.name>-`로 시작하고 `externalClusters`에 있으며 `legacy`도 자기 자신도 아닌 이름으로 바꾸는 것을 더 허용한다. 다른 필드를 같이 바꾸면 거부한다.
 - 관리 `management-app-routes.yaml`: 이름 `^db-legacy-`, 라벨 `hopcharlie.dev/db-route: legacy`, FQDN `hop-db-legacy-<app>.<tailnet>`(기존과 같이 `hop-` + 이름), hostname `hop-db-management-to-legacy-`를 받는다. 포트는 기존처럼 TCP 5432 하나다.
 
 두 정책은 cel-go로 식을 평가해 허용과 거부 경우를 확인했다(저장소 밖 임시 하네스, 결과는 PR 본문).
@@ -65,16 +65,17 @@ managed policy `hopcharlie-platform-onboarding`을 플랫폼 역할에 붙인다
 | --- | --- |
 | `Discover` | `ec2:DescribeInstances`, `DescribeAddresses`, `DescribeNetworkInterfaces`, `ssm:DescribeInstanceInformation`(SSM 관리 여부), `ssm:GetCommandInvocation`, 리소스 `*` |
 | `OnlyTheHopCharlieDocuments` | `ssm:SendCommand`, 두 리전의 문서 `HopCharlie-Inspect`, `HopCharlie-Connect`, `HopCharlie-Disconnect`만 |
-| `InspectAnyInstance` | `ssm:SendCommand`, 이 계정의 모든 인스턴스 |
-| `ConnectTaggedInstances` | `ssm:SendCommand`, `ssm:resourceTag/hopcharlie-onboarding`이 있는 인스턴스(Connect, Disconnect용) |
+| `CommandsOnInstances` | `ssm:SendCommand`, 두 리전의 이 계정 인스턴스 |
 | `OnlyTheOnboardingTag` | `ec2:CreateTags`, `ec2:DeleteTags`, 태그 키가 `hopcharlie-onboarding` 하나일 때만 |
 | `StopTaggedInstances` | `ec2:StopInstances`, 온보딩 태그가 있는 인스턴스만 |
-| `Never*` (Deny) | `eks:cluster-name`이나 `aws:autoscaling:groupName` 태그가 있는 인스턴스(`Null` 조건)에 `CreateTags`, `DeleteTags`, `StopInstances`, `SendCommand` |
+| `Never*` (Deny) | `eks:cluster-name`이나 `aws:autoscaling:groupName` 태그가 있는 인스턴스(`Null` 조건), 그리고 이 계정 스택의 인스턴스(`Component` 태그가 `access`(SSM bridge), `app-private-network`(Tailscale subnet router), `eks`)에 `CreateTags`, `DeleteTags`, `StopInstances`, `SendCommand` |
 
-- SendCommand는 문서와 인스턴스를 따로 인가하고, IAM은 둘을 묶지 못한다. Inspect가 모든 인스턴스를 써야 하므로 `InspectAnyInstance`가 Connect와 Disconnect도 태그 없는 인스턴스에 닿게 한다. `ConnectTaggedInstances`는 플랫폼 코드의 약속을 적어 둔 것이고, 실제 경계는 거부 문과 고정 문서다(platform ADR 0042 권한 절과 같다).
+인스턴스 ARN은 두 리전(`region`, `onboarding_second_region`)으로만 쓴다.
+
+- SendCommand는 문서와 인스턴스를 따로 인가하고, IAM은 둘을 묶지 못한다. Inspect가 모든 인스턴스를 써야 하므로 Connect와 Disconnect도 태그 없는 인스턴스에 닿을 수 있다. ADR 0042의 "Connect는 태그가 있을 때만" 문은 효과가 없어 두지 않았다. 플랫폼은 자기가 태그를 붙인 인스턴스에만 Connect와 Disconnect를 쓰고, IAM의 경계는 거부 문과 고정 문서다.
 - `DeleteTags`(DELETE가 붙인 태그를 되돌린다)와 `DescribeInstanceInformation`(조사의 SSM 관리 여부)은 ADR 0042 권한 표에 없던 것이다.
 - 문서 세 개는 `aws_ssm_document`(Command, schema 2.2, Linux)이고, 계정이 쓸 수 있는 두 리전(`region`, `onboarding_second_region` 기본 `ap-southeast-2`)에 같은 내용으로 둔다. 원본 VM이 어느 리전에 있어도 SendCommand가 그 리전의 문서를 쓰기 때문이다.
-- 스크립트는 `terraform/platform/aws/onboarding/{inspect,connect,disconnect}.sh`(infra #146)이다. 문서는 스크립트를 base64로 싣고 첫 단계에서 `/run/hopcharlie-onboarding-doc/<이름>-<sha256 앞 16자>.sh`로 풀고, 마지막 단계가 끝나면 지운다. SSM이 스크립트 안의 `{{`를 치환하지 않게 하려는 것이다.
+- 스크립트는 `terraform/platform/aws/onboarding/{inspect,connect,disconnect}.sh`(infra #146)이다. 문서는 스크립트를 base64로 싣는다. SSM이 스크립트 안의 `{{`를 치환하지 않게 하려는 것이다. 첫 단계가 그 명령의 디렉터리(단계 디렉터리의 부모, SSM이 명령 id마다 `/var/lib/amazon/ssm/.../orchestration/<command id>/` 아래에 만든다)에 풀고, 마지막 단계가 지운다. 같은 VM에서 두 명령이 겹쳐도 파일을 같이 쓰지 않는다. 그 디렉터리가 `/var/lib/amazon/ssm/` 아래가 아니면 단계가 실패한다(이 경로 배치는 SSM Agent 동작으로 본 가정이고 실제 VM에서 확인하지 않았다).
 - 매개변수는 모두 String이고 `interpolationType: ENV_VAR`로 `SSM_<이름>` 환경 변수로만 받는다. 각 단계가 그 값을 스크립트의 `HC_*` 변수로 넘긴다. `allowedPattern`은 스크립트의 검사와 같다.
 
 | 문서 | 매개변수 | 단계 |
@@ -97,6 +98,7 @@ custom role `charliePlatformOnboardingDiscovery`(`compute.instances.list`, `comp
   1. 컨테이너 `hopai`에 `KIND=onboard`, `ONBOARDING`, `REPO`, `BRANCH`, `FACTS_FILE=/onboarding/facts.json`, 재시도 때 `CHECK_LOG_FILE=/onboarding/check.log`를 넣는다.
   2. 볼륨 `onboarding`의 `configMap.name`을 `hopai-<온보딩 id>`(예: `hopai-onb-3f9a1c2b7d4e`)로, `optional`을 false로 바꾼다.
   3. Job을 만든 뒤 그 ConfigMap을 Job을 owner로 해서 만든다. Pod는 ConfigMap이 생길 때까지 기다리고, Job이 지워지면 함께 지워진다.
+- hopai Job은 플랫폼 ServiceAccount가 아니라 전용 `hopcharlie-hopai`로 돈다. 플랫폼 역할(SSM 명령, 인스턴스 중지, 버킷, IAM 사용자)을 모델이 움직이는 컨테이너가 갖지 않게 하려는 것이다. 그 Pod Identity 역할 `hopcharlie-hopai-pod`(`terraform/platform/aws/eks.tf`)는 `/hopcharlie/hopai/*`와 `/hopcharlie/platform-tokens`의 `ssm:GetParameter`와 SSM 경유 `kms:Decrypt`만 갖는다. ServiceAccount 이름은 템플릿에만 있고 platform `internal/airun`은 그대로 복사하므로 platform 변경은 없다. AI runner 정책은 이제 이 ServiceAccount만 받는다(`platform.aiRunner.serviceAccount`).
 - RBAC `hopcharlie-ai-runner`에 Job `delete`와 ConfigMap `create`, `delete`를 더한다. RBAC는 이름을 미리 알 수 없으므로 `hopcharlie-apps`의 AI runner 정책이 좁힌다. Job의 ConfigMap 볼륨은 `hopcharlie-hopai-fetch`, `hopai-onboarding`, `^hopai-onb-[0-9a-f]{12}$`만 된다. 새 정책 `hopcharlie-platform-ai-runner-cleanup`은 플랫폼 namespace에서 `^hopai-onb-[0-9a-f]{12}$` ConfigMap의 생성과 삭제, 라벨 `hopcharlie.dev/ai-run=true`인 Job의 삭제만 받는다.
 - 같은 Role에 Pod `get`, `list`와 `pods/log` `get`을 더한다. 플랫폼이 hopai onboard의 결과를 Pod 로그로 읽기 때문이다(platform #139). RBAC는 runner의 Pod로 좁힐 수 없어 플랫폼 namespace의 모든 Pod 명세와 로그를 읽을 수 있다. 플랫폼 설정 값은 `/config`(메모리 볼륨)에 있고 Pod 명세나 로그에는 없으므로 받아들인다.
 
@@ -105,13 +107,15 @@ custom role `charliePlatformOnboardingDiscovery`(`compute.instances.list`, `comp
 - 기대 효과: 온보딩 값이 없는 앱의 출력과 권한은 그대로이고, 플랫폼 구현이 ADR 0042의 2번부터 5번까지를 이 차트와 권한으로 진행할 수 있다.
 - 단점과 위험:
   - 차트가 그린 Cluster로 외부 원본 복제와 승격을 실제로 다시 돌리지 않았다. 첫 온보딩 전에 kind에서 렌더 결과로 다시 확인한다.
+  - 전환 뒤 차트는 `initdb`를 그린다. Cluster가 지워지고 다시 만들어지면(네임스페이스나 Application 재생성) 원본이 아니라 빈 DB로 태어나므로, 그때는 백업(ADR 0025)에서 되살린다.
   - Cluster `bootstrap` 무시는 모든 앱에 걸린다. bootstrap을 고쳐도 기존 Cluster에는 적용되지 않는데, CNPG도 만든 뒤에는 쓰지 않으므로 바뀌는 동작은 없다.
-  - `InspectAnyInstance` 때문에 Connect의 태그 조건은 IAM으로 강제되지 않는다(위).
+  - Connect와 Disconnect를 태그가 있는 인스턴스로만 묶는 것은 IAM으로 강제되지 않는다(위).
+  - `platform-tokens`에는 agent 말고 다른 역할의 토큰도 있다. hopai 역할이 그 파라미터 전체를 읽는다. agent 토큰만 따로 두는 것은 후속 작업이다.
   - `interpolationType: ENV_VAR`는 최근 SSM Agent에서만 동작한다. 오래된 agent에서는 환경 변수가 비고, 스크립트의 입력 검사가 실패한다.
   - 이 PR은 infra #146의 스크립트 파일을 읽으므로 #146이 먼저 머지되어야 한다.
   - Tailscale auth key는 SSM 명령 기록에 남는다(ADR 0042가 받아들인 위험, 일회용 1시간).
 - 필요한 후속 작업 및 검증(머지 뒤, 사람이 승인하고 실행):
-  1. `terraform/platform/aws`: `./tf.sh plan`으로 두 리전의 문서 세 개씩, managed policy와 attachment만 더해지는지 보고 apply한다. 스크립트가 바뀌면 다시 apply해 문서 버전을 올린다.
+  1. `terraform/platform/aws`: `./tf.sh plan`으로 두 리전의 문서 세 개씩, managed policy와 attachment, hopai 역할과 Pod Identity association만 더해지는지 보고 apply한다. hopai Job의 ServiceAccount 변경(차트)은 이 apply 뒤에 반영돼야 Job의 fetch가 실패하지 않는다. 스크립트가 바뀌면 다시 apply해 문서 버전을 올린다.
   2. `terraform/integrations/gcp/platform-storage`: plan으로 custom role과 binding만 더해지는지 보고 apply한다.
   3. 워크로드 `hopcharlie-platform-access.yaml` 세 개를 ADR 0063의 방식(`scripts/put-platform-kubeconfig.py`, onprem은 수동)으로 다시 적용한다.
   4. 관리 `app-db-routes` 릴리스를 ADR 0064의 runbook대로 업그레이드한다.

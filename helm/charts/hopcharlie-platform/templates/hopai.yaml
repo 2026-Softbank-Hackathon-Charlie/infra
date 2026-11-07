@@ -12,14 +12,25 @@ hopai-<onboarding id> with optional false. It then creates that ConfigMap
 garbage collector deletes it with the Job. A plain run keeps the name
 hopai-onboarding, which nobody creates, and mounts an empty optional volume.
 
-The Job reads its settings from SSM through the platform ServiceAccount (Pod
-Identity), like the API pod: the Claude key, the sandbox-admin kubeconfigs of
+The Job runs as its own ServiceAccount hopcharlie-hopai, whose Pod Identity
+role (terraform/platform/aws eks.tf) reads only what fetch.sh gets, not the
+platform role's (infra ADR 0082). It reads from SSM the Claude key, the sandbox-admin kubeconfigs of
 the workload clusters (/hopcharlie/hopai/*, put there by an operator) and the
 agent entry of /hopcharlie/platform-tokens. It talks to the API inside the
 namespace, to the clusters' API servers and to Claude over 443.
 */ -}}
 {{- if .Values.hopai.enabled }}
 {{- $image := required "hopai.image is required with hopai.enabled" .Values.hopai.image }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hopcharlie-hopai
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+# Only an AWS identity (Pod Identity); hopai reaches the clusters with the
+# kubeconfigs it fetches, never with a token of this account.
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -69,7 +80,7 @@ data:
             {{- end }}
         spec:
           restartPolicy: Never
-          serviceAccountName: hopcharlie-platform
+          serviceAccountName: hopcharlie-hopai
           automountServiceAccountToken: false
           securityContext:
             {{- include "hopcharlie.podSecurity" 10001 | nindent 12 }}

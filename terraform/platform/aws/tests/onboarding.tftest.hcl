@@ -40,7 +40,7 @@ run "onboarding_documents_and_permissions" {
     error_message = "Inspect stops after a failed inspection and always cleans up; Connect and Disconnect fail on any non-zero exit."
   }
   assert {
-    condition     = toset([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s.Sid]) == toset(["Discover", "OnlyTheHopCharlieDocuments", "InspectAnyInstance", "ConnectTaggedInstances", "OnlyTheOnboardingTag", "StopTaggedInstances", "NeverEksNodes", "NeverAutoScalingInstances", "NeverCommandsOnEksNodes", "NeverCommandsOnAutoScalingInstances"])
+    condition     = toset([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s.Sid]) == toset(["Discover", "OnlyTheHopCharlieDocuments", "CommandsOnInstances", "OnlyTheOnboardingTag", "StopTaggedInstances", "NeverEksNodes", "NeverAutoScalingInstances", "NeverCommandsOnEksNodes", "NeverCommandsOnAutoScalingInstances", "NeverInfrastructureInstances", "NeverCommandsOnInfrastructureInstances"])
     error_message = "Onboarding statements must match the contract."
   }
   assert {
@@ -50,6 +50,10 @@ run "onboarding_documents_and_permissions" {
   assert {
     condition     = one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "OnlyTheOnboardingTag"]).Condition["ForAllValues:StringEquals"]["aws:TagKeys"] == ["hopcharlie-onboarding"] && one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "StopTaggedInstances"]).Condition.Null["aws:ResourceTag/hopcharlie-onboarding"] == "false"
     error_message = "Tags only with the onboarding key, stops only tagged instances."
+  }
+  assert {
+    condition     = alltrue([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s.Resource == "*" || try(startswith(s.Resource[0], "arn:aws:ssm:"), false) || try(toset(s.Resource) == toset(["arn:aws:ec2:ap-northeast-2:123456789012:instance/*", "arn:aws:ec2:ap-southeast-2:123456789012:instance/*"]), false)]) && one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "NeverCommandsOnInfrastructureInstances"]).Condition.StringEquals["ssm:resourceTag/Component"] == ["access", "app-private-network", "eks"] && one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "NeverInfrastructureInstances"]).Condition.StringEquals["aws:ResourceTag/Component"] == ["access", "app-private-network", "eks"]
+    error_message = "Instances only in the two regions, never the account's own infrastructure instances."
   }
   assert {
     condition     = one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "OnlyTheHopCharlieDocuments"]).Action == "ssm:SendCommand" && length(one([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s if s.Sid == "OnlyTheHopCharlieDocuments"]).Resource) == 6 && aws_iam_role_policy_attachment.platform_onboarding.role == aws_iam_role.platform_pod.name

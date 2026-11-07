@@ -154,7 +154,7 @@
               "required": ["name", "host", "user", "passwordSecret", "sslmode"],
               "properties": {
                 "name": { "const": "legacy" },
-                "host": { "type": "string", "pattern": "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,47}[a-z0-9])?$" },
+                "host": { "type": "string", "pattern": "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" },
                 "user": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
                 "passwordSecret": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
                 "sslmode": { "enum": ["prefer", "require", "verify-ca", "verify-full"] }
@@ -172,8 +172,8 @@
             "storageSize": { "$ref": "#/definitions/quantity" },
             "parameters": {
               "type": "object",
-              "propertyNames": { "pattern": "^[a-z_][a-z0-9_.]{0,62}$" },
-              "additionalProperties": { "type": "string" }
+              "propertyNames": { "enum": ["max_connections", "max_wal_senders", "max_worker_processes", "max_prepared_transactions", "max_locks_per_transaction"] },
+              "additionalProperties": { "type": "string", "pattern": "^[0-9]{1,7}$" }
             }
           }
         },
