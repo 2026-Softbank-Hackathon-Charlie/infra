@@ -1042,6 +1042,11 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [helm/gitops/templates/observability-external.yaml](helm/gitops/templates/observability-external.yaml) | GKE 관측 코드·준비 설정·검증 |
 | [scripts/tests/test-gke-observability.py](scripts/tests/test-gke-observability.py) | GKE 관측 코드·준비 설정·검증 |
 | [clusters/gcp-dev-workload/observability-namespace.yaml](clusters/gcp-dev-workload/observability-namespace.yaml) | 노드 로그·지표 agent용 namespace의 명시적 실행 준비 |
+| [terraform/environments/aws/dev/foundation/langfuse.tf](terraform/environments/aws/dev/foundation/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/management/langfuse.tf](terraform/environments/aws/dev/management/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 
 ### Onprem registration preparation (disabled)
 
