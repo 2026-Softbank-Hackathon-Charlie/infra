@@ -589,6 +589,32 @@ def main():
             assert ns["metadata"]["labels"]["pod-security.kubernetes.io/enforce"] == "restricted"
             policies = [d for d in docs if d["kind"] == "NetworkPolicy"]
             assert any({"ipBlock": {"cidr": "10.40.0.0/19"}} in (rule.get("from") or []) for d in policies for rule in d["spec"].get("ingress") or []), "GKE apps admit only the gateway subnets"
+        # onprem apps (ADR 0081): buckets on the laptop's in-cluster MinIO, path
+        # style, with the same prefix as the platform's minio storage block, and
+        # an egress rule to MinIO's port 9000 next to the default 443.
+        onprem_profile = work / "onprem-profile.json"
+        onprem = json.loads(apps_values.read_text())["environments"]["onprem"]
+        onprem_profile.write_text(json.dumps({"profile": onprem["profile"]}))
+        envs_text = (ROOT / "terraform/platform/aws/host/envs.yaml").read_text()
+        onprem_env = next(e for e in yaml.safe_load(envs_text)["environments"] if e["name"] == "onprem")
+        assert onprem_env["storage"]["driver"] == "minio", onprem_env.get("storage")
+        assert onprem_env["storage"]["bucketPrefix"] == onprem["profile"]["s3"]["bucketPrefix"], "envs.yaml and the onprem profile name the same buckets"
+        minio_egress = {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "minio"}}, "podSelector": {"matchLabels": {"app": "minio"}}}], "ports": [{"protocol": "TCP", "port": 9000}]}
+        for ci in sorted((ROOT / "helm/charts/hopcharlie-app/ci").glob("*.yaml")):
+            gitops_file = yaml.safe_load(ci.read_text())
+            gitops_file.pop("profile", None)
+            plain = work / ("onprem-" + ci.name)
+            plain.write_text(json.dumps(gitops_file))
+            namespace = gitops_file["namespace"]
+            docs = render(ROOT / "helm/charts/hopcharlie-app", plain, namespace, namespace, ("-f", onprem_profile))
+            has_s3 = any(r["type"] == "s3" for r in gitops_file["values"].get("resources") or [])
+            for pod in (d["spec"]["template"] for d in docs if d["kind"] == "Deployment"):
+                for container in pod["spec"]["containers"]:
+                    env = {e["name"]: e.get("value") for e in container["env"] if e["name"].startswith("S3_")}
+                    expected = {"S3_ENDPOINT": "http://minio.minio.svc.cluster.local:9000", "S3_BUCKET": "hopcharlie-op-" + namespace, "S3_REGION": "us-east-1", "S3_PATH_STYLE": "true", "S3_ACCESS_KEY": None, "S3_SECRET_KEY": None}
+                    assert env == (expected if has_s3 else {}), env
+            policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-app")
+            assert minio_egress in policy["spec"]["egress"], policy["spec"]["egress"]
         # The schema and the chart refuse sealed values the platform must not write.
         stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
         # Postgres backups (platform ADR 0025): with the platform's backup bucket and
