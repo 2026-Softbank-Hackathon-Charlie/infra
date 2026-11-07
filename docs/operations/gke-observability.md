@@ -1,6 +1,6 @@
 # GKE 관측 연결 준비와 실행 기준
 
-2026-11-07. 코드 준비 단계다. **실제 설치·Secret 발급·tailnet 변경·GKE 앱 활성화를 수행하지 않았다.** 온프레미스는 사용자 지시로 제외한다. 결정은 [ADR0082](../adr/0082-connect-gke-to-central-observability.md)를 따른다.
+초기 준비 기준은 2026-11-07이며, **최신 실제 적용 상태는 아래 2026-11-08 절을 따른다.** GKE backend 설치·Secret 발급·tailnet 연결은 완료했고 앱 활성화는 사용자 PR 머지 대기다. 온프레미스는 사용자 지시로 제외한다. 결정은 [ADR0082](../adr/0082-connect-gke-to-central-observability.md)를 따른다.
 
 ## 구성과 현재 상태
 
@@ -8,7 +8,7 @@
 - Ready 노드 3개, 각 allocatable CPU 1930m/메모리 6170224Ki. 점검 당시 요청량 기준 남은 CPU 562m/1000m/497m이다. 배포 직전 fresh 용량을 다시 계산한다.
 - GKE 자체 metrics-server·Google managed 수집기·KSM·Tailscale operator·PD 클래스는 이미 있다. 중앙용 observability namespace와 monitoring.coreos.com CRD는 없었다. 기존 managed 구성은 변경하지 않는다.
 - GKE API의 현재 허용 AWS NAT 경로로 strict CA/SNI 읽기를 확인했다. 로컬 IP를 허용 목록에 추가하지 않았다. 이 운영 접근 터널은 수집 경로가 아니다.
-- 앱 `gke.profile.observability`는 계속 off다. 준비 파일 [app-observability.yaml](../../clusters/gcp-dev-workload/values/app-observability.yaml)도 off이며 새 CA·endpoint가 확정되기 전에 켜지 않는다.
+- 앱 `gke.profile.observability`와 [app-observability.yaml](../../clusters/gcp-dev-workload/values/app-observability.yaml)은 실제 발급한 공개 CA·endpoint로 활성화한다. 앱용 admission/RBAC 선행 검증과 사용자 PR 머지 후 순차 적용한다.
 
 ```mermaid
 flowchart LR
@@ -104,3 +104,13 @@ GKE profile은 기록한 이전 값으로 복구하고 해당 신규 관측 App/
 **자원 gate:** 3개 node 기준 GKE 기본 요청은 885m/2112Mi이며 gateway/Prometheus PVC는 2Gi/10Gi다. 합성 fixture 최대335m/576Mi와 PVC1Gi는 별도다. 관측 rollout과 fixture를 순차 실행하고 기존 앱 활성화도 Deployment 하나씩 진행한다. fresh node별 allocatable·기존 요청·Pod overhead·일반/init/sidecar peak·Pending Pod·taint/affinity·PD topology와 surge까지 계산한다. 기존 워크로드 축소·노드 증설은 이 계획에서 수행하지 않는다.
 
 **합성 검증 제한:** `obs-gke-proof-*` 자원만 생성·UID 기록·정리한다. private ECR image를 GKE 신규 namespace에서 pull할 기존 경로가 없으면 credential 복사·신규 발급·이미지 게시로 우회하지 않는다. 이 경우 공개 pinned nginx로 공통 chart env/CA 주입·로그·replica 수집만 검증하며 합성 SDK 앱은 미검증으로 남긴다. SDK/DB/storage trace는 기존 GKE 모임룸의 nonce SELECT·HEAD probe로 별도 확인한다. 합성 CNPG는 독립1 instance/PVC1Gi이며 실 업무 DB·bucket과 연결하지 않는다. 합성 PVC 삭제 외 운영 PVC는 보존한다.
+
+## 2026-11-08 실제 적용과 앱 활성화
+
+GKE Alloy3개·gateway·Prometheus·node-exporter·query proxy 및 양쪽 Tailscale proxy4개를 설치했고 운영 PVC2Gi/10Gi가 Bound다. HyperDX GKE Prometheus 연결에서 node3개/cAdvisor/정상target13개를 확인했고 기존 관리·AWS workload query200을 보존했다. 신규 합성 CNPG의 up=1, 앱·DB 로그와 즉시 완료 Job 첫 로그1건도 중앙 저장을 확인했다. 이는 앱 SDK trace 검증을 대신하지 않는다.
+
+Argo root/관측 Git source는 `main`을 추적한다. 검증용 snapshot SHA는 기록에만 사용하며 운영 targetRevision을 SHA로 재고정하지 않는다. Helm chart semver와 image digest pin은 유지한다.
+
+앱 자동 활성화 전 [ADR0088](../adr/0088-authorize-gke-app-observability-resources.md)의 별도 앱 권한 guard를 적용한다. 기존 VAP의 빈 subResource는 필드 생략을 처리하며, bootstrap Role/RoleBinding은 Argo 읽기만 허용한다. 새 앱 guard+Binding → 거절 검증 → unbound role/권한binding → 소유namespace 최초CA/PodMonitor CREATE·변조거절 검증 순서를 따른다. 전체 chart sync로 단계를 합치지 않는다.
+
+공개 CA와 gke profile 활성화는 이 PR에 포함한다. 사용자 머지 후 hopcharlie-apps ApplicationSet의 GKE profile을 선택 반영하고 앱 한 개씩 확인한다. 기존 이미지·업무env·DB topology/credentials/storage를 바꾸지 않는다. 실제 SDK server→DB/storage trace와 로그 trace_id/span_id 확인은 후속 실제 검증 결과에 기록한다.

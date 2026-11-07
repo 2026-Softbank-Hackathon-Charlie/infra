@@ -74,6 +74,9 @@ spec:
         {{- if (dig "automatic" "enabled" false .Values.observability) }}
         - ../../../clusters/aws-dev-management/values/clickstack-workload.yaml
         {{- end }}
+        {{- if (dig "externalTargets" "gke" "enabled" false .Values.observability) }}
+        - ../../../clusters/aws-dev-management/values/clickstack-gke.yaml
+        {{- end }}
   destination: {server: {{ $management.endpoint | quote }}, namespace: observability}
   syncPolicy:
     syncOptions: [ServerSideApply=true]

@@ -1068,3 +1068,6 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
 | [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
 | [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+
+- [docs/adr/0088-authorize-gke-app-observability-resources.md](docs/adr/0088-authorize-gke-app-observability-resources.md) — GKE 새 앱의 공개 CA·CNPG PodMonitor 자동 등록 권한과 admission 제한
+- [helm/charts/gcp-argocd-access/templates/app-observability.yaml](helm/charts/gcp-argocd-access/templates/app-observability.yaml) — 기본 off인 앱 관측 자원 guard와 단계별 권한

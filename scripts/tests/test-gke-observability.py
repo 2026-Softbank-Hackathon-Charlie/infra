@@ -52,18 +52,21 @@ class GKEObservability(unittest.TestCase):
         v['observability'] = {'enabled': True, 'automatic': {'enabled': True}, 'agentTargets': ['management', 'workload'], 'gatewayTargets': ['management', 'workload']}
         return v
 
-    def test_preparation_is_off_and_aws_root_objects_are_identical(self):
+    def test_activation_is_explicit_and_aws_root_objects_are_identical(self):
         v = self.root()
         before = render('helm/gitops', v, namespace='argocd')
         v['observability']['externalTargets'] = load('clusters/gcp-dev-workload/values/observability-activation.yaml')['observability']['externalTargets']
-        self.assertFalse(v['observability']['externalTargets']['gke']['enabled'])
+        self.assertTrue(v['observability']['externalTargets']['gke']['enabled'])
+        v['observability']['externalTargets']['gke']['enabled'] = False
         after = render('helm/gitops', v, namespace='argocd')
         self.assertEqual(before, after)
         self.assertNotIn('gke', v['targets'])
         self.assertFalse([d for d in after if d['metadata']['name'].startswith('charlie-gke-')])
         apps = load('clusters/aws-dev-management/values/hopcharlie-apps.yaml')['environments']
-        self.assertFalse(apps['gke']['profile']['observability']['enabled'])
-        self.assertFalse(load('clusters/gcp-dev-workload/values/app-observability.yaml')['environments']['gke']['profile']['observability']['enabled'])
+        self.assertTrue(apps['gke']['profile']['observability']['enabled'])
+        self.assertTrue(apps['gke']['profile']['observability']['metricsEnabled'])
+        self.assertIn('BEGIN CERTIFICATE', apps['gke']['profile']['observability']['caBundle'])
+        self.assertEqual(apps['gke']['profile']['observability'], load('clusters/gcp-dev-workload/values/app-observability.yaml')['environments']['gke']['profile']['observability'])
         for role, directory in [('gke', 'gcp-dev-workload'), ('management', 'aws-dev-management')]:
             values = load(f'clusters/{directory}/values/observability-transport.yaml')
             self.assertFalse(values['enabled'])
@@ -168,7 +171,7 @@ class GKEObservability(unittest.TestCase):
         self.assertEqual({name for group, resource, name in actual if resource == 'secrets'}, {'monitoring-prometheus-scrape-confg'})
         self.assertFalse(any('*' in p for entry in actual for p in entry))
         expression = policy['spec']['validations'][0]['expression']
-        self.assertIn("request.subResource == ''", expression)
+        self.assertIn("!has(request.subResource) || request.subResource == ''", expression)
         self.assertIn("request.namespace == 'hopcharlie-db-network' && request.operation in ['UPDATE', 'DELETE']", expression)
         role = next(x for x in of(docs, 'Role') if x['metadata']['namespace'] == 'hopcharlie-db-network')
         self.assertFalse(any('create' in rule['verbs'] for rule in role['rules']))
@@ -177,6 +180,33 @@ class GKEObservability(unittest.TestCase):
         self.assertTrue(any('networkpolicies' in rule['resources'] and 'create' in rule['verbs'] for rule in dynamic['rules']))
         self.assertNotIn('bind', json.dumps([x for x in of(docs, 'Role')]))
         self.assertNotIn('escalate', json.dumps([x for x in of(docs, 'Role')]))
+
+    def test_app_observability_guard_is_opt_in_and_keeps_exact_contract(self):
+        v = load('clusters/gcp-dev-workload/values/argocd-observability-access.yaml')
+        v['observability'].update(enabled=True, appResourcesEnabled=True, appResourcesGranted=False,
+                                  appCABundle=load('clusters/gcp-dev-workload/values/app-observability.yaml')['environments']['gke']['profile']['observability']['caBundle'])
+        docs = render('helm/charts/gcp-argocd-access', v, release='gcp-argocd-access')
+        name = 'gcp-argocd-access-app-observability'
+        p = next(d for d in of(docs, 'ValidatingAdmissionPolicy') if d['metadata']['name'] == name)
+        self.assertEqual(p['spec']['failurePolicy'], 'Fail')
+        self.assertEqual({r for x in p['spec']['matchConstraints']['resourceRules'] for r in x['resources']}, {'configmaps', 'configmaps/*', 'podmonitors', 'podmonitors/*'})
+        expressions = ' '.join(x['expression'] for x in p['spec']['validations'])
+        for guard in ["!has(request.subResource)", "namespaceObject.metadata.labels", "== 'restricted'", "variables.target.data['ca.crt'] == variables.ca", 'size(variables.target.data) == 1', 'size(variables.target.spec) == 2', "'port': 'metrics'", "'interval': '30s'", "'scrapeTimeout': '10s'", "variables.target.spec.selector == {'matchLabels': {'cnpg.io/cluster': variables.target.metadata.name}}"]:
+            self.assertIn(guard, expressions)
+        variables = {x['name']: x['expression'] for x in p['spec']['variables']}
+        self.assertEqual(variables['target'], "request.operation == 'DELETE' ? oldObject : object")
+        self.assertEqual(json.loads(variables['ca']), v['observability']['appCABundle'])
+        role = next(d for d in of(docs, 'ClusterRole') if d['metadata']['name'] == name)
+        self.assertEqual({r for rule in role['rules'] for r in rule['resources']}, {'configmaps', 'podmonitors'})
+        self.assertFalse(any(d['metadata']['name'] == name for d in of(docs, 'ClusterRoleBinding')))
+        v['observability']['appResourcesGranted'] = True
+        active = render('helm/charts/gcp-argocd-access', v, release='gcp-argocd-access')
+        self.assertTrue(any(d['metadata']['name'] == name for d in of(active, 'ClusterRoleBinding')))
+        for patch in [{'appResourcesEnabled': False, 'appResourcesGranted': True}, {'appCABundle': ''}, {'enabled': False}]:
+            bad = copy.deepcopy(v)
+            bad['observability'].update(patch)
+            with self.assertRaises(ValueError):
+                render('helm/charts/gcp-argocd-access', bad)
 
     def test_query_service_mode_preserves_aws_and_drops_aws_annotations_on_gke(self):
         aws = load('clusters/aws-dev-workload/values/observability-boundary.yaml')
