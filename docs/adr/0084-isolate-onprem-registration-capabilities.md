@@ -28,6 +28,8 @@ API의 신규 권한은 다음과 같다.
 - hopcharlie-db-network: `hop-k3s-<등록 ID의 24 hex>` API 경로. 전용 ProxyClass, `tag:hop-onprem-api-client`, `hop-k3s-*.tail567fe8.ts.net`, TCP 6443만 허용한다. operator가 관리하는 externalName·finalizers는 갱신 시 보존한다. 기존 DB Service UPDATE는 계속 거부한다.
 - Argo source·generator·destination·동기화 정책·profile은 서버 설정과 정확히 일치해야 한다. profile은 restricted를 강제하며 시스템 namespace, RBAC, Secret의 앱 동기화를 허용하지 않는다.
 
+Argo CRD의 `helm.valuesObject`는 opaque 필드여서 CEL이 내부 profile을 정확히 검증하기 어렵다. 동일한 우선순위를 갖는 `helm.values`에 Go JSON encoder로 만든 `{"profile": ...}` 문자열을 넣는다. JSON은 Helm values의 유효한 YAML 표현이며, VAP는 신뢰한 profile과 소유자 ID·UID를 포함한 문자열을 정확히 비교한다. 추가 `valuesObject` override는 허용하지 않는다. 공식 Argo CRD와 실제 API로 이 표현을 검증하며 타입 경고도 실패로 처리한다.
+
 새 장비 profile은 기존 onprem profile에서 출발하되 기존 노트북 전용 DB·S3·복제 경로는 복사하지 않는다. 연결 확인은 Kubernetes와 Hello World까지만 뜻한다. DB·스토리지·Sealed Secrets 기능은 별도 준비와 실제 검증 전까지 사용 가능하다고 표시하지 않는다.
 
 등록 profile은 내부 ClusterIP를 사용하고 기존 노트북의 Tailscale 웹 ProxyClass·태그·MinIO 송신 허용을 복사하지 않는다. AppSet은 해당 등록 ID와 클러스터 UID를 profile에 주입하고 앱 차트가 Namespace 라벨로 전달한다. 원격 admission이 자기 소유 Namespace만 허용하는 platform 설치 계약과 맞춘다. 기존 앱 Pod의 `automountServiceAccountToken: false`도 유지한다.

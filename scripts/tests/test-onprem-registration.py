@@ -13,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 CHART = ROOT / 'helm/charts/hopcharlie-platform'
 
 
-def render(enabled):
+def render(enabled, profile=None):
     values = json.loads((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text(encoding='utf-8'))
     values['api']['onpremRegistration'] = {'enabled': enabled, 'tailnetDomain': 'tail567fe8.ts.net',
-        'profile': {'podSecurity': 'restricted', 'networkPolicy': {'enabled': True}},
+        'profile': profile or {'podSecurity': 'restricted', 'networkPolicy': {'enabled': True}},
         'agentImage': 'example.test/agent@sha256:' + '1'*64,
         'tailscaleImage': 'example.test/tailscale@sha256:' + '2'*64,
         'helloImage': 'example.test/hello@sha256:' + '3'*64}

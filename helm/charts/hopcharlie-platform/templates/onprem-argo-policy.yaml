@@ -5,14 +5,17 @@
 {{- $uid := dict "__hopExpr" "variables.clusterUID" }}
 {{- $environment := dict "__hopExpr" "variables.environment" }}
 {{- $profile := deepCopy $cfg.profile }}
-{{- $_ := set $profile "onpremRegistration" (dict "enrollmentID" $owner "clusterUID" $uid) }}
+{{- $_ := set $profile "onpremRegistration" (dict "enrollmentID" "__HOP_ENROLLMENT__" "clusterUID" "__HOP_CLUSTER_UID__") }}
+{{- $valuesJSON := toJson (dict "profile" $profile) }}
+{{- $valuesExpr := replace "__HOP_ENROLLMENT__" "\" + variables.owner + \"" (toJson $valuesJSON) }}
+{{- $valuesExpr = replace "__HOP_CLUSTER_UID__" "\" + variables.clusterUID + \"" $valuesExpr }}
 {{- $destinations := list }}
 {{- range $namespace := list "*" "!kube-*" "!argocd" "!charlie-system" "!default" "!hopcharlie-*" }}
 {{- $destinations = append $destinations (dict "name" $name "namespace" $namespace) }}
 {{- end }}
 {{- $project := dict "sourceRepos" (list "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git") "destinations" $destinations "clusterResourceWhitelist" (list (dict "group" "" "kind" "Namespace")) "namespaceResourceBlacklist" (list (dict "group" "rbac.authorization.k8s.io" "kind" "*") (dict "group" "" "kind" "Secret")) }}
 {{- $generator := dict "git" (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "revision" "main" "files" (list (dict "path" (dict "__hopExpr" "'apps/*/' + variables.environment + '.yaml'"))) "requeueAfterSeconds" 30) }}
-{{- $sources := list (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "targetRevision" "main" "path" "helm/charts/hopcharlie-app" "helm" (dict "releaseName" "{{ .namespace }}" "valueFiles" (list "$gitops/{{ .path.path }}/{{ .path.filename }}") "valuesObject" (dict "profile" $profile))) (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "targetRevision" "main" "ref" "gitops") }}
+{{- $sources := list (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "targetRevision" "main" "path" "helm/charts/hopcharlie-app" "helm" (dict "releaseName" "{{ .namespace }}" "valueFiles" (list "$gitops/{{ .path.path }}/{{ .path.filename }}") "values" (dict "__hopExpr" $valuesExpr))) (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "targetRevision" "main" "ref" "gitops") }}
 {{- $sync := dict "automated" (dict "prune" true "selfHeal" true) "retry" (dict "limit" 10 "backoff" (dict "duration" "5s" "factor" 2 "maxDuration" "3m")) }}
 {{- $templateMeta := dict "name" (dict "__hopExpr" "'{{ .namespace }}-' + variables.environment") "labels" (dict "hopcharlie.dev/app" "{{ .app }}" "hopcharlie.dev/instance" "{{ .namespace }}" "hopcharlie.dev/env" $environment "hopcharlie.dev/onprem-enrollment" $owner) }}
 {{- $set := dict "goTemplate" true "goTemplateOptions" (list "missingkey=error") "generators" (list $generator) "template" (dict "metadata" $templateMeta "spec" (dict "project" $name "destination" (dict "name" $name "namespace" "{{ .namespace }}") "sources" $sources "syncPolicy" $sync)) }}

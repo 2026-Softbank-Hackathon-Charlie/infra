@@ -79,9 +79,7 @@ def route():
         'spec':{'type':'ExternalName','externalName':HOST+'.'+DOMAIN,'ports':[{'name':'kubernetes','port':6443,'protocol':'TCP'}]}}
 
 
-def argo(profile):
-    profile=copy.deepcopy(profile)
-    profile['onpremRegistration']={'enrollmentID':ID,'clusterUID':UID}
+def argo(values_json):
     meta = {'name':NAME,'namespace':'argocd','labels':{OWNER:ID,CLUSTER_UID:UID,'hopcharlie.dev/env':ENV}}
     project = {'apiVersion':'argoproj.io/v1alpha1','kind':'AppProject','metadata':copy.deepcopy(meta),'spec':{
         'sourceRepos':['https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git'],
@@ -93,7 +91,7 @@ def argo(profile):
         'generators':[{'git':{'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','revision':'main','files':[{'path':'apps/*/'+ENV+'.yaml'}],'requeueAfterSeconds':30}}],
         'template':{'metadata':{'name':'{{ .namespace }}-'+ENV,'labels':{'hopcharlie.dev/app':'{{ .app }}','hopcharlie.dev/instance':'{{ .namespace }}','hopcharlie.dev/env':ENV,OWNER:ID}},'spec':{
             'project':NAME,'destination':{'name':NAME,'namespace':'{{ .namespace }}'},'sources':[
-                {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ .namespace }}','valueFiles':['$gitops/{{ .path.path }}/{{ .path.filename }}'],'valuesObject':{'profile':profile}}},
+                {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ .namespace }}','valueFiles':['$gitops/{{ .path.path }}/{{ .path.filename }}'],'values':values_json}},
                 {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','targetRevision':'main','ref':'gitops'}],
             'syncPolicy':{'automated':{'prune':True,'selfHeal':True},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}}}}}}
     return project, appset
@@ -102,7 +100,7 @@ def argo(profile):
 def rendered_documents():
     module_spec = importlib.util.spec_from_file_location('render_test', ROOT/'scripts/tests/test-onprem-registration.py')
     module = importlib.util.module_from_spec(module_spec); module_spec.loader.exec_module(module)
-    docs = module.render(True)
+    docs = module.render(True,profile={'podSecurity':'restricted','networkPolicy':{'enabled':True},'onpremRegistration':{'enrollmentID':ID,'clusterUID':UID},'publicService':{'type':'ClusterIP','port':80,'annotations':{'example.test/special':'<tag>&value'}}})
     apps = json.loads((ROOT/'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text())
     docs += render('helm/charts/hopcharlie-apps', apps, 'argocd')
     docs += render('helm/charts/hopcharlie-db-network', {'enabled':False,'managementAppRoutes':{'enabled':True,'tailnet':DOMAIN,'tag':'tag:hop-db-client-management'}},'hopcharlie-db-network')
@@ -184,15 +182,18 @@ def main():
     bad=copy.deepcopy(saved);bad['spec']['externalName']=HOST+'.'+DOMAIN;decision('operator externalName overwritten',bad,False,'replace')
     static=route();static['metadata']['name']='db-eks';static=apply(static);decision('static DB route update',static,False,'replace')
     static['metadata']['name']='db-gke';decision('static DB route creation',static,False)
-    profile = json.loads(next(d for d in docs if d['kind']=='ConfigMap' and d['metadata']['name']=='hopcharlie-onprem-profile')['data']['profile.json'])
-    p,a=argo(profile)
+    # The real Helm encoder generates canonical Go JSON, including escaping;
+    # do not independently serialize the expected values with Python.
+    profile_json=next(d for d in docs if d['kind']=='ConfigMap' and d['metadata']['name']=='hopcharlie-onprem-profile')['data']['profile.json']
+    p,a=argo('{"profile":'+profile_json+'}')
     decision('owned fixed project',p,True);decision('owned fixed application set',a,True)
     for label,original,mutate in [
         ('project management destination',p,lambda o:o['spec']['destinations'].append({'server':'https://kubernetes.default.svc','namespace':'*'})),
         ('project protected namespace',p,lambda o:o['spec']['destinations'].pop()),
         ('project cluster admin kinds',p,lambda o:o['spec']['clusterResourceWhitelist'].append({'group':'*','kind':'*'})),
         ('application source repo',a,lambda o:o['spec']['template']['spec']['sources'][0].update(repoURL='https://evil.example/repo.git')),
-        ('application profile privilege',a,lambda o:o['spec']['template']['spec']['sources'][0]['helm']['valuesObject']['profile'].update(podSecurity='privileged')),
+        ('application profile privilege',a,lambda o:o['spec']['template']['spec']['sources'][0]['helm'].update(values=o['spec']['template']['spec']['sources'][0]['helm']['values'].replace('restricted','privileged'))),
+        ('application valuesObject override',a,lambda o:o['spec']['template']['spec']['sources'][0]['helm'].update(valuesObject={'profile':{'podSecurity':'privileged'}})),
         ('application other environment',a,lambda o:o['spec']['generators'][0]['git']['files'][0].update(path='apps/*/eks.yaml')),
         ('application template patch',a,lambda o:o['spec'].update(templatePatch='spec: {}'))]:
         bad=copy.deepcopy(original);mutate(bad);decision(label,bad,False)
