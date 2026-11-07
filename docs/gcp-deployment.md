@@ -42,7 +42,7 @@ cp terraform/environments/gcp/dev/workload/terraform.tfvars.example terraform/en
 cp terraform/environments/gcp/dev/workload/backend.hcl.example terraform/environments/gcp/dev/workload/backend.hcl
 ```
 
-프로젝트와 node_service_account_email을 bootstrap 결과로 채운다. control_plane_authorized_cidrs에는 운영자와 AWS 관리 영역의 실제 공인 egress CIDR를 입력한다. 예제 문서용 IP는 교체해야 하며 전체 인터넷 /0은 거부된다. CIDR가 AWS·VPN·다른 클러스터와 겹치지 않는지 확인한다. 기본값은 서울 단일 zone, 노드1개이며 운영 HA 구성이 아니다. GKE·노드·디스크·NAT 비용이 발생한다. backend에는 bootstrap GCS 버킷과 gcp/dev/workload prefix를 사용한다.
+프로젝트와 node_service_account_email을 bootstrap 결과로 채운다. control_plane_authorized_cidrs에는 운영자와 AWS 관리 영역의 실제 공인 egress CIDR를 입력한다. 예제 문서용 IP는 교체해야 하며 전체 인터넷 /0은 거부된다. CIDR가 AWS·VPN·다른 클러스터와 겹치지 않는지 확인한다. 기본값은 서울 단일 zone, 노드 3대이며 운영 HA 구성이 아니다. GKE·노드·디스크·NAT 비용이 발생한다. backend에는 bootstrap GCS 버킷과 gcp/dev/workload prefix를 사용한다.
 
 로컬 배포를 선택한 경우 사용자의 ADC 권한으로 실행한다. 아래 명령은 클라우드 조회·변경을 수행하므로 별도 검토 후 실행한다.
 
@@ -53,6 +53,14 @@ terraform -chdir=terraform/environments/gcp/dev/workload apply workload.tfplan
 ```
 
 기본 삭제 보호를 임의 해제하지 않는다. 생성 후 node Ready와 시스템 Pod 상태를 확인한다. 연결 경로와 허용 CIDR가 준비되지 않으면 API 접속이 되지 않을 수 있다.
+
+### 제어 영역 패치 목표 검토
+
+현재 소스는 제어 영역의 `min_master_version`을 `1.36.4-gke.2377000`으로 선언한다([ADR 0070](adr/0070-declare-gke-control-plane-patch-target.md)). 실제 적용 상태를 뜻하지 않는다. 별도 노드 풀의 `version`은 지정하지 않으며, 노드 3대와 `REGULAR` 채널·노드 자동 업그레이드는 유지한다. 이 값은 버전의 하한이므로 이후 GKE 자동 업그레이드를 막지 않는다.
+
+실제 적용 전에 기존 GCS state와 운영 입력으로 전체 workload plan을 확인한다. `-target`이나 `-refresh=false`로 다른 변경을 숨기지 않는다. 제어 영역 최소 버전 외 변경, 노드 생성·삭제·교체 또는 네트워크·IAM 등 다른 변경이 있으면 적용하지 않고 따로 검토한다. zonal 제어 영역 갱신 중 API와 스케줄링 등 관리 작업이 일시적으로 불가능할 수 있다. 옛 Service 삭제 오류가 이 패치로 수정됐다는 공개 근거는 확인되지 않았다.
+
+PR 게시·병합과 plan 검토는 실제 업그레이드 승인이 아니다. push/PR의 GCP 검사는 apply를 실행하지 않으며, 실제 업그레이드·이전·AWS strict 적용은 별도 승인 대상이다.
 
 ## 3. GitHub Actions로 Runtime 배포하는 경우
 

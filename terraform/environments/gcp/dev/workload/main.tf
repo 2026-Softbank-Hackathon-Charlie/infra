@@ -43,6 +43,7 @@ resource "google_container_cluster" "workload" {
   initial_node_count       = 1
   networking_mode          = "VPC_NATIVE"
   enable_shielded_nodes    = true
+  min_master_version       = "1.36.4-gke.2377000"
   release_channel { channel = "REGULAR" }
   ip_allocation_policy {
     cluster_secondary_range_name  = "pods"
