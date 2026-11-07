@@ -135,8 +135,13 @@ while IFS= read -r line; do
 done <<<"$removed"
 printf 'select pg_reload_conf();\n' | psql_db >/dev/null || die 5 "reloading the configuration failed"
 
+# Each session turns default_transaction_read_only off for itself: DELETE of
+# an onboarding may run while the source is still fenced read-only by
+# ALTER SYSTEM (platform ADR 0042, 5.), and DROP ROLE needs a writable
+# transaction. The fence itself stays as it is.
 roles=$(
 	psql_db <<SQL
+SET default_transaction_read_only = off;
 select pg_terminate_backend(pid) from pg_stat_activity where usename = '$REPLICATION_USER' \g /dev/null
 select 'replicator' where exists (select 1 from pg_roles where rolname = '$REPLICATION_USER');
 select 'postgres' from pg_roles where rolname = 'postgres' and shobj_description(oid, 'pg_authid') = '$MARKER';
@@ -144,13 +149,13 @@ SQL
 ) || die 5 "removing the roles failed"
 case "$roles" in
 *replicator*)
-	printf 'drop role if exists %s;\n' "$REPLICATION_USER" | psql_db >/dev/null || die 5 "dropping $REPLICATION_USER failed"
+	printf 'SET default_transaction_read_only = off;\ndrop role if exists %s;\n' "$REPLICATION_USER" | psql_db >/dev/null || die 5 "dropping $REPLICATION_USER failed"
 	undone replication_role_created "$REPLICATION_USER"
 	;;
 esac
 case "$roles" in
 *postgres*)
-	printf 'drop role postgres;\n' | psql_db >/dev/null || die 5 "dropping role postgres failed"
+	printf 'SET default_transaction_read_only = off;\ndrop role postgres;\n' | psql_db >/dev/null || die 5 "dropping role postgres failed"
 	undone postgres_role_created postgres
 	;;
 esac
