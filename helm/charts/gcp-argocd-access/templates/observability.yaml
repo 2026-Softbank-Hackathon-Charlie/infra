@@ -10,6 +10,14 @@
 {{- end }}
 {{- if $obs.enabled }}
 {{- $name := printf "%s-observability" .Release.Name }}
+{{- $allowed := list }}
+{{- range (.Files.Get "files/observability-resources.json" | fromJsonArray) }}
+{{- $group := .group }}
+{{- $resource := .resource }}
+{{- range .names }}
+{{- $allowed = append $allowed (printf "%s/%s/%s" $group $resource .) }}
+{{- end }}
+{{- end }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -34,13 +42,12 @@ spec:
          request.name in ['observability-transport-egress-client', 'observability-transport-ingress-client'])
   variables:
     - name: allowed
-      expression: {{ .Files.Get "files/observability-resources.json" | fromJsonArray | toJson | quote }}
+      expression: {{ $allowed | toJson | quote }}
   validations:
     - expression: >-
         request.subResource == '' &&
         ((request.namespace == 'observability' && request.operation in ['CREATE', 'UPDATE', 'DELETE'] &&
-          variables.allowed.exists(rule,
-            request.resource.group == rule.group && request.resource.resource == rule.resource && request.name in rule.names)) ||
+          (request.resource.group + '/' + request.resource.resource + '/' + request.name) in variables.allowed) ||
          (request.namespace == 'hopcharlie-db-network' && request.operation in ['UPDATE', 'DELETE']))
       message: Argo observability writes must match the reviewed resource names; transport NetworkPolicy CREATE and all subresources are forbidden
 ---

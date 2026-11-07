@@ -149,7 +149,7 @@ class GKEObservability(unittest.TestCase):
         docs = render('helm/charts/gcp-argocd-access', v, release='gcp-argocd-access')
         policy = next(x for x in of(docs, 'ValidatingAdmissionPolicy') if x['metadata']['name'].endswith('-observability'))
         allowed = json.loads(policy['spec']['variables'][0]['expression'])
-        actual = {(rule['group'], rule['resource'], name) for rule in allowed for name in rule['names']}
+        actual = {tuple(entry.split('/')) for entry in allowed}
         expected = set()
         plurals = {'ServiceAccount': 'serviceaccounts', 'ConfigMap': 'configmaps', 'PersistentVolumeClaim': 'persistentvolumeclaims',
                    'Service': 'services', 'Deployment': 'deployments', 'DaemonSet': 'daemonsets', 'Prometheus': 'prometheuses',
