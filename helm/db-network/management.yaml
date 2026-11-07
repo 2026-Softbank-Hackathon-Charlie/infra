@@ -1,5 +1,7 @@
 # Remote ingress FQDNs observed on reciprocal workload Services, 2026-11-06:
 # GKE db-eks points to EKS; EKS db-gke points to GKE.
+# 2026-11-07: the GKE moimroom and these db-eks (GKE) and db-gke routes were
+# removed; hop-db-gke-moimroom no longer exists.
 # Disabled profile only; manual Helm installation requires separate approval.
 enabled: false
 clusterId: management

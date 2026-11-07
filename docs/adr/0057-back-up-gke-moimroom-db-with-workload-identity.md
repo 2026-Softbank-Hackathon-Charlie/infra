@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-06
 - 상태: 채택, 2026-11-06 00:03(KST) 적용
+- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. 지금 moimroom은 EKS(`moimroom/moimroom-db`)에서만 돈다. `moimroom-db-gke`와 그 백업, 백업 매니페스트를 지웠고 app-db-backup의 `clusters` 기본값은 빈 목록이다. 버킷과 서비스 계정은 남긴다.
 - 관련 ADR: [0031](0031-reproduce-cnpg-poc-on-gke.md), [0050](0050-let-migrations-own-app-database-topology.md), platform 저장소 ADR 0025(앱 Postgres 백업)
 
 ## 배경과 제약

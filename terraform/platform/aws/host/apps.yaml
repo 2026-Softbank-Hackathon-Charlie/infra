@@ -24,6 +24,5 @@ apps:
     namespace: moimroom
     database: {name: app, user: app, schemas: [app]}
     environments:
-      gke:    {namespace: charlie-apps, cnpgCluster: moimroom-db-gke, dbHost: db-gke.hopcharlie-db-network.svc.cluster.local, passwordEnv: GKE_MOIMROOM_PGPASSWORD,    bucket: "gcs:charlie-414068132732-moimroom-gcp"}
       eks:    {cnpgCluster: moimroom-db,        dbHost: db-eks.hopcharlie-db-network.svc.cluster.local, passwordEnv: EKS_MOIMROOM_PGPASSWORD,    bucket: "s3:hopcharlie-eks-moimroom"}
       onprem: {cnpgCluster: moimroom-db-onprem, dbHost: moimroom-db-onprem-rw.moimroom.onprem.ts.net, passwordEnv: ONPREM_MOIMROOM_PGPASSWORD, bucket: "minio:moimroom-photos"}

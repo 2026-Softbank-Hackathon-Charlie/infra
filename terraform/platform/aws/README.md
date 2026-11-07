@@ -147,7 +147,7 @@ Terraform이 관리하는 설정(`host/compose.yaml`, `host/Caddyfile`, `host/en
 
 | 파라미터 | 내용 | 넣는 방법 |
 | --- | --- | --- |
-| `/hopcharlie/db-passwords` | Plan이 참조하는 DB 비밀번호. 한 줄에 `이름=값` (`SRC_PGPASSWORD`, `GKE_MOIMROOM_PGPASSWORD` 등) | 아래 명령 |
+| `/hopcharlie/db-passwords` | Plan이 참조하는 DB 비밀번호. 한 줄에 `이름=값` (`SRC_PGPASSWORD`, `EKS_MOIMROOM_PGPASSWORD` 등) | 아래 명령 |
 | `/hopcharlie/rclone-env` | 파일 이전에 쓰는 rclone 원격. 한 줄에 `RCLONE_CONFIG_<원격>_<옵션>=값` | 아래 명령 |
 | `/hopcharlie/kube/<이름>` | 클러스터마다 kubeconfig 하나. 워크로드 EKS(`eks`)는 infra의 `scripts/put-platform-kubeconfig.py`가 넣음 ([ADR 0036](../../../docs/adr/0036-app-routing-and-argo-apps.md)) | `bash "$PLATFORM_DIR/deploy/aws/put-kubeconfig.sh"` |
 | `/hopcharlie/tailscale-authkey` | 있으면 호스트가 Tailscale에 붙음 | 아래 명령 |

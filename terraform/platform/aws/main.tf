@@ -151,7 +151,7 @@ resource "aws_ssm_parameter" "host_file" {
 # aws ssm put-parameter --overwrite (deploy/aws/README.md); apply never resets them.
 resource "aws_ssm_parameter" "team_secret" {
   for_each = {
-    "db-passwords" = "# Database passwords plans reference, one KEY=value per line:\n# SRC_PGPASSWORD=...\n# GKE_MOIMROOM_PGPASSWORD=...\n"
+    "db-passwords" = "# Database passwords plans reference, one KEY=value per line:\n# SRC_PGPASSWORD=...\n"
     "rclone-env"   = "# rclone remotes, one KEY=value per line:\n# RCLONE_CONFIG_GCS_TYPE=google cloud storage\n"
   }
   name  = "${local.prefix}/${each.key}"

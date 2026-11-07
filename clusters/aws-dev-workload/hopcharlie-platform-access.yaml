@@ -121,7 +121,7 @@ subjects:
     name: hopcharlie-platform
     namespace: charlie-system
 ---
-# Production databases (moimroom, charlie-apps) have no such label: there the
+# Production databases (namespace moimroom) have no such label: there the
 # platform can patch only during a db-migration-access.py session.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy

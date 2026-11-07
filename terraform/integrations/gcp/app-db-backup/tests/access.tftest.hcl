@@ -26,10 +26,20 @@ run "private_bucket_in_the_region" {
     error_message = "Keep deleted objects recoverable for 7 days."
   }
 }
-run "only_the_named_clusters_act_as_the_account" {
+run "no_cluster_acts_as_the_account_by_default" {
   command = plan
   assert {
-    condition     = [for m in google_service_account_iam_member.clusters : m.member] == ["serviceAccount:charlie-test-project.svc.id.goog[charlie-apps/moimroom-db-gke]"]
+    condition     = length(google_service_account_iam_member.clusters) == 0
+    error_message = "Bind no Kubernetes service account unless a Cluster is named."
+  }
+}
+run "only_the_named_clusters_act_as_the_account" {
+  command = plan
+  variables {
+    clusters = ["app-example/postgres-example"]
+  }
+  assert {
+    condition     = [for m in google_service_account_iam_member.clusters : m.member] == ["serviceAccount:charlie-test-project.svc.id.goog[app-example/postgres-example]"]
     error_message = "Trust exactly the Kubernetes service account of each named Cluster."
   }
   assert {

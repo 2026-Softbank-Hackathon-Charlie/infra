@@ -13,10 +13,6 @@ import sys
 
 PROTECTED = {'argocd', 'cert-manager', 'charlie-apps', 'charlie-platform', 'charlie-system',
              'cnpg-system', 'default', 'headlamp', 'hopcharlie-db-network', 'observability'}
-# Exact (namespace, CNPG Cluster) pairs that may be granted although the namespace is protected
-# (infra ADR 0060). charlie-apps holds the GKE app workloads, and the live moimroom database is in it
-# (infra ADR 0053). Nothing else in a protected namespace is allowed, and a kube-* namespace never is.
-PROTECTED_EXCEPTIONS = {('charlie-apps', 'moimroom-db-gke')}
 DNS_LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?')
 RBAC_API = 'rbac.authorization.k8s.io/v1'
 # get and patch for the migration engine. migrate is not a Kubernetes verb: the workload's
@@ -41,11 +37,8 @@ def manifests(args):
         value = getattr(args, field)
         require(len(value) <= limit and DNS_LABEL.fullmatch(value),
                 f'Invalid {field}: use a DNS label of 1-{limit} lowercase letters, digits or hyphens.')
-    protected = args.namespace in PROTECTED or args.namespace.startswith('kube-')
-    require(not protected or (args.namespace, args.cluster) in PROTECTED_EXCEPTIONS,
-            'The requested namespace is reserved for infrastructure.' +
-            ' Only these (namespace, CNPG Cluster) pairs may be granted there: ' +
-            ', '.join(f'{ns}/{name}' for ns, name in sorted(PROTECTED_EXCEPTIONS)) + '.')
+    require(args.namespace not in PROTECTED and not args.namespace.startswith('kube-'),
+            'The requested namespace is reserved for infrastructure.')
     for value in (args.context, args.kubeconfig):
         require(value.strip() and not any(ord(char) < 32 for char in value),
                 'Context and kubeconfig must be explicit nonempty values without control characters.')

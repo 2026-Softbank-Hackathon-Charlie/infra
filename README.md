@@ -555,7 +555,6 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml](clusters/gcp-dev-workload/values/plugin-barman-cloud.yaml) | AWS와 같은 고정 Barman 컨트롤러·sidecar 이미지 |
 | [clusters/gcp-dev-workload/values/cert-manager.yaml](clusters/gcp-dev-workload/values/cert-manager.yaml) | AWS와 같은 고정 cert-manager 이미지·CRD 설정 |
 | [clusters/gcp-dev-workload/values/sealed-secrets.yaml](clusters/gcp-dev-workload/values/sealed-secrets.yaml) | GKE sealed-secrets 실제 설치 값(모든 namespace, 키 갱신 끔, ADR 0043) |
-| [clusters/gcp-dev-workload/values/moimroom-gcp.yaml](clusters/gcp-dev-workload/values/moimroom-gcp.yaml) | 기존 GKE moimroom Deployment 수동 렌더 profile: 이전 후 DB Secret 참조·시드 끔·1 replica와 현재 이미지·S3·resources 보존 |
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 
@@ -618,11 +617,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
 | [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
-| [scripts/tests/test-gke-moimroom.py](scripts/tests/test-gke-moimroom.py) | GKE 렌더 진입점의 profile 소비·Deployment 한정·기존 설정·Secret 참조 보존 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
-| [clusters/gcp-dev-workload/moimroom-db-backup.yaml](clusters/gcp-dev-workload/moimroom-db-backup.yaml) | GKE 운영 moimroom DB의 ObjectStore와 ScheduledBackup, 손으로 적용(ADR 0057) |
-| [clusters/gcp-dev-workload/moimroom-db-backup-patch.json](clusters/gcp-dev-workload/moimroom-db-backup-patch.json) | 같은 DB의 Cluster에 넣는 Workload Identity annotation, plugin, 4Gi 디스크(ADR 0057) |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
