@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "role",
+    "proxyNamespace",
+    "tailnetDomain",
+    "centralHostname",
+    "queryHostname"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "role": {
+      "enum": [
+        "management",
+        "gke"
+      ]
+    },
+    "proxyNamespace": {
+      "const": "hopcharlie-db-network"
+    },
+    "tailnetDomain": {
+      "type": "string",
+      "pattern": "^tail[a-z0-9]+\\.ts\\.net$"
+    },
+    "centralHostname": {
+      "const": "hop-observability-central"
+    },
+    "queryHostname": {
+      "const": "hop-observability-gke-query"
+    }
+  }
+}

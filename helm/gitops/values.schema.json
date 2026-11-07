@@ -181,6 +181,33 @@
           "required": [
             "enabled"
           ]
+        },
+        "externalTargets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gke": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled",
+                "endpoint",
+                "valuesDir"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "endpoint": {
+                  "type": "string",
+                  "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]+)?$"
+                },
+                "valuesDir": {
+                  "const": "clusters/gcp-dev-workload"
+                }
+              }
+            }
+          }
         }
       }
     }

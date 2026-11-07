@@ -1,0 +1,108 @@
+{
+  "fullnameOverride": "observability-alloy",
+  "crds": {
+    "create": false
+  },
+  "image": {
+    "registry": "docker.io",
+    "repository": "grafana/alloy",
+    "tag": "v1.21.3",
+    "digest": "sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4"
+  },
+  "configReloader": {
+    "enabled": false
+  },
+  "controller": {
+    "type": "daemonset",
+    "volumes": {
+      "extra": [
+        {
+          "name": "positions",
+          "hostPath": {
+            "path": "/var/lib/charlie-alloy",
+            "type": "DirectoryOrCreate"
+          }
+        },
+        {
+          "name": "client-ca",
+          "secret": {
+            "secretName": "observability-client-ca"
+          }
+        }
+      ]
+    }
+  },
+  "service": {
+    "enabled": false
+  },
+  "serviceMonitor": {
+    "enabled": false
+  },
+  "alloy": {
+    "stabilityLevel": "public-preview",
+    "storagePath": "/var/lib/alloy",
+    "enableReporting": false,
+    "configMap": {
+      "content": "// The API target is selected BEFORE a file reader is created.\nlogging { level = \"warn\" }\ndiscovery.kubernetes \"pods\" {\n  role = \"pod\"\n  selectors {\n    role = \"pod\"\n    field = \"spec.nodeName=\" + sys.env(\"NODE_NAME\")\n  }\n}\ndiscovery.relabel \"owned\" {\n  targets = discovery.kubernetes.pods.targets\n  rule {\n    source_labels = [\"__meta_kubernetes_namespace\"]\n   \n    regex = \"observability|gke-managed-.*|gmp-system|gmp-public|kube-system|kube-public|kube-node-lease|cert-manager|cnpg-system|headlamp|default|traefik|charlie-system|hopcharlie-db-network\"\n    action = \"drop\"\n  }\n  rule {\n    source_labels = [\"__meta_kubernetes_pod_label_observability_hopcharlie_dev_enabled\", \"__meta_kubernetes_namespace\"]\n   \n    regex = \"true;.*|;(hop-migrate|charlie-platform)\"\n    action = \"keep\"\n  }\n  rule {\n    source_labels = [\"__meta_kubernetes_pod_container_init\", \"__meta_kubernetes_pod_container_name\"]\n   \n    regex = \"true;fetch\"\n    action = \"drop\"\n  }\n  rule { source_labels = [\"__meta_kubernetes_namespace\"]\n    target_label = \"namespace\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_name\"]\n    target_label = \"pod\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_uid\"]\n    target_label = \"pod_uid\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_container_name\"]\n    target_label = \"container\" }\n  rule { source_labels = [\"__meta_kubernetes_namespace\"]\n    target_label = \"app\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_label_hopcharlie_dev_app\"]\n    regex = \"(.+)\"\n    target_label = \"app\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_container_name\"]\n    target_label = \"service\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_label_hopcharlie_dev_service\"]\n    regex = \"(.+)\"\n    target_label = \"service\" }\n  rule {\n    replacement = \"platform\"\n    target_label = \"workload_kind\" }\n  rule { source_labels = [\"__meta_kubernetes_pod_label_observability_hopcharlie_dev_kind\"]\n    regex = \"(.+)\"\n    target_label = \"workload_kind\" }\n  rule { source_labels = [\"__meta_kubernetes_namespace\"]\n    regex = \"hop-migrate\"\n    replacement = \"job\"\n    target_label = \"workload_kind\" }\n  rule {\n    source_labels = [\"__meta_kubernetes_namespace\", \"__meta_kubernetes_pod_name\", \"__meta_kubernetes_pod_uid\", \"__meta_kubernetes_pod_container_name\"]\n    separator = \";\"\n   \n    regex = \"(.+);(.+);(.+);(.+)\"\n   \n    replacement = \"/var/log/pods/${1}_${2}_${3}/${4}/*.log\"\n   \n    target_label = \"__path__\"\n  }\n  rule {\n    source_labels = [\"__meta_kubernetes_pod_container_image\"]\n    target_label = \"version\"\n  }\n  rule {\n    source_labels = [\"__meta_kubernetes_pod_label_app_kubernetes_io_version\"]\n    regex = \"(.+)\"\n    target_label = \"version\"\n  }\n  // Dropping per-port discovery labels makes identical container targets one reader.\n  rule { action = \"labelkeep\"\n    regex = \"__path__|namespace|pod|pod_uid|container|app|service|version|workload_kind\" }\n}\nloki.source.file \"containers\" {\n  targets = discovery.relabel.owned.output\n  file_match { enabled = true }\n  tail_from_end = false\n  forward_to = [loki.process.cri.receiver]\n}\nloki.process \"cri\" {\n  stage.cri {}\n  forward_to = [otelcol.receiver.loki.logs.receiver]\n}\notelcol.receiver.loki \"logs\" {\n  output { logs = [otelcol.processor.transform.identity.input] }\n}\notelcol.processor.transform \"identity\" {\n  error_mode = \"ignore\"\n  log_statements {\n    context = \"log\"\n    statements = [\n      `merge_maps(cache, ParseJSON(body), \"upsert\") where IsString(body) and IsMatch(body, \"^\\\\s*\\\\{\")`,\n      `set(trace_id, TraceID(cache[\"trace_id\"])) where IsString(cache[\"trace_id\"]) and IsMatch(cache[\"trace_id\"], \"^[a-fA-F0-9]{32}$\")`,\n      `set(span_id, SpanID(cache[\"span_id\"])) where IsString(cache[\"span_id\"]) and IsMatch(cache[\"span_id\"], \"^[a-fA-F0-9]{16}$\")`,\n      `set(resource.attributes[\"k8s.namespace.name\"], attributes[\"namespace\"])`,\n      `set(resource.attributes[\"k8s.pod.name\"], attributes[\"pod\"])`,\n      `set(resource.attributes[\"k8s.pod.uid\"], attributes[\"pod_uid\"])`,\n      `set(resource.attributes[\"k8s.container.name\"], attributes[\"container\"])`,\n      `set(resource.attributes[\"app.name\"], attributes[\"app\"])`,\n      `set(resource.attributes[\"service.name\"], Concat([attributes[\"app\"], attributes[\"service\"]], \"-\"))`,\n      `set(resource.attributes[\"service.version\"], attributes[\"version\"])`,\n      `set(resource.attributes[\"workload.kind\"], attributes[\"workload_kind\"])`,\n      `set(resource.attributes[\"k8s.cluster.name\"], \"charlie-dev-gcp-workload\")`,\n      `set(resource.attributes[\"cloud.provider\"], \"gcp\")`,\n      `set(resource.attributes[\"cloud.region\"], \"asia-northeast3\")`,\n      `set(resource.attributes[\"cloud.availability_zone\"], \"asia-northeast3-a\")`,\n      `set(resource.attributes[\"deployment.environment.name\"], \"dev\")`,\n    ]\n  }\n  output { logs = [otelcol.exporter.otlphttp.gateway.input] }\n}\n// Explicit preview exception: pinned version + real queue restart proof required.\notelcol.storage.file \"queue\" {\n  directory = \"/var/lib/alloy/queue\"\n}\notelcol.exporter.otlphttp \"gateway\" {\n  client {\n    endpoint = \"https://observability-gateway.observability.svc:4318\"\n    headers = { \"Authorization\" = \"Bearer \" + sys.env(\"OTLP_AUTH_TOKEN\") }\n    tls { ca_file = \"/etc/otel/client/ca.crt\" }\n  }\n  retry_on_failure { enabled = true\n    max_elapsed_time = \"0s\" }\n  sending_queue { enabled = true\n    queue_size = 1000\n    storage = otelcol.storage.file.queue.handler }\n}\n"
+    },
+    "mounts": {
+      "varlog": true,
+      "extra": [
+        {
+          "name": "positions",
+          "mountPath": "/var/lib/alloy"
+        },
+        {
+          "name": "client-ca",
+          "mountPath": "/etc/otel/client",
+          "readOnly": true
+        }
+      ]
+    },
+    "extraEnv": [
+      {
+        "name": "NODE_NAME",
+        "valueFrom": {
+          "fieldRef": {
+            "fieldPath": "spec.nodeName"
+          }
+        }
+      },
+      {
+        "name": "OTLP_AUTH_TOKEN",
+        "valueFrom": {
+          "secretKeyRef": {
+            "name": "observability-client-auth",
+            "key": "OTLP_AUTH_TOKEN"
+          }
+        }
+      }
+    ],
+    "securityContext": {
+      "runAsUser": 0,
+      "runAsGroup": 0,
+      "allowPrivilegeEscalation": false,
+      "capabilities": {
+        "drop": [
+          "ALL"
+        ]
+      }
+    },
+    "resources": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "memory": "512Mi"
+      }
+    }
+  },
+  "rbac": {
+    "create": false
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "observability-agent"
+  }
+}

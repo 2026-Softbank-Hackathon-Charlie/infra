@@ -1,0 +1,21 @@
+{
+  "clusterName": "charlie-dev-gcp-workload",
+  "cloudProvider": "gcp",
+  "region": "asia-northeast3",
+  "zone": "asia-northeast3-a",
+  "hyperdxPrometheusURL": "https://observability-gke-metrics.observability.svc.cluster.local:443",
+  "queryCertificateDNSNames": [
+    "observability-gke-metrics.observability.svc.cluster.local",
+    "observability-gke-metrics.observability.svc",
+    "observability-metrics-query.observability.svc",
+    "observability-metrics-query.observability.svc.cluster.local"
+  ],
+  "centralTLSServerName": "clickstack-otel-collector.observability.svc",
+  "queryCAConfigMap": "observability-metrics-query-ca",
+  "gatewayQueuePVC": "observability-gateway-queue",
+  "nodeLogState": "/var/lib/charlie-alloy",
+  "gatewayQueueStorage": "2Gi",
+  "prometheusStorage": "10Gi",
+  "agentPersistentQueueStatus": "public-preview",
+  "activationRequiresExecutionApproval": true
+}

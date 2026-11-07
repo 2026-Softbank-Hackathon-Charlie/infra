@@ -1,0 +1,17 @@
+{
+  "environments": {
+    "gke": {
+      "profile": {
+        "observability": {
+          "enabled": false,
+          "metricsEnabled": false,
+          "endpoint": "",
+          "caBundle": "",
+          "clusterName": "charlie-dev-gcp-workload",
+          "cloudProvider": "gcp",
+          "region": "asia-northeast3"
+        }
+      }
+    }
+  }
+}

@@ -44,15 +44,19 @@ apiVersion: v1
 kind: Service
 metadata:
   name: observability-metrics-query
+  {{- if ne (dig "service" "type" "LoadBalancer" .Values.metrics) "ClusterIP" }}
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: external
     service.beta.kubernetes.io/aws-load-balancer-scheme: internal
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
     service.beta.kubernetes.io/aws-load-balancer-subnets: {{ join "," .Values.metrics.privateSubnets | quote }}
+  {{- end }}
 spec:
-  type: LoadBalancer
+  type: {{ dig "service" "type" "LoadBalancer" .Values.metrics }}
+  {{- if ne (dig "service" "type" "LoadBalancer" .Values.metrics) "ClusterIP" }}
   loadBalancerSourceRanges:
     {{- toYaml .Values.metrics.sourceRanges | nindent 4 }}
+  {{- end }}
   selector: {app.kubernetes.io/name: observability-metrics-query}
   ports: [{name: https, port: 443, targetPort: https}]
 {{- end }}

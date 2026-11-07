@@ -41,6 +41,21 @@
         "image": {
           "type": "string",
           "pattern": "^docker.io/nginxinc/nginx-unprivileged:[^@]+@sha256:[a-f0-9]{64}$"
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "ClusterIP",
+                "LoadBalancer"
+              ]
+            }
+          }
         }
       },
       "allOf": [
@@ -56,18 +71,46 @@
             }
           },
           "then": {
-            "properties": {
-              "privateSubnets": {
-                "minItems": 2,
-                "uniqueItems": true
+            "anyOf": [
+              {
+                "required": [
+                  "service"
+                ],
+                "properties": {
+                  "service": {
+                    "required": [
+                      "type"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "ClusterIP"
+                      }
+                    }
+                  }
+                }
               },
-              "sourceRanges": {
-                "minItems": 1
+              {
+                "required": [
+                  "privateSubnets",
+                  "sourceRanges"
+                ],
+                "properties": {
+                  "privateSubnets": {
+                    "minItems": 2,
+                    "uniqueItems": true
+                  },
+                  "sourceRanges": {
+                    "minItems": 1
+                  }
+                }
               }
-            }
+            ]
           }
         }
       ]
+    },
+    "gkePlatformMetrics": {
+      "type": "boolean"
     }
   }
 }

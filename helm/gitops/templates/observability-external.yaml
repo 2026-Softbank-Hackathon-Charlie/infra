@@ -1,0 +1,100 @@
+{{- if and .Values.observability.enabled (dig "externalTargets" "gke" "enabled" false .Values.observability) }}
+{{- $gke := .Values.observability.externalTargets.gke }}
+{{- $management := required "GKE observability requires management endpoint" .Values.targets.management }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: charlie-observability-gke, namespace: argocd}
+spec:
+  sourceRepos:
+    - {{ .Values.repoURL | quote }}
+    - https://grafana.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - {server: {{ $gke.endpoint | quote }}, namespace: observability}
+    - {server: {{ $gke.endpoint | quote }}, namespace: hopcharlie-db-network}
+    - {server: {{ $management.endpoint | quote }}, namespace: observability}
+    - {server: {{ $management.endpoint | quote }}, namespace: hopcharlie-db-network}
+  clusterResourceWhitelist:
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+    - {group: tailscale.com, kind: ProxyClass}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    # KPS renders only public additional-scrape configuration in this Secret.
+    # No authentication Secret is committed or managed by these Applications.
+    - {group: "", kind: Secret}
+    - {group: "", kind: PersistentVolumeClaim}
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: DaemonSet}
+    - {group: apps, kind: StatefulSet}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: monitoring.coreos.com, kind: Prometheus}
+    - {group: monitoring.coreos.com, kind: ServiceMonitor}
+    - {group: monitoring.coreos.com, kind: PodMonitor}
+{{- $charts := list
+  (dict "name" "observability-agent" "chart" "alloy" "repo" "https://grafana.github.io/helm-charts" "version" "1.15.0" "values" "alloy.yaml" "release" "observability-agent")
+  (dict "name" "observability-gateway" "chart" "opentelemetry-collector" "repo" "https://open-telemetry.github.io/opentelemetry-helm-charts" "version" "0.175.0" "values" "otel-gateway-automatic.yaml" "release" "observability-gateway")
+  (dict "name" "kube-prometheus-stack" "chart" "kube-prometheus-stack" "repo" "https://prometheus-community.github.io/helm-charts" "version" "91.8.2" "values" "kube-prometheus-stack.yaml" "release" "monitoring") }}
+{{- range $chart := $charts }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: charlie-gke-{{ $chart.name }}, namespace: argocd}
+spec:
+  project: charlie-observability-gke
+  sources:
+    - repoURL: {{ $chart.repo | quote }}
+      chart: {{ $chart.chart }}
+      targetRevision: {{ $chart.version | quote }}
+      helm:
+        releaseName: {{ $chart.release }}
+        valueFiles: [{{ printf "$values/%s/values/%s" $gke.valuesDir $chart.values | quote }}]
+    - repoURL: {{ $.Values.repoURL | quote }}
+      targetRevision: {{ $.Values.revision | quote }}
+      ref: values
+  destination: {server: {{ $gke.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: charlie-gke-observability-boundary, namespace: argocd}
+spec:
+  project: charlie-observability-gke
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.revision | quote }}
+    path: helm/charts/observability-boundary
+    helm:
+      releaseName: observability-boundary
+      valueFiles: [../../../clusters/gcp-dev-workload/values/observability-boundary.yaml]
+  destination: {server: {{ $gke.endpoint | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- range $role := list "management" "gke" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: charlie-{{ $role }}-observability-transport, namespace: argocd}
+spec:
+  project: charlie-observability-gke
+  source:
+    repoURL: {{ $.Values.repoURL | quote }}
+    targetRevision: {{ $.Values.revision | quote }}
+    path: helm/charts/observability-transport
+    helm:
+      releaseName: observability-transport
+      valueFiles: [{{ ternary "../../../clusters/aws-dev-management/values/observability-transport.yaml" "../../../clusters/gcp-dev-workload/values/observability-transport.yaml" (eq $role "management") | quote }}]
+      parameters: [{name: enabled, value: "true"}]
+  destination: {server: {{ ternary $management.endpoint $gke.endpoint (eq $role "management") | quote }}, namespace: observability}
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+{{- end }}
+{{- end }}
