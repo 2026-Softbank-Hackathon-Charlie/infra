@@ -199,8 +199,10 @@ platform, which builds the same names for the migration engine:
 
 other is the environment of the file that is not env. The platform writes peer
 as the environment born a replica, the same value in both files; a peer that
-is the other environment seen from this file is accepted too. Fails on values
-the platform must not write.
+is the other environment seen from this file is accepted too. peerPresent
+false (infra ADR 0074) means the peer environment does not exist yet: only
+the primary's file may say so, and dbnetwork.yaml then draws no tailnet
+objects. Fails on values the platform must not write.
 */}}
 {{- define "hopcharlie-app.dbTopology" -}}
 {{- $t := .Values.values.dbTopology -}}
@@ -216,9 +218,14 @@ the platform must not write.
 {{- if or (not $env) (eq $other $env) (not (has $t.peer (list $env $other))) -}}
 {{- fail (printf "values.dbTopology: env %q must be one of primary %q and peer %q, and the other must differ (infra ADR 0063)" $env $t.primary $t.peer) -}}
 {{- end -}}
+{{- $peerPresent := not (and (hasKey $t "peerPresent") (not $t.peerPresent)) -}}
+{{- if and (not $peerPresent) (ne $env $t.primary) -}}
+{{- fail (printf "values.dbTopology.peerPresent false is only for the primary's file (env %q, primary %q; infra ADR 0074)" $env $t.primary) -}}
+{{- end -}}
 {{- $cluster := printf "%s-%s" .Values.values.app $pg.name -}}
 {{- $instance := .Release.Namespace -}}
 {{- $_ := set $out "cluster" $cluster -}}
+{{- $_ := set $out "peerPresent" $peerPresent -}}
 {{- $_ := set $out "env" $env -}}
 {{- $_ := set $out "other" $other -}}
 {{- $_ := set $out "isPrimary" (eq $env $t.primary) -}}

@@ -695,6 +695,20 @@ def main():
             assert not [d for d in docs if d["metadata"]["name"].startswith("moimroom-db-")
                         and d["kind"] in ("Service", "NetworkPolicy")], "dbNetwork off draws no tailnet objects"
         assert len(sizes) == 1, f"both environments' databases must be the same size: {sizes}"
+        # One env so far (ADR 0074): the primary's file with peerPresent false is the
+        # same output without the tailnet objects; peerPresent true is the same output.
+        on = work / "topology-profile-gke.json"
+        paired = render(ROOT / "helm/charts/hopcharlie-app", topo_files["gke"], "moimroom", "moimroom", ("-f", on))
+        tailnet = {("Service", "moimroom-db-ts"), ("Service", "moimroom-db-to-eks"), ("NetworkPolicy", "moimroom-db-replication")}
+        assert tailnet <= {(d["kind"], d["metadata"]["name"]) for d in paired}
+        for present in (True, False):
+            values = json.loads(topo_files["gke"].read_text())
+            values["values"]["dbTopology"]["peerPresent"] = present
+            alone = work / f"topology-gke-peer-{str(present).lower()}.json"
+            alone.write_text(json.dumps(values))
+            docs = render(ROOT / "helm/charts/hopcharlie-app", alone, "moimroom", "moimroom", ("-f", on))
+            want = paired if present else [d for d in paired if (d["kind"], d["metadata"]["name"]) not in tailnet]
+            assert docs == want, f"peerPresent {present} must draw the paired output{'' if present else ' without the tailnet objects'}"
         for name, change in (
             ("dbTopology without pgCA", lambda v: v["values"]["sealedSecrets"].pop("pgCA")),
             ("dbTopology without pgApp and pgCA", lambda v: (v["values"]["sealedSecrets"].pop("pgCA"), v["values"]["sealedSecrets"].pop("pgApp"))),
@@ -702,6 +716,8 @@ def main():
             ("dbTopology of other environments", lambda v: v["values"]["dbTopology"].update(primary="aws", peer="gcp")),
             ("dbTopology whose only environment is the file's", lambda v: v["values"]["dbTopology"].update(primary="eks", peer="eks")),
             ("unknown dbTopology key", lambda v: v["values"]["dbTopology"].update(role="primary")),
+            ("peerPresent false in the replica's file", lambda v: v["values"]["dbTopology"].update(peerPresent=False)),
+            ("peerPresent that is not a boolean", lambda v: v["values"]["dbTopology"].update(peerPresent="false")),
             ("pgApp without uri", lambda v: v["values"]["sealedSecrets"]["pgApp"].pop("uri")),
             ("service whose Service is the tailnet ingress", lambda v: v["values"]["services"][0].update(name="db-ts")),
         ):

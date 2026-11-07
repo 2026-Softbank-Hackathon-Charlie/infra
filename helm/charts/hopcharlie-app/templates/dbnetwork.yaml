@@ -13,6 +13,8 @@ shared NetworkPolicies admit them.
 {{- fail (printf "profile.dbNetwork.%s is required with profile.dbNetwork.enabled" .) }}
 {{- end }}
 {{- end }}
+{{- /* No peer yet (peerPresent false, infra ADR 0074): the tailnet objects come when the peer environment is added. */}}
+{{- if $topo.peerPresent }}
 {{- $ns := .Release.Namespace }}
 # This database's primary on the tailnet, for the peer's replica. Drawn on
 # both sides: after a migration this side is the one the peer follows.
@@ -92,5 +94,6 @@ spec:
               tailscale.com/parent-resource-ns: {{ $ns | quote }}
       ports:
         - {protocol: TCP, port: 5432}
+{{- end }}
 {{- end }}
 {{- end }}

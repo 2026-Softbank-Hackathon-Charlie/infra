@@ -130,7 +130,8 @@
           "required": ["primary", "peer"],
           "properties": {
             "primary": { "$ref": "#/definitions/envName" },
-            "peer": { "$ref": "#/definitions/envName" }
+            "peer": { "$ref": "#/definitions/envName" },
+            "peerPresent": { "type": "boolean" }
           }
         },
         "backup": {

@@ -75,6 +75,8 @@ SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict
 - 네임스페이스에 `hopcharlie.dev/db-topology: "true"`를 단다. 워크로드의 플랫폼 계정 권한과 공용 프록시 정책이 이 레이블을 본다.
 - `profile.dbNetwork.enabled`면 Tailscale ingress Service `<cluster>-ts`(호스트 `hop-db-<env>-<instance>`)와 egress Service `<cluster>-to-<other>`(상대 `hop-db-<other>-<instance>.<tailnetDomain>`), 복제 NetworkPolicy를 그린다. 프록시는 `profile.dbNetwork.proxyNamespace`에서 돈다.
 
+한 환경에만 등록한 postgres 앱도 처음부터 같은 토폴로지로 태어날 수 있다(infra ADR 0074). 이때 플랫폼은 primary 파일에 `dbTopology.peerPresent: false`를 쓴다. Cluster, 봉인 Secret, 네임스페이스 레이블은 위와 같고, Tailscale Service 둘과 복제 NetworkPolicy만 그리지 않는다. 상대 환경을 더하면 플랫폼이 `peerPresent`를 빼거나 `true`로 다시 쓰고, 그때 이 세 객체가 생긴다. `peerPresent: false`는 `env`가 `primary`인 파일에만 쓸 수 있고 다른 파일에서는 렌더링이 실패한다. 값이 없으면 `true`다.
+
 `dbTopology`가 없으면 출력은 이 기능 이전과 같다.
 
 ## 앱을 지우면 네임스페이스째 지워진다

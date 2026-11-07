@@ -845,6 +845,7 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 | [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
 | [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
 | [docs/adr/0064-platform-creates-management-app-db-routes.md](docs/adr/0064-platform-creates-management-app-db-routes.md) | 관리 EKS의 등록 앱 DB egress Service를 플랫폼이 만들고(별도 릴리스의 Role, VAP) 앱 파일을 플랫폼 신원으로 옮기는 제안 |
+| [docs/adr/0074-born-paired-app-database-before-its-peer-exists.md](docs/adr/0074-born-paired-app-database-before-its-peer-exists.md) | 한 환경 앱 DB도 짝의 primary로 태어나고(`dbTopology.peerPresent: false`) 상대를 더할 때 tailnet 객체만 생기게 하는 제안 |
 | [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
 | [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
 | [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
