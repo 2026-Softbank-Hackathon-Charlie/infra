@@ -1,5 +1,8 @@
 {{- $cfg := .Values.api.onpremRegistration | default dict }}
 {{- if $cfg.enabled }}
+{{- $profile := deepCopy $cfg.profile }}
+{{- $_ := unset $profile "onpremRegistration" }}
+{{- $profilePrefix := trimSuffix "}" (toJson $profile) }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata: {name: hopcharlie-onprem-argo}
@@ -63,7 +66,7 @@ spec:
         size(object.spec.template.spec) == 4 && object.spec.template.spec.project == variables.name &&
         object.spec.template.spec.destination == {'name':variables.name,'namespace':'{{ "{{ .namespace }}" }}'} &&
         object.spec.template.spec.sources == [
-          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ "{{ .namespace }}" }}','valueFiles':['$gitops/{{ "{{ .path.path }}/{{ .path.filename }}" }}'],'valuesObject':{'profile':{{ toJson $cfg.profile }}}}},
+          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ "{{ .namespace }}" }}','valueFiles':['$gitops/{{ "{{ .path.path }}/{{ .path.filename }}" }}'],'valuesObject':{'profile':{{ $profilePrefix }},'onpremRegistration':{'enrollmentID':variables.owner,'clusterUID':variables.clusterUID}}}}},
           {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','targetRevision':'main','ref':'gitops'}] &&
         object.spec.template.spec.syncPolicy == {'automated':{'prune':true,'selfHeal':true},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}})
       message: application set has one fixed environment generator, approved chart and exact server profile with restricted PodSecurity

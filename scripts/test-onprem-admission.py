@@ -79,6 +79,8 @@ def route():
 
 
 def argo(profile):
+    profile=copy.deepcopy(profile)
+    profile['onpremRegistration']={'enrollmentID':ID,'clusterUID':UID}
     meta = {'name':NAME,'namespace':'argocd','labels':{OWNER:ID,CLUSTER_UID:UID,'hopcharlie.dev/env':ENV}}
     project = {'apiVersion':'argoproj.io/v1alpha1','kind':'AppProject','metadata':copy.deepcopy(meta),'spec':{
         'sourceRepos':['https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git'],
