@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-06
 - 상태: 제안
-- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. 지금 moimroom은 EKS(`moimroom/moimroom-db`)에서만 돈다. `charlie-apps/moimroom-db-gke`가 없어져 `PROTECTED_EXCEPTIONS`를 코드에서 뺐다. 보호 네임스페이스는 다시 예외 없이 거부한다.
+- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). `charlie-apps/moimroom-db-gke`가 없어져 `PROTECTED_EXCEPTIONS`를 코드에서 뺐다. 보호 네임스페이스는 다시 예외 없이 거부한다.
 - 관련 ADR: [0048](0048-connect-cloud-databases-with-scoped-migration-access.md), [0057](0057-back-up-gke-moimroom-db-with-workload-identity.md), 0053(운영 moimroom 이전 대상은 새 standby `moimroom-db-gke`다. [PR #72](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/72)에 있고 아직 병합되지 않았다)
 
 ## 배경과 제약

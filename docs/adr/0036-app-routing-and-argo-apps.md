@@ -2,7 +2,7 @@
 
 - 날짜: 2026-11-04
 - 상태: 제안
-- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. 지금 moimroom은 EKS(`moimroom/moimroom-db`)에서만 돈다. apps.yaml에서 moimroom의 `gke` 환경(`moimroom-db-gke`)을 뺐다.
+- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). apps.yaml에서 moimroom의 `gke` 환경(`moimroom-db-gke`)을 뺐다.
 - 관련 ADR: [ADR 0002](0002-require-approval-for-privileged-operations.md), [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md), [ADR 0017](0017-adopt-existing-helm-resources-in-argocd.md), [ADR 0021](0021-configure-platform-github-app-deploy.md), [ADR 0023](0023-deploy-github-apps-with-applicationset.md), platform 저장소 ADR 0011(GitHub 앱 배포), ADR 0012(게이트웨이 호스트 라우팅), ADR 0015(브랜치 인스턴스)
 
 ## 배경과 제약

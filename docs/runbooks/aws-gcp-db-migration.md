@@ -3,12 +3,12 @@
 관련: [ADR0048](../adr/0048-connect-cloud-databases-with-scoped-migration-access.md), [infra #47](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/47).
 이 문서는 **설치 전 코드 준비**다. 아래 실행은 클러스터·tailnet·Secret 변경 승인을 받은 운영자만 수행한다. 기본 예제는 모두 꺼져 있으며 웹앱 라우터와 기존 DB를 수정하지 않는다.
 
-> 2026-11-07: 손으로 배포했던 GKE moimroom(`charlie-apps/moimroom-gcp`, DB `moimroom-db-gke`와 `moimroom-gcp-db`, 버킷 `charlie-414068132732-moimroom-gcp`, Tailscale DB 경로 `db-eks`(GKE)와 `db-gke`(workload EKS, 관리 EKS))를 지웠다. 지금 moimroom은 EKS(`moimroom/moimroom-db`)에서만 돈다. 아래에 나오는 GKE moimroom 이름과 주소는 그때의 기록이다.
+> 2026-11-07: 손으로 배포했던 GKE moimroom(`charlie-apps/moimroom-gcp`, DB `moimroom-db-gke`와 `moimroom-gcp-db`, 버킷 `charlie-414068132732-moimroom-gcp`, Tailscale DB 경로 `db-eks`(GKE)와 `db-gke`(workload EKS, 관리 EKS))를 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). 아래에 나오는 GKE moimroom 이름과 주소는 그때의 기록이다.
 
 ## 1. 실행 전 확인
 
 1. 관리 EKS·workload EKS·workload GKE의 **운영자** kubeconfig/context를 준비한다. 기존 API kubeconfig는 `charlie-system/hopcharlie-platform`이며 operator 설치·권한 부여에는 사용하지 않는다. `kubectl config use-context`로 사용자 기본 컨텍스트를 바꾸지 않는다.
-2. source namespace/Cluster와 **새 target standby**를 확정한다. 예제의 `moimroom/moimroom-db`(EKS)와 `charlie-apps/moimroom-db-gke`(GKE, 보호 네임스페이스라 [ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)의 예외 쌍)는 catalog 기준이다. 기존 `charlie-apps/moimroom-gcp-db`·PoC primary를 target으로 덮어쓰지 않는다. 같은 CNPG Cluster의 다른 DB도 물리 복제 영향을 받는다.
+2. source namespace/Cluster와 **새 target standby**를 확정한다. 예제의 `moimroom/moimroom-db`(EKS)는 catalog 기준이다. GKE의 `charlie-apps/moimroom-db-gke`([ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)의 예외 쌍)는 2026-11-07에 지웠고 catalog와 예외에서도 뺐으므로 대상으로 쓰지 않는다. 기존 `charlie-apps/moimroom-gcp-db`·PoC primary를 target으로 덮어쓰지 않는다. 같은 CNPG Cluster의 다른 DB도 물리 복제 영향을 받는다.
 3. DB/API namespace의 기존 default-deny·DNS·Kubernetes API·CNPG·백업 허용 정책을 확인한다. 새 차트의 Egress allow만 먼저 설치하면 기존 정책이 없는 클라이언트를 격리할 수 있다. 노드 여유도 확인한다(standalone 합계 9 Pods, proxy 요청 각각 50m/128Mi, operator 각각 50m/128Mi; 측정값 아님). 고정 버전의 proxy/init 기본값은 **privileged**다. 전용 namespace의 Pod Security 허용을 별도 검토·승인하고, 정책이 막으면 앱 namespace의 보안을 낮추거나 우회하지 않는다.
 4. source·target의 양방향 `externalClusters`·replica topology, replication CA/client cert/key와 source 앱 비밀번호를 운영자가 준비한다. 엔진은 Secret을 복사하지 않는다. target은 `pg_is_in_recovery()=true`여야 하고 Plan의 `target.manifest`는 **생략**한다.
 5. 앱의 Argo self-heal이 `/spec/replica`를 되돌리지 않도록 합의된 동기화 제어·GitOps 반영/재개 절차를 준비한다. HTTP gateway 외부 writer(배치·직접 SQL 등)는 운영자가 중지한다. 현재 엔진 fence는 gateway 쓰기 hold이며 SQL 쓰기 주체 전체를 차단하지 않는다. 이전 도중 앱 업그레이드는 하지 않는다.
