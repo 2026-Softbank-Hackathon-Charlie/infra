@@ -67,6 +67,21 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(set(secret_rule['verbs']), {'create', 'update', 'delete'})
         self.assertFalse(any(d['kind'] in ('ClusterRole', 'ClusterRoleBinding') for d in docs))
 
+    def test_secret_webhook_is_fail_closed_and_excludes_foreign_old_credentials(self):
+        docs=render(True)
+        config=next(d for d in docs if d['kind']=='ValidatingWebhookConfiguration')
+        hook=config['webhooks'][0]
+        self.assertEqual(hook['name'],'hopcharlie-onprem-secret.hopcharlie.dev')
+        self.assertEqual(hook['clientConfig'],{'url':'https://api.hopcharlie.dev/v1/onprem/admission/cluster-secret'})
+        self.assertEqual((hook['failurePolicy'],hook['sideEffects'],hook['timeoutSeconds']),('Fail','None',5))
+        self.assertEqual(hook['rules'][0]['operations'],['CREATE','UPDATE'])
+        self.assertEqual(hook['namespaceSelector'],{'matchLabels':{'kubernetes.io/metadata.name':'argocd'}})
+        conditions={c['name']:c['expression'] for c in hook['matchConditions']}
+        self.assertIn('system:serviceaccount:charlie-platform:hopcharlie-platform-api',conditions['dedicated-api-only'])
+        self.assertIn('hop-onprem-',conditions['owned-new-object'])
+        self.assertIn('oldObject.metadata.labels',conditions['owned-old-object'])
+        self.assertIn('hopcharlie.dev/onprem-cluster-uid',conditions['owned-old-object'])
+
     def test_registered_app_namespace_ownership_and_no_pod_token(self):
         values = yaml.safe_load((ROOT/'helm/charts/hopcharlie-app/ci/stateless-values.yaml').read_text(encoding='utf-8'))
         for registered in (False, True):

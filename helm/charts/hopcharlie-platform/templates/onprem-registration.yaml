@@ -112,25 +112,21 @@ spec:
         (int(variables.annotations['hopcharlie.dev/registration-version']) > int(oldObject.metadata.annotations['hopcharlie.dev/registration-version']) ||
         (variables.annotations['hopcharlie.dev/registration-version'] == oldObject.metadata.annotations['hopcharlie.dev/registration-version'] && object.data['config'] == oldObject.data['config'])) &&
         timestamp(variables.annotations['hopcharlie.dev/token-expires-at']) >= timestamp(oldObject.metadata.annotations['hopcharlie.dev/token-expires-at']) &&
-        object.data['server'] == oldObject.data['server'] &&
-        string(object.data['config']).find('"caData":"[A-Za-z0-9+/=]+"') == string(oldObject.data['config']).find('"caData":"[A-Za-z0-9+/=]+"'))
-      message: rotation must advance registration version, preserve CA and endpoint, and never reduce expiry; equal version requires identical token config
+        object.data['server'] == oldObject.data['server'])
+      message: rotation must advance registration version, preserve endpoint and never reduce expiry; equal version requires identical token config
     - expression: "request.operation == 'DELETE' || object.type == 'Opaque'"
       message: registration credential must have Opaque Secret type
     - expression: "request.operation == 'DELETE' || (has(object.data) && size(object.data) == 4)"
       message: registration credential requires exactly four data fields
-    - expression: "request.operation == 'DELETE' || string(object.data['name']) == object.metadata.name"
-      messageExpression: "'credential name mismatch; value type=' + (type(object.data['name']) == bytes ? 'bytes' : type(object.data['name']) == string ? 'string' : 'other') + ', length=' + string(size(object.data['name']))"
-    - expression: "request.operation == 'DELETE' || string(object.data['clusterResources']) == 'true'"
-      message: credential clusterResources must be true
+    # The real API exposes core Secret.data as base64 strings. CEL has no
+    # decoder here: the paired Go admission webhook parses the actual bytes
+    # and enforces name/server/TLS/CA, without trusting parallel annotations.
     - expression: >-
-        request.operation == 'DELETE' || string(object.data['server']) ==
-        'https://hop-k3s-' + variables.owner.substring(4) + '.hopcharlie-db-network.svc.cluster.local:6443'
-      message: credential endpoint must be the exact owned API Service
-    - expression: >-
-        request.operation == 'DELETE' || (size(object.data['config']) <= 65536 &&
-        string(object.data['config']).matches('^[{]"bearerToken":"[A-Za-z0-9_.-]+","tlsClientConfig":[{]"caData":"[A-Za-z0-9+/=]+","insecure":false,"serverName":"kubernetes[.]default[.]svc"[}][}]$'))
-      message: credential config must contain only the token and verified TLS fields
+        request.operation == 'DELETE' ||
+        (['name','server','config','clusterResources'].all(k, k in object.data &&
+        type(object.data[k]) == string && string(object.data[k]).matches('^[A-Za-z0-9+/]+={0,2}$')) &&
+        object.data['clusterResources'] == '{{ "true" | b64enc }}' && size(object.data['config']) <= 65536)
+      message: credential data must contain only the four encoded cluster fields; semantic validation is enforced by the fail-closed webhook
 
 ---
 apiVersion: admissionregistration.k8s.io/v1

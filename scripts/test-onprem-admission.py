@@ -6,7 +6,9 @@ Argo/Tailscale controllers or claim a working tailnet/remote deployment.
 """
 import base64
 import copy
+import datetime
 import importlib.util
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -15,6 +17,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+import ssl
 
 import yaml
 
@@ -27,6 +30,13 @@ NAME = 'hop-onprem-' + ID[4:]
 HOST = 'hop-k3s-' + ID[4:]
 DOMAIN = 'tail567fe8.ts.net'
 ENV = 'laptop-test'
+TOKEN = 'eyJ.test-only-fixture.signature'
+ROTATED_TOKEN = 'eyJ.new-only-fixture.signature'
+CA_DATA = ''
+ALT_CA_DATA = ''
+TOKEN_EXPIRY = ''
+WEBHOOK_URL = ''
+WEBHOOK_CA = ''
 OWNER = 'hopcharlie.dev/onprem-enrollment'
 CLUSTER_UID = 'hopcharlie.dev/onprem-cluster-uid'
 ARGO_SHA = 'c9c369efcc5b2a0bd720803f8d14a1c3eaddf579'  # v3.5.3, chart 10.9.6
@@ -53,12 +63,14 @@ def render(chart, values, namespace):
     return [d for d in yaml.safe_load_all(output) if d]
 
 
-def decision(label, obj, allowed, verb='create'):
+def decision(label, obj, allowed, verb='create', policy=None):
     result = kube([verb, '--dry-run=server', '--validate=false', '-f', '-'], obj, actor=True, allow_failure=True)
     if allowed:
         assert result.returncode == 0, label + ': ' + result.stderr
     else:
         assert result.returncode != 0 and ('hopcharlie-' in result.stderr or 'forbidden' in result.stderr.lower()), label + ': ' + result.stderr
+        if policy:
+            assert policy in result.stderr,label+': expected '+policy+', got '+result.stderr
     print(('ALLOW ' if allowed else 'DENY  ') + label, flush=True)
 
 
@@ -67,9 +79,10 @@ def apply(obj):
 
 
 def secret():
+    assert CA_DATA and TOKEN_EXPIRY,'real fixture CA and bounded expiry must be prepared'
     encode = lambda value: base64.b64encode(value.encode()).decode()
-    config = json.dumps({'bearerToken':'eyJ.test.signature','tlsClientConfig':{'caData':'Y2E=','insecure':False,'serverName':'kubernetes.default.svc'}},separators=(',',':'),sort_keys=True)
-    return {'apiVersion':'v1','kind':'Secret','metadata':{'name':NAME,'namespace':'argocd','labels':{OWNER:ID,CLUSTER_UID:UID,'argocd.argoproj.io/secret-type':'cluster'},'annotations':{'hopcharlie.dev/registration-version':'2','hopcharlie.dev/token-expires-at':'2027-01-01T00:00:00Z'}},'type':'Opaque',
+    config = json.dumps({'bearerToken':TOKEN,'tlsClientConfig':{'caData':CA_DATA,'insecure':False,'serverName':'kubernetes.default.svc'}},separators=(',',':'),sort_keys=True)
+    return {'apiVersion':'v1','kind':'Secret','metadata':{'name':NAME,'namespace':'argocd','labels':{OWNER:ID,CLUSTER_UID:UID,'argocd.argoproj.io/secret-type':'cluster'},'annotations':{'hopcharlie.dev/registration-version':'2','hopcharlie.dev/token-expires-at':TOKEN_EXPIRY}},'type':'Opaque',
         'data':{k:encode(v) for k,v in {'name':NAME,'server':'https://'+HOST+'.hopcharlie-db-network.svc.cluster.local:6443','config':config,'clusterResources':'true'}.items()}}
 
 
@@ -129,11 +142,15 @@ def main():
         else:
             raise AssertionError('official Argo CRD did not become Established')
     docs = rendered_documents()
-    kinds = {'ServiceAccount','Role','RoleBinding','ValidatingAdmissionPolicy','ValidatingAdmissionPolicyBinding'}
+    kinds = {'ServiceAccount','Role','RoleBinding','ValidatingAdmissionPolicy','ValidatingAdmissionPolicyBinding','ValidatingWebhookConfiguration'}
     for obj in docs:
         if obj['kind'] not in kinds: continue
         if obj['kind'] in {'ServiceAccount','Role','RoleBinding'}:
             obj['metadata'].setdefault('namespace','charlie-platform')
+        if obj['kind']=='ValidatingWebhookConfiguration':
+            # Only the disposable fixture replaces production HTTPS routing
+            # with the real Go validator on the runner and its temporary CA.
+            obj['webhooks'][0]['clientConfig']={'url':WEBHOOK_URL,'caBundle':WEBHOOK_CA}
         apply(obj)
     # Admission policy propagation is asynchronous; wait for a real denial.
     invalid = route(); invalid['spec']['ports'][0]['port'] = 22
@@ -154,19 +171,21 @@ def main():
         ('wrong endpoint',lambda o:o['data'].update(server=base64.b64encode(b'https://evil.example:6443').decode())),
         ('insecure TLS',lambda o:o['data'].update(config=base64.b64encode(base64.b64decode(o['data']['config']).replace(b'false',b'true')).decode())),
         ('additional secret field',lambda o:o['data'].update(admin='c2VjcmV0'))]:
-        bad=copy.deepcopy(s);mutate(bad);decision('credential '+label,bad,False)
-    saved = apply(s)
+        bad=copy.deepcopy(s);mutate(bad);decision('credential '+label,bad,False,policy='hopcharlie-onprem-secret.hopcharlie.dev' if label in ('wrong endpoint','insecure TLS') else None)
+    # Persist a real owned CREATE as the restricted actor as well as DryRun:
+    # the production validator must not merely allow dry-run requests.
+    saved = json.loads(kube(['create','-f','-','-o','json'],s,actor=True).stdout)
     decision('owned credential unconditional update without GET',s,True,'replace')
     decision('owned credential rotation',saved,True,'replace')
-    rotated=copy.deepcopy(saved);rotated['metadata']['annotations']['hopcharlie.dev/registration-version']='3';rotated['data']['config']=base64.b64encode(base64.b64decode(rotated['data']['config']).replace(b'eyJ.test.signature',b'eyJ.new.signature')).decode();decision('newer token rotation',rotated,True,'replace')
+    rotated=copy.deepcopy(saved);rotated['metadata']['annotations']['hopcharlie.dev/registration-version']='3';rotated['data']['config']=base64.b64encode(base64.b64decode(rotated['data']['config']).replace(TOKEN.encode(),ROTATED_TOKEN.encode())).decode();decision('newer token rotation',rotated,True,'replace')
     for label,mutate in [
         ('stale version',lambda o:o['metadata']['annotations'].update({'hopcharlie.dev/registration-version':'1'})),
         ('invalid decimal',lambda o:o['metadata']['annotations'].update({'hopcharlie.dev/registration-version':'2x'})),
         ('expiry regression',lambda o:o['metadata']['annotations'].update({'hopcharlie.dev/token-expires-at':'2026-01-01T00:00:00Z'})),
         ('invalid timestamp',lambda o:o['metadata']['annotations'].update({'hopcharlie.dev/token-expires-at':'2027-99-01T00:00:00Z'})),
-        ('same version changed token',lambda o:o['data'].update(config=base64.b64encode(base64.b64decode(o['data']['config']).replace(b'eyJ.test.signature',b'eyJ.new.signature')).decode())),
-        ('CA substitution',lambda o:(o['metadata']['annotations'].update({'hopcharlie.dev/registration-version':'3'}),o['data'].update(config=base64.b64encode(base64.b64decode(o['data']['config']).replace(b'Y2E=',b'YmFk')).decode())))]:
-        bad=copy.deepcopy(saved);mutate(bad);decision('credential '+label,bad,False,'replace')
+        ('same version changed token',lambda o:o['data'].update(config=base64.b64encode(base64.b64decode(o['data']['config']).replace(TOKEN.encode(),ROTATED_TOKEN.encode())).decode())),
+        ('CA substitution',lambda o:(o['metadata']['annotations'].update({'hopcharlie.dev/registration-version':'3'}),o['data'].update(config=base64.b64encode(base64.b64decode(o['data']['config']).replace(CA_DATA.encode(),ALT_CA_DATA.encode())).decode())))]:
+        bad=copy.deepcopy(saved);mutate(bad);decision('credential '+label,bad,False,'replace',policy='hopcharlie-onprem-secret.hopcharlie.dev' if label=='CA substitution' else None)
     bad=copy.deepcopy(saved);bad['metadata']['labels'][CLUSTER_UID]='ffffffff-ffff-ffff-ffff-ffffffffffff';decision('credential UID takeover',bad,False,'replace')
     result = kube(['get','secret',NAME,'-n','argocd'],actor=True,allow_failure=True)
     assert result.returncode and 'forbidden' in result.stderr.lower();print('DENY  credential GET (including own)',flush=True)
@@ -215,13 +234,58 @@ def main():
         assert result.returncode == 0,(kind,result.stderr);print('ALLOW owned '+kind+' delete',flush=True)
     result=kube(['delete','service','db-eks','-n','hopcharlie-db-network','--dry-run=server'],actor=True,allow_failure=True)
     assert result.returncode and 'hopcharlie-' in result.stderr;print('DENY  static DB route delete',flush=True)
-    print('PASS real Kubernetes RBAC/CEL with official Argo CRDs; no production resources used',flush=True)
+    print('PASS real Kubernetes RBAC/CEL and Go admission webhook with official Argo CRDs; no production resources used',flush=True)
+
+
+def with_real_webhook():
+    global CA_DATA,ALT_CA_DATA,TOKEN_EXPIRY,WEBHOOK_URL,WEBHOOK_CA
+    assert os.environ.get('ONPREM_ADMISSION_FIXTURE')=='1','explicit disposable fixture opt-in required'
+    binary=Path(os.environ['ONPREM_WEBHOOK_BINARY']).resolve()
+    assert binary.is_file(),'real platform Go webhook binary required'
+    # Linux CI only: kind nodes reach a host-bound server through this bridge.
+    gateway=subprocess.check_output(['docker','inspect','onprem-admission-control-plane','--format','{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'],text=True).strip()
+    ipaddress.ip_address(gateway)
+    with tempfile.TemporaryDirectory(prefix='onprem-admission-tls-') as directory:
+        work=Path(directory)
+        for name in ['webhook','alternate']:
+            command=['openssl','req','-x509','-newkey','rsa:2048','-sha256','-nodes','-keyout',str(work/(name+'.key')),'-out',str(work/(name+'.crt')),'-days','1','-subj','/CN=onprem-fixture-'+name,'-addext','basicConstraints=critical,CA:TRUE','-addext','subjectAltName=IP:'+gateway]
+            subprocess.run(command,check=True,capture_output=True)
+            os.chmod(work/(name+'.key'),0o600)
+        cert=work/'webhook.crt'
+        CA_DATA=WEBHOOK_CA=base64.b64encode(cert.read_bytes()).decode()
+        ALT_CA_DATA=base64.b64encode((work/'alternate.crt').read_bytes()).decode()
+        TOKEN_EXPIRY=(datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)+datetime.timedelta(hours=1)).isoformat().replace('+00:00','Z')
+        WEBHOOK_URL='https://'+gateway+':18443/v1/onprem/admission/cluster-secret'
+        process=subprocess.Popen([str(binary),'-addr','0.0.0.0:18443','-cert',str(cert),'-key',str(work/'webhook.key')],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+        try:
+            context=ssl.create_default_context(cafile=str(cert))
+            opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=context))
+            for _ in range(50):
+                assert process.poll() is None,'real Go admission server exited during startup'
+                try:
+                    # Any HTTP rejection proves TLS and the real server are up;
+                    # admission allow/deny is verified only by the API requests.
+                    opener.open(WEBHOOK_URL,timeout=1).close()
+                    break
+                except urllib.error.HTTPError:
+                    break
+                except (OSError,urllib.error.URLError):
+                    time.sleep(0.1)
+            else:
+                raise AssertionError('real Go admission TLS server not reachable')
+            main()
+        finally:
+            process.terminate()
+            try: process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill();process.wait(timeout=5)
+            process.stderr.close()
 
 
 if __name__ == '__main__':
     if sys.argv[1:] == ['--render-only']:
         print('rendered admission fixture objects:',len(rendered_documents()))
     elif not sys.argv[1:]:
-        main()
+        with_real_webhook()
     else:
         raise SystemExit('usage: test-onprem-admission.py [--render-only]')

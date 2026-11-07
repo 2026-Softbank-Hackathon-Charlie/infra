@@ -18,6 +18,23 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with: {python-version: '3.12'}
+      # Draft integration reference only; pin the reviewed stable platform
+      # commit before release. No module or deployed image uses this PR ref.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: 2026-Softbank-Hackathon-Charlie/platform
+          ref: 8319de6ba4ba69a60f9b303e4767c52d007cc4e1
+          path: .contract-platform
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: .contract-platform/go.mod
+          cache-dependency-path: .contract-platform/go.sum
+      - name: Compile the real platform admission validator
+        working-directory: .contract-platform
+        run: |
+          git rev-parse HEAD >> "$GITHUB_STEP_SUMMARY"
+          go build -o "$RUNNER_TEMP/onprem-admission-webhook" ./test/onprem-admission-webhook
       - uses: azure/setup-helm@v4.3.1
         with: {version: v3.19.1}
       - run: python3 -m pip install PyYAML==6.0.3
@@ -32,7 +49,9 @@ jobs:
       - name: Create disposable API server (no cloud credentials)
         run: kind create cluster --name onprem-admission --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s
       - name: Verify rendered RBAC and CEL with real API admission
-        env: {ONPREM_ADMISSION_FIXTURE: '1'}
+        env:
+          ONPREM_ADMISSION_FIXTURE: '1'
+          ONPREM_WEBHOOK_BINARY: ${{ runner.temp }}/onprem-admission-webhook
         run: python3 scripts/test-onprem-admission.py
       - name: Remove disposable cluster
         if: always()
