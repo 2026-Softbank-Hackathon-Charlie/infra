@@ -1,9 +1,13 @@
 # Identity of the HopCharlie platform API in the on-prem k3s cluster (the
 # laptop's WSL2 k3s), which is the platform's environment onprem.
-# scripts/put-platform-kubeconfig.py --env onprem applies this file and stores
-# a kubeconfig with the token below in SSM /hopcharlie/kube/onprem; Argo CD
-# does not manage it. It is the same as
-# clusters/aws-dev-workload/hopcharlie-platform-access.yaml (ADR 0036).
+# An operator applies this file by hand and stores a kubeconfig with the token
+# below in SSM /hopcharlie/kube/onprem (scripts/put-platform-kubeconfig.py
+# supports only eks and gke). The kubeconfig's server is the management EKS
+# egress proxy https://k3s-onprem-api.hopcharlie-db-network.svc.cluster.local:6443
+# with tls-server-name set to the laptop's tailnet name, which the k3s
+# certificate lists (tls-san in /etc/rancher/k3s/config.yaml). Argo CD does not
+# manage it. The rules are the same as
+# clusters/gcp-dev-workload/hopcharlie-platform-access.yaml (ADR 0036).
 #
 # Based on deploy/k8s/hopcharlie-platform.yaml of the platform repository, cut
 # down to the calls the platform makes today. Every rule only reads (but the
