@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: onprem-connection-proof
+  name: {{ .Values.resourceName | quote }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     app.kubernetes.io/name: onprem-connection-check
