@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: 2026-Softbank-Hackathon-Charlie/platform
-          ref: e8cbcb1456d0d5fa0594798153f2cdd34cf788c4
+          ref: aa46cb37e40470fda4c5cbf1e50bd12c9b887b0a
           path: .contract-platform
           persist-credentials: false
       - uses: actions/setup-go@v6
