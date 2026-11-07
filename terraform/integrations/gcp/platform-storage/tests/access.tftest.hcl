@@ -94,3 +94,11 @@ run "security_findings_are_read_only" {
     error_message = "Removing this root must never switch the SCC API off."
   }
 }
+
+run "onboarding_discovery_is_read_only" {
+  command = plan
+  assert {
+    condition     = toset(google_project_iam_custom_role.onboarding.permissions) == toset(["compute.instances.list", "compute.instances.get", "compute.addresses.list"]) && google_project_iam_member.onboarding.member == "serviceAccount:charlie-platform-storage@charlie-test-project.iam.gserviceaccount.com" && length(google_project_iam_member.onboarding.condition) == 0
+    error_message = "Onboarding discovery must only list and read instances and list addresses."
+  }
+}

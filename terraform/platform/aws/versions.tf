@@ -24,3 +24,18 @@ provider "aws" {
     }
   }
 }
+
+# The second region the account may use: onboarding.tf puts its SSM documents
+# there too, since a source VM can be in either.
+provider "aws" {
+  alias  = "second"
+  region = var.onboarding_second_region
+
+  default_tags {
+    tags = {
+      Project   = "hopcharlie"
+      Component = "management-host"
+      ManagedBy = "terraform:platform/deploy/aws"
+    }
+  }
+}

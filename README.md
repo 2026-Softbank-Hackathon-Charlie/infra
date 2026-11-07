@@ -673,6 +673,8 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/onboarding/test/compose.yaml](terraform/platform/aws/onboarding/test/compose.yaml) | 시험용 compose 대역(postgres, 앱, 프록시) |
 | [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
 | [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
+| [terraform/platform/aws/onboarding.tf](terraform/platform/aws/onboarding.tf) | compose 앱 가져오기의 SSM 문서 세 개(두 리전)와 플랫폼 역할의 EC2 조회, 문서 실행, 태그, 중지 권한(ADR 0082) |
+| [terraform/platform/aws/tests/onboarding.tftest.hcl](terraform/platform/aws/tests/onboarding.tftest.hcl) | 온보딩 문서 매개변수와 권한의 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
 | [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
 | [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |
@@ -773,6 +775,7 @@ EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준�
 | [terraform/integrations/gcp/platform-storage/backend.hcl.example](terraform/integrations/gcp/platform-storage/backend.hcl.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
 | [terraform/integrations/gcp/platform-storage/main.tf](terraform/integrations/gcp/platform-storage/main.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
 | [terraform/integrations/gcp/platform-storage/security-findings.tf](terraform/integrations/gcp/platform-storage/security-findings.tf) | SCC API 활성화와 플랫폼 계정의 SCC 결과 읽기 권한(ADR 0066) |
+| [terraform/integrations/gcp/platform-storage/onboarding.tf](terraform/integrations/gcp/platform-storage/onboarding.tf) | 플랫폼 계정의 VM 인스턴스와 주소 조회 권한(ADR 0082) |
 | [terraform/integrations/gcp/platform-storage/outputs.tf](terraform/integrations/gcp/platform-storage/outputs.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
 | [terraform/integrations/gcp/platform-storage/terraform.tfvars.example](terraform/integrations/gcp/platform-storage/terraform.tfvars.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
 | [terraform/integrations/gcp/platform-storage/variables.tf](terraform/integrations/gcp/platform-storage/variables.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
@@ -1010,6 +1013,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md](docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md) — API가 쓰기 기록 토큰을 SSM에서 선택적으로 읽는다 (제안)
 - [docs/adr/0080-fetch-optional-residency-policy-from-ssm.md](docs/adr/0080-fetch-optional-residency-policy-from-ssm.md) — API가 레지던시 정책을 SSM에서 선택적으로 읽어 시작 전 검사를 켠다 (제안)
 - [docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md](docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md) — onprem 앱 저장소를 노트북 MinIO로 두고 관리 플랫폼에 MinIO 이미지를 고정 (제안)
+- [docs/adr/0082-onboard-existing-compose-apps-infra.md](docs/adr/0082-onboard-existing-compose-apps-infra.md) — compose로 돌던 앱 가져오기의 차트, Argo, 승인 정책, 플랫폼 권한 (제안)
 - [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)
 
 - [scripts/tests/test-platform-written-tokens.py](scripts/tests/test-platform-written-tokens.py) — 실제 설정 스크립트와 API entrypoint의 미설정·전달·접근 거부·리터럴 값 보존 검사

@@ -14,6 +14,7 @@
 {{- fail "profile.s3.region is required for postgres backups: the backup bucket is in that region" }}
 {{- end }}
 {{- $topo := include "hopcharlie-app.dbTopology" $ | fromJson }}
+{{- $pgv := include "hopcharlie-app.postgresValues" $ | fromJson }}
 # CNPG creates the database app owned by user app and the Secret
 # <name>-app, whose uri is the services' DATABASE_URL.
 apiVersion: postgresql.cnpg.io/v1
@@ -38,9 +39,17 @@ spec:
       hopcharlie.dev/service: {{ $pg.name | quote }}
   {{- end }}
   instances: 1
+  {{- with $pgv.image }}
+  # The image the platform chose for an onboarded app's database (platform
+  # ADR 0042): the source's PostgreSQL major and libc. Without it the
+  # operator's default image.
+  imageName: {{ . | quote }}
+  {{- end }}
   # CNPG restarts a newly promoted primary with a smart shutdown that waits for
   # every client session up to this many seconds. The default 180 keeps the new
   # primary down for minutes after a migration (migration-engine ADR 0009).
+  {{- /* values.postgres.parameters (platform ADR 0042) are merged into
+  postgresql.parameters below; a key given there wins. */}}
   {{- if $topo.cluster }}
   # Paired databases (ADR 0063) use 1: the demoted primary restarts as a
   # replica during the write hold, and 5 seconds of smart shutdown made the
@@ -51,12 +60,28 @@ spec:
       # The new primary waits for the demoted one's shutdown checkpoint over
       # streaming replication; after the old primary restarts, a replica
       # retries the connection after this interval (PostgreSQL default 5s).
-      wal_retrieve_retry_interval: 1s
+      wal_retrieve_retry_interval: {{ if hasKey $pgv.parameters "wal_retrieve_retry_interval" }}{{ $pgv.parameters.wal_retrieve_retry_interval | quote }}{{ else }}1s{{ end }}
+      {{- range $k, $v := $pgv.parameters }}
+      {{- if ne $k "wal_retrieve_retry_interval" }}
+      {{ $k }}: {{ $v | quote }}
+      {{- end }}
+      {{- end }}
   {{- else }}
   smartShutdownTimeout: 5
+  {{- with $pgv.parameters }}
+  # values.postgres.parameters (platform ADR 0042): an onboarded app's
+  # database is never below its source in these settings.
+  postgresql:
+    parameters:
+      {{- range $k, $v := . }}
+      {{ $k }}: {{ $v | quote }}
+      {{- end }}
+  {{- end }}
   {{- end }}
   storage:
-    {{- if $topo.cluster }}
+    {{- if $pgv.storageSize }}
+    size: {{ $pgv.storageSize }}
+    {{- else if $topo.cluster }}
     size: {{ $profile.topologyStorageSize | default $profile.storageSize | default "1Gi" }}
     {{- else }}
     size: {{ $profile.storageSize | default "1Gi" }}
@@ -79,6 +104,14 @@ spec:
         barmanObjectName: {{ $cluster }}
         serverName: {{ $cluster }}
   {{- end }}
+  {{- if and (not $topo.cluster) $pgv.bootstrap }}
+  # The database and owner of an onboarded app (platform ADR 0042), which
+  # CNPG makes and puts in the Secret <cluster>-app.
+  bootstrap:
+    initdb:
+      database: {{ $pgv.database }}
+      owner: {{ $pgv.owner }}
+  {{- end }}
   {{- with $topo.cluster }}
   {{- $ns := $.Release.Namespace }}
   # One half of a CNPG distributed topology (infra ADR 0063). Both
@@ -90,18 +123,29 @@ spec:
   # born a replica of it. Argo CD ignores replica and certificates after
   # creation: the migration engine moves the primary through replica.primary.
   # Three-member externalClusters stay GitOps-owned so a new member is added.
+  {{- /* With dbTopology.external (infra ADR 0082) the primary's database is
+  born a replica of the onboarded app's source outside the platform, which it
+  follows until the migration engine promotes it. Argo CD ignores bootstrap
+  after creation: once the source is gone the chart draws initdb again. */}}
   bootstrap:
-    {{- if $topo.isPrimary }}
+    {{- if $topo.external }}
+    pg_basebackup:
+      source: {{ $topo.external.name }}
+      database: {{ $pgv.database }}
+      owner: {{ $pgv.owner }}
+      secret:
+        name: {{ . }}-app
+    {{- else if $topo.isPrimary }}
     initdb:
-      database: app
-      owner: app
+      database: {{ $pgv.database }}
+      owner: {{ $pgv.owner }}
       secret:
         name: {{ . }}-app
     {{- else }}
     pg_basebackup:
       source: {{ $topo.primary }}
-      database: app
-      owner: app
+      database: {{ $pgv.database }}
+      owner: {{ $pgv.owner }}
       secret:
         name: {{ . }}-app
     {{- end }}
@@ -117,6 +161,17 @@ spec:
     primary: {{ $topo.primary }}
     source: {{ $topo.source }}
   externalClusters:
+    {{- with $topo.external }}
+    # The source through its egress Service (dbnetwork.yaml), with the
+    # replication account connecting made there (platform ADR 0042).
+    - name: {{ .name }}
+      connectionParameters:
+        host: {{ .egressService }}.{{ $ns }}.svc.cluster.local
+        user: {{ .user }}
+        dbname: postgres
+        sslmode: {{ .sslmode }}
+      password: {name: {{ .passwordSecret }}, key: password}
+    {{- end }}
     - name: {{ $topo.self }}
       connectionParameters:
         host: {{ . }}-rw.{{ $ns }}.svc

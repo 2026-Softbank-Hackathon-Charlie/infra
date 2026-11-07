@@ -173,6 +173,10 @@ public service, and no env name that is also a sealed app secret.
 {{- $services = append $services .egressService -}}
 {{- $hosts = concat $hosts (list .egressHost .peerHost) -}}
 {{- end -}}
+{{- with $topo.external -}}
+{{- $services = append $services .egressService -}}
+{{- $hosts = concat $hosts (list .egressHost .host) -}}
+{{- end -}}
 {{- range $services -}}
 {{- if gt (len .) 63 -}}
 {{- fail (printf "values.dbTopology: Service name %s is longer than 63 characters" .) -}}
@@ -265,8 +269,34 @@ the platform must not write.
 {{- $_ := set $out "ingressHost" (printf "hop-db-%s-%s" $env $instance) -}}
 {{- $_ := set $out "egressHost" (printf "hop-db-%s-%s-to-%s" $env $instance $other) -}}
 {{- $_ := set $out "peerHost" (printf "hop-db-%s-%s" $other $instance) -}}
+{{- /* An onboarded app's source outside the platform (platform ADR 0042, infra ADR 0082): the primary's Cluster is born its replica. */ -}}
+{{- with $t.external -}}
+{{- if or (ne $env $t.primary) $explicitMembers -}}
+{{- fail "values.dbTopology.external is only for the primary's file of a two-member topology (infra ADR 0082)" -}}
+{{- end -}}
+{{- if not $sealed.pgLegacy -}}
+{{- fail "values.dbTopology.external needs values.sealedSecrets.pgLegacy (infra ADR 0082)" -}}
+{{- end -}}
+{{- if ne .passwordSecret (printf "%s-legacy" $cluster) -}}
+{{- fail (printf "values.dbTopology.external.passwordSecret must be %s-legacy, the Secret of values.sealedSecrets.pgLegacy" $cluster) -}}
+{{- end -}}
+{{- $_ := set $out "external" (dict "name" .name "host" .host "user" .user "passwordSecret" .passwordSecret "sslmode" .sslmode
+  "egressService" (printf "%s-to-%s" $cluster .name) "egressHost" (printf "hop-db-%s-%s-to-%s" $env $instance .name)) -}}
+{{- $_ := set $out "primary" .name -}}
+{{- $_ := set $out "source" .name -}}
+{{- end -}}
 {{- end -}}
 {{- toJson $out -}}
+{{- end -}}
+
+{{/*
+values.postgres (platform ADR 0042, infra ADR 0082) as JSON: the Cluster's
+image, its bootstrap database and owner (default app) and its volume size,
+each empty when the platform left it out.
+*/}}
+{{- define "hopcharlie-app.postgresValues" -}}
+{{- $p := .Values.values.postgres | default dict -}}
+{{- toJson (dict "image" ($p.image | default "") "database" ($p.database | default "app") "owner" ($p.owner | default "app") "storageSize" ($p.storageSize | default "") "bootstrap" (or $p.database $p.owner | empty | not) "parameters" ($p.parameters | default dict)) -}}
 {{- end -}}
 
 {{/* Namespace-independent OTel wiring; no credential in app values. */}}

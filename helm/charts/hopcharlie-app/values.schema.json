@@ -30,7 +30,7 @@
               "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
               "healthCheck": { "type": "string", "pattern": "^(/[^\\s]*)?$" },
               "public": { "type": "boolean" },
-              "replicas": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "replicas": { "type": "integer", "minimum": 0, "maximum": 5 },
               "memory": { "$ref": "#/definitions/quantity" },
               "cpu": { "$ref": "#/definitions/quantity" },
               "env": {
@@ -115,6 +115,15 @@
                 "ca.crt": { "$ref": "#/definitions/ciphertext" },
                 "ca.key": { "$ref": "#/definitions/ciphertext" }
               }
+            },
+            "pgLegacy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["username", "password"],
+              "properties": {
+                "username": { "$ref": "#/definitions/ciphertext" },
+                "password": { "$ref": "#/definitions/ciphertext" }
+              }
             }
           },
           "dependencies": {
@@ -138,9 +147,37 @@
               "maxItems": 3,
               "uniqueItems": true,
               "items": { "$ref": "#/definitions/envName" }
+            },
+            "external": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "host", "user", "passwordSecret", "sslmode"],
+              "properties": {
+                "name": { "const": "legacy" },
+                "host": { "type": "string", "pattern": "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,47}[a-z0-9])?$" },
+                "user": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
+                "passwordSecret": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
+                "sslmode": { "enum": ["prefer", "require", "verify-ca", "verify-full"] }
+              }
             }
           }
         },
+        "postgres": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": { "type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$" },
+            "database": { "$ref": "#/definitions/pgName" },
+            "owner": { "$ref": "#/definitions/pgName" },
+            "storageSize": { "$ref": "#/definitions/quantity" },
+            "parameters": {
+              "type": "object",
+              "propertyNames": { "pattern": "^[a-z_][a-z0-9_.]{0,62}$" },
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        },
+        "onboardingCold": { "type": "boolean" },
         "backup": {
           "type": "object",
           "additionalProperties": false,
@@ -319,6 +356,7 @@
   "definitions": {
     "partName": { "type": "string", "pattern": "^[a-z]([a-z0-9-]{0,22}[a-z0-9])?$" },
     "envName": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "pgName": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
     "ciphertext": { "type": "string", "pattern": "^[A-Za-z0-9+/]+={0,2}$" },
     "quantity": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?([eE][0-9]+|[mkMGTPE]|[KMGTPE]i)?$" },
     "reservedEnv": {

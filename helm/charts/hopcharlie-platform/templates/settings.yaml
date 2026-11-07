@@ -27,6 +27,8 @@ data:
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
     #                   residency-policy.yaml (when host/residency-policy.yaml
     #                   exists, with its PLATFORM_RESIDENCY_POLICY_FILE line),
+    #                   the Tailscale OAuth client of onboarding
+    #                   (tailscale-onboard-oauth, when it exists) in api.env,
     #                   aiobs-clickhouse-password (with AIOBS_CLICKHOUSE),
     #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
@@ -93,6 +95,26 @@ data:
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$residency" = "None" ]; then residency=""; fi
         if [ -n "$residency" ]; then printf '%s\n' "$residency" > /config/residency-policy.yaml; fi
+        # The Tailscale OAuth client onboarding mints the source's one-time
+        # auth key with (platform ADR 0042, infra ADR 0082), JSON
+        # {clientId, clientSecret} that the tailnet administrator puts there.
+        # Optional: without it the API starts and onboarding cannot connect.
+        ts_oauth="$(aws ssm get-parameters --with-decryption --names "$PREFIX/tailscale-onboard-oauth" \
+          --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$ts_oauth" = "None" ]; then ts_oauth=""; fi
+        # The image has no JSON tool; Tailscale client ids and secrets are
+        # letters, digits, '-' and '_', so a strict match reads them. A value
+        # that does not match is skipped with a message, like a missing one.
+        ts_id=""; ts_secret=""
+        if [ -n "$ts_oauth" ]; then
+          flat="$(printf '%s' "$ts_oauth" | tr -d ' \t\n')"
+          ts_id="$(printf '%s' "$flat" | sed -n 's/.*"clientId":"\([A-Za-z0-9_-]\{1,200\}\)".*/\1/p')"
+          ts_secret="$(printf '%s' "$flat" | sed -n 's/.*"clientSecret":"\([A-Za-z0-9_-]\{1,200\}\)".*/\1/p')"
+          if [ -z "$ts_id" ] || [ -z "$ts_secret" ]; then
+            echo "skipping tailscale-onboard-oauth: it is not JSON {clientId, clientSecret}" >&2
+            ts_id=""; ts_secret=""
+          fi
+        fi
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"
@@ -139,6 +161,7 @@ data:
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
           if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
+          if [ -n "$ts_id" ]; then printf 'PLATFORM_TAILSCALE_OAUTH_CLIENT_ID=%s\nPLATFORM_TAILSCALE_OAUTH_CLIENT_SECRET=%s\n' "$ts_id" "$ts_secret"; fi
         } > /config/api.env
         ;;
       *)

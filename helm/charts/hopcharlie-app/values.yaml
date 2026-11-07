@@ -64,6 +64,9 @@ values:
   #   pgCA:                     # with dbTopology: SealedSecret app-pg-ca, the
   #     ca.crt: <ciphertext>    # CA both databases sign their server and
   #     ca.key: <ciphertext>    # streaming_replica certificates with
+  #   pgLegacy:                 # onboarded apps (infra ADR 0082): SealedSecret
+  #     username: <ciphertext>  # <app>-<pg>-legacy, kubernetes.io/basic-auth,
+  #     password: <ciphertext>  # the source's replication account
   sealedSecrets: {}
   # The postgres resource's backup bucket and the path in it, new for every
   # registration of the app (platform ADR 0025). The platform sets it with
@@ -82,6 +85,24 @@ values:
   #     members: [gke, eks, onprem] # optional 2..3 unique members, all present;
   #                                # includes primary, peer and this file's env;
   #                                # cannot accompany peerPresent: false
+  #     external:      # onboarded apps (platform ADR 0042, infra ADR 0082), only
+  #       name: legacy # in the primary's file: the Cluster is born a replica of
+  #       host: hop-db-legacy-<app>  # this tailnet host (+ dbNetwork.tailnetDomain)
+  #       user: hopcharlie_replicator
+  #       passwordSecret: <app>-<pg>-legacy   # from sealedSecrets.pgLegacy
+  #       sslmode: prefer
+  # The postgres resource of an onboarded app (platform ADR 0042); each key optional.
+  #   postgres:
+  #     image: ghcr.io/cloudnative-pg/postgresql:17.11-standard-bookworm@sha256:...
+  #     database: moimroom   # bootstrap database and owner; default app
+  #     owner: moimroom
+  #     storageSize: 2Gi     # before profile.postgres.topologyStorageSize and storageSize
+  #     parameters:          # merged into the Cluster's postgresql.parameters;
+  #       max_connections: "200"   # a key given here wins over the chart's
+  # true while an onboarded app waits for its cutover: every Deployment has 0
+  # replicas and the label hopcharlie.dev/onboarding-cold, whose spec.replicas
+  # the ApplicationSet ignores so the migration engine can start it.
+  #   onboardingCold: true
 
 profile:
   # The Service of the public service, which the traffic gateway reaches.

@@ -481,16 +481,25 @@ def main():
         apps_values = ROOT / "clusters/aws-dev-management/values/hopcharlie-apps.yaml"
         docs = render(ROOT / "helm/charts/hopcharlie-apps", apps_values, "hopcharlie-apps", "argocd", extra)
         assert sorted(d["kind"] for d in docs) == ["AppProject", "ApplicationSet", "Role", "RoleBinding",
-                                                   "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicy",
-                                                   "ValidatingAdmissionPolicyBinding", "ValidatingAdmissionPolicyBinding"]
+                                                   "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicy",
+                                                   "ValidatingAdmissionPolicyBinding", "ValidatingAdmissionPolicyBinding", "ValidatingAdmissionPolicyBinding"]
         # The platform's AI runner Jobs (hopcharlie-platform hopai.yaml) are kept to the
         # runner by a policy on the platform ServiceAccount's Job requests.
         runner = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and d["metadata"]["name"] == "hopcharlie-platform-ai-runner")
         assert runner["spec"]["matchConstraints"]["resourceRules"] == [{"apiGroups": ["batch"], "apiVersions": ["*"], "operations": ["CREATE", "UPDATE"], "resources": ["jobs"]}]
         assert "system:serviceaccount:charlie-platform:hopcharlie-platform" in runner["spec"]["matchConditions"][0]["expression"]
         rules = " ".join(v["expression"] for v in runner["spec"]["validations"])
-        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-platform'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom"):
+        for want in ("'hopai'", "serviceAccountName == 'hopcharlie-platform'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom",
+                     "['hopcharlie-hopai-fetch', 'hopai-onboarding']", "'^hopai-onb-[0-9a-f]{12}$'"):
             assert want in rules, want
+        # An onboarding's hopai input ConfigMap and stopping its Job (infra ADR 0082).
+        cleanup = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and d["metadata"]["name"] == "hopcharlie-platform-ai-runner-cleanup")["spec"]
+        assert cleanup["matchConstraints"]["resourceRules"] == [
+            {"apiGroups": [""], "apiVersions": ["*"], "operations": ["CREATE", "DELETE"], "resources": ["configmaps"]},
+            {"apiGroups": ["batch"], "apiVersions": ["*"], "operations": ["DELETE"], "resources": ["jobs"]}]
+        cleanup_rules = " ".join(v["expression"] for v in cleanup["validations"])
+        for want in ("request.namespace == 'charlie-platform'", "'^hopai-onb-[0-9a-f]{12}$'", "oldObject.metadata.labels['hopcharlie.dev/ai-run'] == 'true'"):
+            assert want in cleanup_rules, want
         binding = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["policyName"] == "hopcharlie-platform-ai-runner")
         assert binding["spec"]["validationActions"] == ["Deny"]
         # Deleting the parent Application must leave the ApplicationSet (ADR 0036): its
@@ -501,7 +510,8 @@ def main():
         # Migrations change the Cluster's topology fields (ADR 0050); the Tailscale operator
         # rewrites only a database egress Service's externalName (ADR 0063).
         assert appset["spec"]["template"]["spec"]["ignoreDifferences"] == [
-            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", 'select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters', ".spec.certificates"]},
+            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", 'select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters', ".spec.certificates", ".spec.bootstrap"]},
+            {"group": "apps", "kind": "Deployment", "jqPathExpressions": ['select(.metadata.labels["hopcharlie.dev/onboarding-cold"] == "true") | .spec.replicas']},
             {"group": "", "kind": "Service", "jqPathExpressions": [
                 'select(.spec.type == "ExternalName" and .metadata.annotations["tailscale.com/tailnet-fqdn"] != null) | .spec.externalName']}]
         check_project(docs, apps_project, "argocd")
@@ -767,6 +777,101 @@ def main():
             docs = render(ROOT / "helm/charts/hopcharlie-app", alone, "moimroom", "moimroom", ("-f", on))
             want = paired if present else [d for d in paired if (d["kind"], d["metadata"]["name"]) not in tailnet]
             assert docs == want, f"peerPresent {present} must draw the paired output{'' if present else ' without the tailnet objects'}"
+        # Onboarded apps (platform ADR 0042, infra ADR 0082): the primary's Cluster
+        # is born a replica of the source outside the platform; the app stays cold.
+        onb = json.loads(topo_files["gke"].read_text())
+        onb.update(env="eks")
+        for svc in onb["values"]["services"]:
+            svc["replicas"] = 0
+        onb["values"]["postgres"] = {"image": "ghcr.io/cloudnative-pg/postgresql:17.11-standard-bookworm@sha256:" + "a" * 64,
+                                     "database": "moimroom", "owner": "moimroom", "storageSize": "3Gi",
+                                     "parameters": {"max_connections": "200", "max_wal_senders": "10", "wal_retrieve_retry_interval": "2s"}}
+        onb["values"]["dbTopology"] = {"primary": "eks", "peer": "gke", "peerPresent": False, "external": {
+            "name": "legacy", "host": "hop-db-legacy-moimroom", "user": "hopcharlie_replicator", "passwordSecret": "moimroom-db-legacy", "sslmode": "prefer"}}
+        onb["values"]["onboardingCold"] = True
+        pg_legacy = {"username": "AgB1c2VyCg==", "password": "AgBwYXNzCg=="}
+        onb["values"]["sealedSecrets"]["pgLegacy"] = pg_legacy
+        onb_file = work / "onboarding-eks.json"
+        onb_file.write_text(json.dumps(onb))
+        eks_on = work / "topology-profile-eks.json"
+        net = json.loads(eks_on.read_text())["profile"]["dbNetwork"]
+        docs = render(ROOT / "helm/charts/hopcharlie-app", onb_file, "moimroom", "moimroom", ("-f", eks_on))
+        for doc in docs:
+            assert (doc["apiVersion"].rpartition("/")[0], doc["kind"]) in app_allowed, f"AppProject hopcharlie-apps denies {doc['kind']}"
+        spec = next(d for d in docs if d["kind"] == "Cluster")["spec"]
+        assert spec["imageName"] == onb["values"]["postgres"]["image"] and spec["storage"]["size"] == "3Gi"
+        # values.postgres.parameters merge into the chart's; a given key wins.
+        assert spec["postgresql"]["parameters"] == {"wal_retrieve_retry_interval": "2s", "max_connections": "200", "max_wal_senders": "10"}, spec["postgresql"]
+        assert spec["bootstrap"] == {"pg_basebackup": {"source": "legacy", "database": "moimroom", "owner": "moimroom", "secret": {"name": "moimroom-db-app"}}}, spec["bootstrap"]
+        assert spec["replica"] == {"self": "moimroom-db-eks", "primary": "legacy", "source": "legacy"}, spec["replica"]
+        assert spec["certificates"]["serverCASecret"] == "app-pg-ca" and spec["certificates"]["clientCASecret"] == "app-pg-ca"
+        assert spec["externalClusters"] == [
+            {"name": "legacy", "connectionParameters": {"host": "moimroom-db-to-legacy.moimroom.svc.cluster.local", "user": "hopcharlie_replicator",
+                                                        "dbname": "postgres", "sslmode": "prefer"},
+             "password": {"name": "moimroom-db-legacy", "key": "password"}},
+            {"name": "moimroom-db-eks", "connectionParameters": {"host": "moimroom-db-rw.moimroom.svc", **params}, **tls},
+            {"name": "moimroom-db-gke", "connectionParameters": {"host": "moimroom-db-to-gke.moimroom.svc.cluster.local", **params}, **tls}], spec["externalClusters"]
+        objects = {(d["kind"], d["metadata"]["name"]): d for d in docs}
+        assert ("Service", "moimroom-db-ts") not in objects and ("Service", "moimroom-db-to-gke") not in objects, "no peer tailnet objects before the peer exists"
+        egress = objects[("Service", "moimroom-db-to-legacy")]
+        assert egress["spec"]["type"] == "ExternalName" and egress["metadata"]["annotations"] == {
+            "tailscale.com/tailnet-fqdn": f"hop-db-legacy-moimroom.{net['tailnetDomain']}", "tailscale.com/hostname": "hop-db-eks-moimroom-to-legacy",
+            "tailscale.com/tags": "tag:hop-db-client-eks", "tailscale.com/proxy-class": "hopcharlie-app-db-egress-eks"}
+        assert objects[("NetworkPolicy", "moimroom-db-to-legacy")]["spec"]["egress"] == [{"to": [proxy("moimroom-db-to-legacy")], "ports": [{"protocol": "TCP", "port": 5432}]}]
+        legacy = objects[("SealedSecret", "moimroom-db-legacy")]["spec"]
+        assert legacy["encryptedData"] == pg_legacy and legacy["template"]["type"] == "kubernetes.io/basic-auth"
+        deployments = [d for d in docs if d["kind"] == "Deployment"]
+        assert deployments and all(d["spec"]["replicas"] == 0 and d["metadata"]["labels"]["hopcharlie.dev/onboarding-cold"] == "true"
+                                   and "hopcharlie.dev/onboarding-cold" not in d["spec"]["template"]["metadata"]["labels"] for d in deployments)
+        # After the cutover: initdb with the same database (Argo CD ignores it), no
+        # source objects, the legacy Secret kept, replicas as written (0 stays 0).
+        after = copy.deepcopy(onb)
+        after["values"]["dbTopology"].pop("external")
+        after["values"].pop("onboardingCold")
+        after["values"]["services"][0]["replicas"] = 2
+        after_file = work / "onboarding-after.json"
+        after_file.write_text(json.dumps(after))
+        docs = render(ROOT / "helm/charts/hopcharlie-app", after_file, "moimroom", "moimroom", ("-f", eks_on))
+        objects = {(d["kind"], d["metadata"]["name"]): d for d in docs}
+        spec = objects[("Cluster", "moimroom-db")]["spec"]
+        assert spec["bootstrap"] == {"initdb": {"database": "moimroom", "owner": "moimroom", "secret": {"name": "moimroom-db-app"}}}
+        assert [c["name"] for c in spec["externalClusters"]] == ["moimroom-db-eks", "moimroom-db-gke"]
+        # Without dbTopology the parameters are the Cluster's only ones.
+        alone = copy.deepcopy(after)
+        alone["values"].pop("dbTopology")
+        for key in ("pgApp", "pgCA", "pgLegacy"):
+            alone["values"]["sealedSecrets"].pop(key)
+        alone_file = work / "onboarding-alone.json"
+        alone_file.write_text(json.dumps(alone))
+        spec = next(d for d in render(ROOT / "helm/charts/hopcharlie-app", alone_file, "moimroom", "moimroom", ("-f", eks_on)) if d["kind"] == "Cluster")["spec"]
+        assert spec["postgresql"] == {"parameters": {"max_connections": "200", "max_wal_senders": "10", "wal_retrieve_retry_interval": "2s"}}, spec.get("postgresql")
+        assert spec["bootstrap"] == {"initdb": {"database": "moimroom", "owner": "moimroom"}}, spec["bootstrap"]
+        assert ("Service", "moimroom-db-to-legacy") not in objects and ("NetworkPolicy", "moimroom-db-to-legacy") not in objects
+        assert ("SealedSecret", "moimroom-db-legacy") in objects
+        assert [d["spec"]["replicas"] for d in docs if d["kind"] == "Deployment"] == [2, 0]
+        assert not any("hopcharlie.dev/onboarding-cold" in d["metadata"]["labels"] for d in docs if d["kind"] == "Deployment")
+        for name, change in (
+            ("external in the peer's file", lambda v: v.update(env="gke")),
+            ("external without pgLegacy", lambda v: v["values"]["sealedSecrets"].pop("pgLegacy")),
+            ("external with another password Secret", lambda v: v["values"]["dbTopology"]["external"].update(passwordSecret="other")),
+            ("external with members", lambda v: (v["values"]["dbTopology"].pop("peerPresent"), v["values"]["dbTopology"].update(members=["eks", "gke"]))),
+            ("external that is not legacy", lambda v: v["values"]["dbTopology"]["external"].update(name="vm")),
+            ("external host outside hop-db-legacy-", lambda v: v["values"]["dbTopology"]["external"].update(host="hop-db-eks-moimroom")),
+            ("postgres image without a digest", lambda v: v["values"]["postgres"].update(image="postgres:17")),
+            ("pgLegacy without a postgres resource", lambda v: (v["values"].pop("dbTopology"), v["values"]["sealedSecrets"].pop("pgApp"),
+                                                                v["values"]["sealedSecrets"].pop("pgCA"), v["values"].update(resources=[{"name": "photos", "type": "s3"}]))),
+            ("negative replicas", lambda v: v["values"]["services"][0].update(replicas=-1)),
+        ):
+            values = copy.deepcopy(onb)
+            change(values)
+            broken = work / "broken-values.json"
+            broken.write_text(json.dumps(values))
+            result = subprocess.run([HELM, "template", "moimroom", str(ROOT / "helm/charts/hopcharlie-app"), "-n", "moimroom", "-f", str(eks_on), "-f", str(broken)], capture_output=True, text=True)
+            assert result.returncode != 0, f"hopcharlie-app accepts {name}"
+        # Without profile.dbNetwork the source cannot be reached.
+        result = subprocess.run([HELM, "template", "moimroom", str(ROOT / "helm/charts/hopcharlie-app"), "-n", "moimroom",
+                                 "-f", str(work / "topology-profile-off-eks.json"), "-f", str(onb_file)], capture_output=True, text=True)
+        assert result.returncode != 0, "hopcharlie-app accepts external without dbNetwork"
         for name, change in (
             ("dbTopology without pgCA", lambda v: v["values"]["sealedSecrets"].pop("pgCA")),
             ("dbTopology without pgApp and pgCA", lambda v: (v["values"]["sealedSecrets"].pop("pgCA"), v["values"]["sealedSecrets"].pop("pgApp"))),

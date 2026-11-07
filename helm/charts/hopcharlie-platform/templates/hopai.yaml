@@ -4,6 +4,14 @@ Job the platform API starts from the console (POST /v1/ai-runs, platform
 internal/airun). The API reads the Job template below from
 PLATFORM_AIRUN_JOB_TEMPLATE and only fills in APP, FROM and TO.
 
+An onboarding's contract PR (platform ADR 0042, infra ADR 0082) uses the same
+template: the API sets KIND=onboard, ONBOARDING, REPO, BRANCH, FACTS_FILE and
+CHECK_LOG_FILE in the hopai container, and in the volume onboarding the name
+hopai-<onboarding id> with optional false. It then creates that ConfigMap
+(facts.json, check.log) owned by the Job, so the pod waits for it and the
+garbage collector deletes it with the Job. A plain run keeps the name
+hopai-onboarding, which nobody creates, and mounts an empty optional volume.
+
 The Job reads its settings from SSM through the platform ServiceAccount (Pod
 Identity), like the API pod: the Claude key, the sandbox-admin kubeconfigs of
 the workload clusters (/hopcharlie/hopai/*, put there by an operator) and the
@@ -89,6 +97,9 @@ data:
                 - |
                   set -eu
                   while IFS= read -r line || [ -n "$line" ]; do case "$line" in *=*) export "$line";; esac; done < /config/hopai.env
+                  # The contract PR of an onboarding: hopai reads ONBOARDING, REPO,
+                  # BRANCH, FACTS_FILE and CHECK_LOG_FILE (/onboarding) itself.
+                  if [ "${KIND:-}" = onboard ]; then exec hopai onboard; fi
                   exec hopai run -app "$APP" -from "$FROM" -to "$TO" \
                     -env gke=/config/gke.yaml -env eks=/config/eks.yaml \
                     -sandbox-kubeconfig "/config/$TO.yaml" \
@@ -104,6 +115,7 @@ data:
               volumeMounts:
                 - {name: config, mountPath: /config, readOnly: true}
                 - {name: work, mountPath: /work}
+                - {name: onboarding, mountPath: /onboarding, readOnly: true}
           volumes:
             - name: config
               emptyDir: {medium: Memory, sizeLimit: 8Mi}
@@ -111,9 +123,14 @@ data:
               emptyDir: {sizeLimit: 256Mi}
             - name: scripts
               configMap: {name: hopcharlie-hopai-fetch}
+            - name: onboarding
+              configMap: {name: hopai-onboarding, optional: true}
 ---
 # The API creates the runner's Jobs and reads their status, in this
 # namespace only. It cannot create Pods directly or change other Jobs' specs.
+# An onboarding's Job also gets a ConfigMap of its input, and DELETE of an
+# onboarding stops its Job; the AI runner policy (hopcharlie-apps) limits
+# both to hopai-onb-* ConfigMaps and the runner's Jobs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -123,7 +140,20 @@ metadata:
 rules:
   - apiGroups: [batch]
     resources: [jobs]
-    verbs: [create, get, list]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, delete]
+  # The result of an onboarding's hopai run is its pod's log (platform #139).
+  # RBAC cannot narrow pods to the runner's, so this reads every pod spec and
+  # log in this namespace; the platform's settings are in /config, not in
+  # pod specs or logs.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

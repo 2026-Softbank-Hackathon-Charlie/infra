@@ -27,6 +27,10 @@
     "appFiles": {
       "enabled": false
     },
+    "onboarding": {
+      "enabled": false,
+      "awsRegions": ""
+    },
     "parity": {
       "enabled": false,
       "config": {}

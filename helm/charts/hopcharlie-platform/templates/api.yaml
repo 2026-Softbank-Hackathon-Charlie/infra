@@ -164,6 +164,17 @@ spec:
             # after the object IAM (ADR 0064) is applied.
             - {name: PLATFORM_APP_FILES, value: "1"}
             {{- end }}
+            {{- if .Values.api.onboarding.enabled }}
+            # /v1/onboardings, existing compose apps onboarding (platform ADR 0042).
+            # Turn on only after infra ADR 0082's IAM, SSM documents, chart and
+            # tailnet steps; the Tailscale OAuth client comes from SSM (settings.yaml).
+            - {name: PLATFORM_ONBOARDING, value: "1"}
+            {{- with .Values.api.onboarding.awsRegions }}
+            # Regions discovery looks for the source VM in; the platform's default is
+            # ap-northeast-2,ap-southeast-2, where terraform/platform/aws puts the documents.
+            - {name: PLATFORM_ONBOARD_AWS_REGIONS, value: {{ . | quote }}}
+            {{- end }}
+            {{- end }}
             {{- if .Values.hopai.enabled }}
             # POST /v1/ai-runs starts the AI runner from this Job template (hopai.yaml).
             - {name: PLATFORM_AIRUN_JOB_TEMPLATE, value: /etc/hopai/job.yaml}
