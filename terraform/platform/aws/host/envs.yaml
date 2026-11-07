@@ -44,9 +44,3 @@ environments:
     region: laptop
     kubeContext: onprem-hopcharlie
     sealedSecretsCert: /config/sealed-secrets/onprem.pem
-    storage:
-      driver: aws
-      bucketPrefix: ${app_bucket_prefix}
-      region: ap-northeast-2
-      iamPath: ${app_iam_path}
-      permissionsBoundary: ${app_boundary_arn}
