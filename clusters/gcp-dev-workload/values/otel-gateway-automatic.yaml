@@ -1,0 +1,415 @@
+{
+  "mode": "deployment",
+  "replicaCount": 1,
+  "fullnameOverride": "observability-gateway",
+  "image": {
+    "repository": "docker.io/otel/opentelemetry-collector-contrib",
+    "tag": "0.161.0@sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1"
+  },
+  "command": {
+    "name": "otelcol-contrib"
+  },
+  "resources": {
+    "requests": {
+      "cpu": "100m",
+      "memory": "128Mi"
+    },
+    "limits": {
+      "memory": "512Mi"
+    }
+  },
+  "serviceAccount": {
+    "automountServiceAccountToken": true,
+    "name": "observability-gateway"
+  },
+  "service": {
+    "type": "ClusterIP"
+  },
+  "ports": {
+    "otlp": {
+      "enabled": false
+    },
+    "jaeger-compact": {
+      "enabled": false
+    },
+    "jaeger-thrift": {
+      "enabled": false
+    },
+    "jaeger-grpc": {
+      "enabled": false
+    },
+    "zipkin": {
+      "enabled": false
+    },
+    "metrics": {
+      "enabled": false
+    },
+    "otlp-http": {
+      "enabled": true,
+      "containerPort": 4318,
+      "servicePort": 4318,
+      "protocol": "TCP",
+      "hostPort": 0
+    },
+    "app-otlp-http": {
+      "enabled": true,
+      "containerPort": 4319,
+      "servicePort": 443,
+      "protocol": "TCP",
+      "hostPort": 0
+    }
+  },
+  "extraEnvs": [
+    {
+      "name": "CENTRAL_OTLP_ENDPOINT",
+      "valueFrom": {
+        "configMapKeyRef": {
+          "name": "observability-remote-endpoint",
+          "key": "endpoint"
+        }
+      }
+    }
+  ],
+  "extraEnvsFrom": [
+    {
+      "secretRef": {
+        "name": "observability-client-auth"
+      }
+    },
+    {
+      "secretRef": {
+        "name": "observability-upstream-auth"
+      }
+    }
+  ],
+  "extraVolumes": [
+    {
+      "name": "client-ca",
+      "secret": {
+        "secretName": "observability-client-ca"
+      }
+    },
+    {
+      "name": "server-tls",
+      "secret": {
+        "secretName": "observability-gateway-tls"
+      }
+    },
+    {
+      "name": "queue",
+      "persistentVolumeClaim": {
+        "claimName": "observability-gateway-queue"
+      }
+    },
+    {
+      "name": "upstream-ca",
+      "secret": {
+        "secretName": "observability-upstream-ca"
+      }
+    }
+  ],
+  "extraVolumeMounts": [
+    {
+      "name": "client-ca",
+      "mountPath": "/etc/otel/client",
+      "readOnly": true
+    },
+    {
+      "name": "server-tls",
+      "mountPath": "/etc/otel/server",
+      "readOnly": true
+    },
+    {
+      "name": "queue",
+      "mountPath": "/var/lib/otelcol"
+    },
+    {
+      "name": "upstream-ca",
+      "mountPath": "/etc/otel/upstream",
+      "readOnly": true
+    }
+  ],
+  "podSecurityContext": {
+    "fsGroup": 10001
+  },
+  "securityContext": {
+    "runAsUser": 10001,
+    "runAsGroup": 10001,
+    "runAsNonRoot": true,
+    "allowPrivilegeEscalation": false,
+    "capabilities": {
+      "drop": [
+        "ALL"
+      ]
+    }
+  },
+  "extraManifests": [
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "name": "observability-gateway-queue",
+        "annotations": {
+          "helm.sh/resource-policy": "keep"
+        }
+      },
+      "spec": {
+        "storageClassName": "charlie-gcp-balanced",
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "2Gi"
+          }
+        }
+      }
+    }
+  ],
+  "config": {
+    "extensions": {
+      "bearertokenauth/server": {
+        "scheme": "Bearer",
+        "tokens": [
+          "${env:OTLP_AUTH_TOKEN}"
+        ]
+      },
+      "file_storage/queue": {
+        "directory": "/var/lib/otelcol/queue",
+        "create_directory": true
+      }
+    },
+    "receivers": {
+      "jaeger": null,
+      "zipkin": null,
+      "prometheus": null,
+      "otlp": {
+        "protocols": {
+          "grpc": null,
+          "http": {
+            "endpoint": "${env:MY_POD_IP}:4318",
+            "auth": {
+              "authenticator": "bearertokenauth/server"
+            },
+            "tls": {
+              "cert_file": "/etc/otel/server/tls.crt",
+              "key_file": "/etc/otel/server/tls.key"
+            }
+          }
+        }
+      },
+      "otlp/app": {
+        "protocols": {
+          "http": {
+            "endpoint": "${env:MY_POD_IP}:4319",
+            "tls": {
+              "cert_file": "/etc/otel/server/tls.crt",
+              "key_file": "/etc/otel/server/tls.key"
+            }
+          }
+        }
+      }
+    },
+    "processors": {
+      "resource/cluster": {
+        "attributes": [
+          {
+            "key": "cloud.provider",
+            "value": "gcp",
+            "action": "upsert"
+          },
+          {
+            "key": "cloud.region",
+            "value": "asia-northeast3",
+            "action": "upsert"
+          },
+          {
+            "key": "k8s.cluster.name",
+            "value": "charlie-dev-gcp-workload",
+            "action": "upsert"
+          },
+          {
+            "key": "deployment.environment.name",
+            "value": "dev",
+            "action": "upsert"
+          },
+          {
+            "key": "cloud.availability_zone",
+            "value": "asia-northeast3-a",
+            "action": "upsert"
+          }
+        ]
+      },
+      "attributes/redact": {
+        "actions": [
+          {
+            "key": "authorization",
+            "action": "delete"
+          },
+          {
+            "key": "http.request.header.authorization",
+            "action": "delete"
+          },
+          {
+            "key": "http.request.header.cookie",
+            "action": "delete"
+          },
+          {
+            "key": "password",
+            "action": "delete"
+          },
+          {
+            "key": "token",
+            "action": "delete"
+          }
+        ]
+      },
+      "batch": {
+        "send_batch_size": 512,
+        "send_batch_max_size": 1024,
+        "timeout": "1s"
+      },
+      "filter/sensitive": {
+        "error_mode": "propagate",
+        "logs": {
+          "log_record": [
+            "IsString(body) and IsMatch(body, \"(?i)(password|authorization|access_token|refresh_token|cookie)[\\\" ]*[:=]\")"
+          ]
+        }
+      },
+      "k8sattributes/app": {
+        "auth_type": "serviceAccount",
+        "passthrough": false,
+        "wait_for_metadata": true,
+        "extract": {
+          "metadata": [
+            "k8s.namespace.name",
+            "k8s.pod.name",
+            "k8s.pod.uid",
+            "k8s.node.name"
+          ],
+          "labels": [
+            {
+              "tag_name": "platform.app.name",
+              "key": "hopcharlie.dev/app",
+              "from": "pod"
+            },
+            {
+              "tag_name": "platform.service.name",
+              "key": "hopcharlie.dev/service",
+              "from": "pod"
+            }
+          ]
+        },
+        "pod_association": [
+          {
+            "sources": [
+              {
+                "from": "connection"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "exporters": {
+      "debug": null,
+      "otlphttp/central": {
+        "endpoint": "${env:CENTRAL_OTLP_ENDPOINT}",
+        "headers": {
+          "Authorization": "Bearer ${env:CENTRAL_OTLP_AUTH_TOKEN}"
+        },
+        "tls": {
+          "ca_file": "/etc/otel/upstream/ca.crt",
+          "server_name_override": "clickstack-otel-collector.observability.svc"
+        },
+        "sending_queue": {
+          "enabled": true,
+          "queue_size": 1000,
+          "storage": "file_storage/queue"
+        },
+        "retry_on_failure": {
+          "enabled": true,
+          "max_elapsed_time": "0s"
+        }
+      }
+    },
+    "service": {
+      "extensions": [
+        "health_check",
+        "bearertokenauth/server",
+        "file_storage/queue"
+      ],
+      "pipelines": {
+        "logs": {
+          "receivers": [
+            "otlp"
+          ],
+          "processors": [
+            "memory_limiter",
+            "resource/cluster",
+            "attributes/redact",
+            "filter/sensitive",
+            "batch"
+          ],
+          "exporters": [
+            "otlphttp/central"
+          ]
+        },
+        "traces": {
+          "receivers": [
+            "otlp"
+          ],
+          "processors": [
+            "memory_limiter",
+            "resource/cluster",
+            "attributes/redact",
+            "batch"
+          ],
+          "exporters": [
+            "otlphttp/central"
+          ]
+        },
+        "metrics": null,
+        "logs/app": {
+          "receivers": [
+            "otlp/app"
+          ],
+          "processors": [
+            "memory_limiter",
+            "k8sattributes/app",
+            "resource/cluster",
+            "attributes/redact",
+            "filter/sensitive",
+            "batch"
+          ],
+          "exporters": [
+            "otlphttp/central"
+          ]
+        },
+        "traces/app": {
+          "receivers": [
+            "otlp/app"
+          ],
+          "processors": [
+            "memory_limiter",
+            "k8sattributes/app",
+            "resource/cluster",
+            "attributes/redact",
+            "batch"
+          ],
+          "exporters": [
+            "otlphttp/central"
+          ]
+        }
+      }
+    }
+  },
+  "rollout": {
+    "strategy": "Recreate"
+  },
+  "rewriteDeprecatedComponentNames": false,
+  "podLabels": {
+    "observability.hopcharlie.dev/gateway": "true"
+  }
+}

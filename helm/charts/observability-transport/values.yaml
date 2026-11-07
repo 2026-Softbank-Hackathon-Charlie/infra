@@ -1,0 +1,6 @@
+enabled: false
+role: gke
+proxyNamespace: hopcharlie-db-network
+tailnetDomain: tail567fe8.ts.net
+centralHostname: hop-observability-central
+queryHostname: hop-observability-gke-query

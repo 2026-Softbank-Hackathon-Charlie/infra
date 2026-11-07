@@ -1006,3 +1006,28 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)
 
 - [scripts/tests/test-platform-written-tokens.py](scripts/tests/test-platform-written-tokens.py) — 실제 설정 스크립트와 API entrypoint의 미설정·전달·접근 거부·리터럴 값 보존 검사
+
+## GKE 중앙 관측 연결 준비
+
+[ADR0082](docs/adr/0082-connect-gke-to-central-observability.md)의 코드 준비안입니다. gate는 off이며 실제 설치·GKE 앱 rollout·Secret·tailnet ACL 변경은 별도 실행 범위입니다. 온프레미스는 제외합니다. [운영·검증·복구 순서](docs/operations/gke-observability.md)를 따릅니다.
+
+| 파일 | 용도 |
+| --- | --- |
+| [clusters/aws-dev-management/values/clickstack-gke.yaml](clusters/aws-dev-management/values/clickstack-gke.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/aws-dev-management/values/observability-transport.yaml](clusters/aws-dev-management/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/observability-contract.json](clusters/gcp-dev-workload/observability-contract.json) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/alloy.yaml](clusters/gcp-dev-workload/values/alloy.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/app-observability.yaml](clusters/gcp-dev-workload/values/app-observability.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml](clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-activation.yaml](clusters/gcp-dev-workload/values/observability-activation.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-boundary.yaml](clusters/gcp-dev-workload/values/observability-boundary.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-transport.yaml](clusters/gcp-dev-workload/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml](clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml](helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/Chart.yaml](helm/charts/observability-transport/Chart.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/templates/routes.yaml](helm/charts/observability-transport/templates/routes.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/values.schema.json](helm/charts/observability-transport/values.schema.json) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/values.yaml](helm/charts/observability-transport/values.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/gitops/templates/observability-external.yaml](helm/gitops/templates/observability-external.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [scripts/tests/test-gke-observability.py](scripts/tests/test-gke-observability.py) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/observability-namespace.yaml](clusters/gcp-dev-workload/observability-namespace.yaml) | 노드 로그·지표 agent용 namespace의 명시적 실행 준비 |

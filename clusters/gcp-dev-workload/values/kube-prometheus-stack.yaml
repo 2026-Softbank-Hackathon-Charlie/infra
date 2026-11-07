@@ -1,0 +1,341 @@
+{
+  "fullnameOverride": "monitoring",
+  "kubeControllerManager": {
+    "enabled": false
+  },
+  "kubeScheduler": {
+    "enabled": false
+  },
+  "kubeEtcd": {
+    "enabled": false
+  },
+  "kubeProxy": {
+    "enabled": false
+  },
+  "defaultRules": {
+    "create": false
+  },
+  "prometheus": {
+    "prometheusSpec": {
+      "replicas": 1,
+      "retention": "7d",
+      "retentionSize": "8GB",
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "512Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      },
+      "storageSpec": {
+        "volumeClaimTemplate": {
+          "spec": {
+            "storageClassName": "charlie-gcp-balanced",
+            "accessModes": [
+              "ReadWriteOnce"
+            ],
+            "resources": {
+              "requests": {
+                "storage": "10Gi"
+              }
+            }
+          }
+        }
+      },
+      "image": {
+        "registry": "quay.io",
+        "repository": "prometheus/prometheus",
+        "tag": "v3.15.0-distroless",
+        "sha": "b2a413d5a03ea6a76782a508d1c7947440bba3b973931a25676e278431891b01"
+      },
+      "enableAdminAPI": false,
+      "enableRemoteWriteReceiver": false,
+      "podMonitorSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/monitor": "cnpg"
+        }
+      },
+      "podMonitorNamespaceSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/enabled": "true"
+        }
+      },
+      "serviceMonitorSelector": {
+        "matchLabels": {
+          "release": "monitoring"
+        }
+      },
+      "ruleSelector": {
+        "matchLabels": {
+          "observability.hopcharlie.dev/disabled": "true"
+        }
+      },
+      "serviceMonitorNamespaceSelector": {
+        "matchLabels": {
+          "kubernetes.io/metadata.name": "observability"
+        }
+      },
+      "additionalScrapeConfigs": [
+        {
+          "job_name": "gke-kubelet",
+          "scheme": "https",
+          "scrape_interval": "30s",
+          "scrape_timeout": "10s",
+          "kubernetes_sd_configs": [
+            {
+              "role": "node"
+            }
+          ],
+          "authorization": {
+            "type": "Bearer",
+            "credentials_file": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+          },
+          "tls_config": {
+            "ca_file": "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+            "server_name": "kubernetes.default.svc",
+            "insecure_skip_verify": false
+          },
+          "relabel_configs": [
+            {
+              "source_labels": [
+                "__meta_kubernetes_node_name"
+              ],
+              "target_label": "node"
+            },
+            {
+              "target_label": "__address__",
+              "replacement": "kubernetes.default.svc:443"
+            },
+            {
+              "source_labels": [
+                "__meta_kubernetes_node_name"
+              ],
+              "target_label": "__metrics_path__",
+              "replacement": "/api/v1/nodes/${1}/proxy/metrics"
+            }
+          ]
+        },
+        {
+          "job_name": "gke-cadvisor",
+          "scheme": "https",
+          "scrape_interval": "30s",
+          "scrape_timeout": "10s",
+          "kubernetes_sd_configs": [
+            {
+              "role": "node"
+            }
+          ],
+          "authorization": {
+            "type": "Bearer",
+            "credentials_file": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+          },
+          "tls_config": {
+            "ca_file": "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+            "server_name": "kubernetes.default.svc",
+            "insecure_skip_verify": false
+          },
+          "relabel_configs": [
+            {
+              "source_labels": [
+                "__meta_kubernetes_node_name"
+              ],
+              "target_label": "node"
+            },
+            {
+              "target_label": "__address__",
+              "replacement": "kubernetes.default.svc:443"
+            },
+            {
+              "source_labels": [
+                "__meta_kubernetes_node_name"
+              ],
+              "target_label": "__metrics_path__",
+              "replacement": "/api/v1/nodes/${1}/proxy/metrics/cadvisor"
+            }
+          ]
+        }
+      ],
+      "externalLabels": {
+        "cluster": "charlie-dev-gcp-workload",
+        "cloud_provider": "gcp",
+        "region": "asia-northeast3"
+      }
+    },
+    "serviceAccount": {
+      "createTokenSecret": false
+    }
+  },
+  "grafana": {
+    "enabled": false
+  },
+  "alertmanager": {
+    "enabled": false
+  },
+  "prometheusOperator": {
+    "resources": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    "image": {
+      "registry": "quay.io",
+      "repository": "prometheus-operator/prometheus-operator",
+      "tag": "v0.94.1",
+      "sha": "7c88d4e7bae63bd8d0f8da986054337c23b4472fa8d3c6817f5bc4b8407a2d6a"
+    },
+    "prometheusConfigReloader": {
+      "image": {
+        "registry": "quay.io",
+        "repository": "prometheus-operator/prometheus-config-reloader",
+        "tag": "v0.94.1",
+        "sha": "06b52bd4dbe3ed6dd5905aadaf8b9987d9da4c31d37bb86deaadae68cee2d26b"
+      },
+      "resources": {
+        "requests": {
+          "cpu": "10m",
+          "memory": "32Mi"
+        },
+        "limits": {
+          "memory": "64Mi"
+        }
+      }
+    },
+    "admissionWebhooks": {
+      "patch": {
+        "image": {
+          "registry": "ghcr.io",
+          "repository": "jkroepke/kube-webhook-certgen",
+          "tag": "1.8.9",
+          "sha": "58e4ac2e15bf7785eb00ac90d03f9be1ff3f2fe0add6c71b54af6e5c80031148"
+        }
+      },
+      "enabled": false
+    },
+    "prometheusInstanceNamespaces": [
+      "observability"
+    ],
+    "alertmanagerInstanceNamespaces": [
+      "observability"
+    ],
+    "thanosRulerInstanceNamespaces": [
+      "observability"
+    ],
+    "extraArgs": [
+      "--watch-referenced-objects-in-all-namespaces=false"
+    ],
+    "tls": {
+      "enabled": false
+    },
+    "kubeletService": {
+      "enabled": false
+    },
+    "alertmanagerConfigNamespaces": [
+      "observability"
+    ]
+  },
+  "kubelet": {
+    "enabled": false
+  },
+  "nodeExporter": {
+    "enabled": true
+  },
+  "kubeStateMetrics": {
+    "enabled": true
+  },
+  "kubeApiServer": {
+    "enabled": false
+  },
+  "coreDns": {
+    "enabled": false
+  },
+  "kubeDns": {
+    "enabled": false
+  },
+  "windowsMonitoring": {
+    "enabled": false
+  },
+  "global": {
+    "rbac": {
+      "create": false
+    }
+  },
+  "kube-state-metrics": {
+    "image": {
+      "registry": "registry.k8s.io",
+      "repository": "kube-state-metrics/kube-state-metrics",
+      "tag": "v2.20.0",
+      "sha": "sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b"
+    },
+    "fullnameOverride": "monitoring-kube-state-metrics",
+    "rbac": {
+      "create": false
+    },
+    "serviceAccount": {
+      "create": true,
+      "name": "monitoring-kube-state-metrics"
+    },
+    "resources": {
+      "requests": {
+        "cpu": "50m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    "collectors": [
+      "pods",
+      "nodes",
+      "namespaces",
+      "deployments",
+      "statefulsets",
+      "daemonsets",
+      "replicasets",
+      "jobs",
+      "cronjobs",
+      "persistentvolumes",
+      "persistentvolumeclaims",
+      "services"
+    ],
+    "prometheus": {
+      "monitor": {
+        "enabled": true,
+        "additionalLabels": {
+          "release": "monitoring"
+        }
+      }
+    }
+  },
+  "prometheus-node-exporter": {
+    "image": {
+      "registry": "quay.io",
+      "repository": "prometheus/node-exporter",
+      "tag": "v1.12.1",
+      "digest": "sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106"
+    },
+    "fullnameOverride": "monitoring-node-exporter",
+    "resources": {
+      "requests": {
+        "cpu": "25m",
+        "memory": "32Mi"
+      },
+      "limits": {
+        "memory": "128Mi"
+      }
+    },
+    "prometheus": {
+      "monitor": {
+        "enabled": true,
+        "additionalLabels": {
+          "release": "monitoring"
+        }
+      }
+    }
+  }
+}

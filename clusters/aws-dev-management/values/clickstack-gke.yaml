@@ -1,0 +1,6 @@
+{
+  "additionalIngestTokenKeys": [
+    "WORKLOAD_OTLP_AUTH_TOKEN",
+    "GKE_OTLP_AUTH_TOKEN"
+  ]
+}

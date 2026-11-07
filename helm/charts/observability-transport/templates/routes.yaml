@@ -1,0 +1,140 @@
+{{- if .Values.enabled }}
+{{- $management := eq .Values.role "management" }}
+{{- $ingressName := ternary "observability-central-ingress" "observability-gke-query-ingress" $management }}
+{{- $egressName := ternary "observability-gke-metrics" "observability-central" $management }}
+{{- $ingressTag := ternary "tag:hop-observability-central" "tag:hop-observability-gke-query" $management }}
+{{- $egressTag := ternary "tag:hop-observability-management-query" "tag:hop-observability-gke-export" $management }}
+{{- $ingressHost := ternary .Values.centralHostname .Values.queryHostname $management }}
+{{- $egressHost := ternary .Values.queryHostname .Values.centralHostname $management }}
+{{- range $direction := list "ingress" "egress" }}
+---
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: observability-{{ $.Values.role }}-{{ $direction }}
+spec:
+  statefulSet:
+    pod:
+      labels:
+        hopcharlie.dev/observability-proxy: {{ $direction }}
+      tailscaleContainer:
+        resources:
+          requests: {cpu: 50m, memory: 128Mi}
+          limits: {memory: 512Mi}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $ingressName }}
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: {{ $ingressHost | quote }}
+    tailscale.com/tags: {{ $ingressTag | quote }}
+    tailscale.com/proxy-class: observability-{{ .Values.role }}-ingress
+spec:
+  type: ClusterIP
+  {{- if $management }}
+  selector: {app.kubernetes.io/name: clickstack-collector}
+  ports: [{name: otlp-https, port: 4318, targetPort: 4318}]
+  {{- else }}
+  selector: {app.kubernetes.io/name: observability-metrics-query}
+  ports: [{name: metrics-https, port: 443, targetPort: 8443}]
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $egressName }}
+  annotations:
+    tailscale.com/tailnet-fqdn: {{ printf "%s.%s" $egressHost .Values.tailnetDomain | quote }}
+    tailscale.com/hostname: observability-{{ .Values.role }}-egress
+    tailscale.com/tags: {{ $egressTag | quote }}
+    tailscale.com/proxy-class: observability-{{ .Values.role }}-egress
+spec:
+  type: ExternalName
+  # Reconciled by the existing operator; no public listener is created.
+  externalName: unconfigured.invalid
+  ports:
+    - {name: https, port: {{ ternary 443 4318 $management }}, targetPort: {{ ternary 443 4318 $management }}}
+{{- if not $management }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: observability-remote-endpoint}
+data:
+  endpoint: https://observability-central.observability.svc:4318
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-transport-egress-client
+  namespace: {{ .Values.proxyNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/observability-proxy: egress
+      tailscale.com/parent-resource: {{ $egressName }}
+      tailscale.com/parent-resource-ns: {{ .Release.Namespace }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
+          podSelector:
+            matchLabels:
+              {{- if $management }}
+              app: clickstack
+              {{- else }}
+              observability.hopcharlie.dev/gateway: "true"
+              {{- end }}
+      ports: [{protocol: TCP, port: {{ ternary 443 4318 $management }}}]
+    - ports: [{protocol: UDP, port: 41641}]
+  egress:
+    - ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}, {protocol: TCP, port: 443}, {protocol: UDP}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-transport-ingress-client
+  namespace: {{ .Values.proxyNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/observability-proxy: ingress
+      tailscale.com/parent-resource: {{ $ingressName }}
+      tailscale.com/parent-resource-ns: {{ .Release.Namespace }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{protocol: UDP, port: 41641}]
+  egress:
+    - ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}, {protocol: TCP, port: 443}, {protocol: UDP}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ ternary "clickstack-collector" "observability-metrics-query" $management }}
+      ports: [{protocol: TCP, port: {{ ternary 4318 8443 $management }}}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-from-tailnet
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ ternary "clickstack-collector" "observability-metrics-query" $management }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Values.proxyNamespace }}}
+          podSelector:
+            matchLabels:
+              hopcharlie.dev/observability-proxy: ingress
+              tailscale.com/parent-resource: {{ $ingressName }}
+              tailscale.com/parent-resource-ns: {{ .Release.Namespace }}
+      ports: [{protocol: TCP, port: {{ ternary 4318 8443 $management }}}]
+{{- end }}

@@ -1,0 +1,11 @@
+{
+  "observability": {
+    "externalTargets": {
+      "gke": {
+        "enabled": false,
+        "endpoint": "https://34.64.99.246",
+        "valuesDir": "clusters/gcp-dev-workload"
+      }
+    }
+  }
+}
