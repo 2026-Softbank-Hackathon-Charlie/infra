@@ -1049,4 +1049,9 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [docs/adr/0087-align-onprem-source-rewire-admission.md](docs/adr/0087-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
+| [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
+
+- [docs/adr/0087-bound-gke-observability-argocd-writes.md](docs/adr/0087-bound-gke-observability-argocd-writes.md) — GKE 관측 Argo의 단계별 admission·권한 위임과 실효 권한 (채택)
+- [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
+- [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록
+- [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력

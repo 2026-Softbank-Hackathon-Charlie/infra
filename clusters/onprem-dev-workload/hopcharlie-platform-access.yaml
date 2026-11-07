@@ -95,7 +95,7 @@ subjects:
     name: hopcharlie-platform
     namespace: charlie-system
 ---
-# Migrations of registered app databases (ADR 0063, 0078, 0087). The migration
+# Migrations of registered app databases (ADR 0063, 0078, 0088). The migration
 # engine reads the CNPG Cluster (precheck) and merge-patches its
 # spec.replica.primary and promotionToken (demote, promote), source only on
 # a three-member primary to an existing externalCluster, or source from
