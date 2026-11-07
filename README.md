@@ -378,6 +378,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | 파일 | 역할 |
 | --- | --- |
 | [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
+| [.github/workflows/cnpg-migration-admission.yml](.github/workflows/cnpg-migration-admission.yml) | 임시 kind에서 세 환경의 실제 CNPG migration admission 검사 |
 | [.gitignore](.gitignore) | 로컬 비밀값·state·plan·kubeconfig·다운로드 산출물의 Git 추적 방지 |
 | [.terraform-version](.terraform-version) | Terraform CLI 버전 고정 |
 | [Makefile](Makefile) | 인프라 검증·로컬 Terraform·SSM 터널·Argo CD 접속 명령 진입점 |
@@ -743,6 +744,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [scripts/check-cnpg.py](scripts/check-cnpg.py) | CNPG 구현·검증·운영 기록 |
 | [scripts/cnpg-freeze-archive.py](scripts/cnpg-freeze-archive.py) | CNPG 구현·검증·운영 기록 |
 | [scripts/tests/test-cnpg-freeze.py](scripts/tests/test-cnpg-freeze.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/test-cnpg-migration-admission.py](scripts/test-cnpg-migration-admission.py) | AWS·GCP·onprem 정책 동등성 및 실제 RBAC/CEL 허용·거절 회귀 |
 | [scripts/tests/test-cnpg-jobs.py](scripts/tests/test-cnpg-jobs.py) | CNPG 구현·검증·운영 기록 |
 | [terraform/environments/aws/dev/foundation/cnpg.tf](terraform/environments/aws/dev/foundation/cnpg.tf) | CNPG 구현·검증·운영 기록 |
 | [terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl](terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl) | CNPG 구현·검증·운영 기록 |
@@ -1047,6 +1049,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
 
 ### Onprem registration preparation (disabled)
 
