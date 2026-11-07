@@ -2,7 +2,8 @@
 
 - 날짜: 2026-11-02
 - 갱신: 2026-11-05 — main 머지/push의 자동 apply 추가
-- 상태: 채택
+- 상태: 대체됨
+- 대체 ADR: [0069](0069-limit-aws-auto-apply-to-deployment-inputs.md) — 자동 실행 범위를 제한하고 기존 수동 선택은 유지
 - 관련 ADR: [0003. 공통 입력](0003-share-project-inputs-between-local-and-ci.md), [0004. 검증 병렬화](0004-parallelize-infrastructure-checks.md), [0007. OIDC 등록](0007-register-account-github-oidc-provider.md)
 
 ## 배경과 제약

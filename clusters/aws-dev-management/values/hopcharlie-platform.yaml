@@ -1,8 +1,8 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:b917180@sha256:2a80b68ca10385f6e4de679ae881050fad2e4931d02a5625ce9adb9a00b753a2",
-    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:85c82bb@sha256:43303986cb5f9a47a682e41cbd171bfe5af7621017fad2922eeb1a12959eb618",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:9c2744a@sha256:4ce06e79b3aaaeed2c2b77938a0d9efcf7340db061d15f5401150042cdf93759",
+    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:a00258a@sha256:138307cb667237c9742e07c9686cb06fea43c5302126e19bc79bd499583408bd",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   },
@@ -67,7 +67,7 @@
   },
   "hopai": {
     "enabled": true,
-    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:6c72662@sha256:869952ff0d59970c0e71fa0d156646abbfdd241fc757f1dc007f096fa3fd0a1a"
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:2c4895d@sha256:ea386150d31e4a90d471ccf1b37150bee1e48e31a55116d91796aab292d13258"
   },
   "observability": {
     "automaticJobs": true
