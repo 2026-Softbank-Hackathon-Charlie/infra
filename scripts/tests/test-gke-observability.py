@@ -175,7 +175,7 @@ class GKEObservability(unittest.TestCase):
                 self.assertEqual(attrs['cloud.provider'], 'gcp')
                 self.assertEqual(attrs['cloud.region'], 'asia-northeast3')
                 self.assertEqual(attrs['cloud.availability_zone'], 'asia-northeast3-a')
-                self.assertIsNone(config['service']['pipelines']['metrics'])
+                self.assertIsNone(config['service']['pipelines'].get('metrics'))
                 upstream = config['exporters']['otlphttp/central']['tls']
                 self.assertEqual(upstream['server_name_override'], 'clickstack-otel-collector.observability.svc')
                 self.assertFalse(upstream.get('insecure_skip_verify', False))
