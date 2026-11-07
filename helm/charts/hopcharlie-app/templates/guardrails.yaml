@@ -75,4 +75,30 @@ spec:
     {{- with $np.extraEgress }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+{{- $pg := include "hopcharlie-app.resource" (dict "root" . "type" "postgres") | fromJson }}
+{{- if and $pg.name $np.cnpgApiServerEgress }}
+---
+# CNPG instances AND bootstrap Jobs share this cluster label. A k3s Service
+# advertised at TCP 443 can target the node's TCP 6443; namespace-wide 443
+# alone does not cover the translated backend on every network implementation.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-cnpg-api
+  labels:
+    {{- include "hopcharlie-app.namespaceLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ printf "%s-%s" .Values.values.app $pg.name | quote }}
+  policyTypes: [Egress]
+  egress:
+    {{- range $np.cnpgApiServerEgress }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+      ports:
+        - {protocol: TCP, port: {{ .port }}}
+    {{- end }}
+{{- end }}
 {{- end }}

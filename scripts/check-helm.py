@@ -632,6 +632,15 @@ def main():
                     assert env == (expected if has_s3 else {}), env
             policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-app")
             assert minio_egress in policy["spec"]["egress"], policy["spec"]["egress"]
+            pg = next((r for r in gitops_file["values"].get("resources", []) if r["type"] == "postgres"), None)
+            api_policies = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-cnpg-api"]
+            assert len(api_policies) == (1 if pg else 0), "API backend egress is CNPG-only"
+            if pg:
+                assert api_policies[0]["spec"] == {
+                    "podSelector": {"matchLabels": {"cnpg.io/cluster": f"{gitops_file['values']['app']}-{pg['name']}"}},
+                    "policyTypes": ["Egress"],
+                    "egress": [{"to": [{"ipBlock": {"cidr": "172.17.124.166/32"}}], "ports": [{"protocol": "TCP", "port": 6443}]}],
+                }, api_policies[0]["spec"]
         # The schema and the chart refuse sealed values the platform must not write.
         stateful = yaml.safe_load((ROOT / "helm/charts/hopcharlie-app/ci/stateful-values.yaml").read_text())
         # Postgres backups (platform ADR 0025): with the platform's backup bucket and
