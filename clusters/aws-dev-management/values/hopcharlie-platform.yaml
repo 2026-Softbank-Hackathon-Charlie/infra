@@ -203,7 +203,7 @@
   },
   "hopai": {
     "enabled": true,
-    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:01c64fc@sha256:bc6ae7d6dbb99ff93639c500f68df62ccf3a8d8bd68f16b550b5b93bd6d6cb52"
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:a5b38a5@sha256:6e9ff644233e1ecdbeb132e0cdff880afdca2d307ee7fa33b20c515d725fec38"
   },
   "observability": {
     "automaticJobs": true
