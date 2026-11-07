@@ -85,3 +85,22 @@ CI 통과는 준비 완료이며 실제 2~8단계 완료 증거가 아니다. �
 ## 실패·복구
 
 GKE profile은 기록한 이전 값으로 복구하고 해당 신규 관측 App/서비스만 대상으로 삼는다. 업무 DB/PVC·기존 AWS 수집기·GCP managed 수집기는 삭제하지 않는다. 중앙 문제가 생기면 기존 token 목록·ConfigMap·Deployment 기준점으로 먼저 복구해 AWS 수집을 유지한 뒤 GKE 전용 token/TS 경로를 철회한다. CA 교체는 신뢰 bundle→leaf 순서를 지킨다. 이름/권한/소유권/예상 외 diff가 있으면 전체 sync·prune·allow-all로 우회하지 않는다.
+
+## Argo 권한 선행 적용
+
+[ADR0087](../adr/0087-bound-gke-observability-argocd-writes.md)에 따라 기존 앱용 Argo 정책을 전체 비활성화하지 않는다. `values/argocd-observability-access.yaml`은 수동 관리자 적용용이며 기본 off다. 차트의 flag는 반영 순서를 자동 보장하지 않는다.
+
+1. 승인된 머지 SHA에서 `gcp-argocd-access`를 렌더한다. 기존 Google identity·namespace·원래 정책과 충돌을 확인한다. 신규 namespace·CRD·관측 RBAC 및 ProxyClass는 관리자 소유 목록으로 구분한다.
+2. `observability.enabled=true`, 나머지 두 flag=false로 새 VAP·Deny Binding·unbound Role을 먼저 설치한다. 기존 VAP와 binding은 그대로 보존한다. API type-check 확인 후 동일 Argo identity로 잘못된 이름·인증 Secret·subresource 쓰기가 거부되고 DB-network 신규 NP 두 이름의 CREATE도 새 VAP에 의해 거부됨을 dry-run 검증한다. 기존 ClusterRole에 CREATE가 있어도 거부되어야 한다. wildcard type-check만으로 성공을 단정하지 않는다.
+3. 새 guard가 작동하는 상태에서 `openExistingPolicy=true`의 **기존 VAP 한 개만** 선택 반영한다. 기존 역할로 허용되는 Service/Deployment/NP의 허용 이름 dry-run 성공과 금지 이름 거부를 확인한다. 기존 정책이 첫 단계의 정상 요청을 거절하는 것은 예상 동작이다.
+4. `grantAccess=true`로 관측 RoleBinding2개·cluster-read binding1개만 추가한다. 추가 종류의 허용·거부 검증 후 관측 Application을 설치한다. 실패하면 다음 단계로 진행하지 않는다.
+5. CRD10개는 관리자 선행 적용/Established 확인 대상이다. KPS는 skipCrds=true다. GKE boundary의 ClusterRole6·ClusterRoleBinding6·Role1·RoleBinding1과 전용 ProxyClass2개, 관리 ProxyClass2개, 두 클러스터 DB-network namespace의 신규 NP2개씩은 관리자 bootstrap이다. Argo의 boundary/transport sync는 이 목록을 제외한 namespaced 자원만 선택한다. 관리 observability-from-tailnet NP와 transport Services2개는 관리 transport App의 선택 sync 대상이다.
+6. Prometheus StatefulSet·설정 Secret·PVC는 Prometheus operator, Tailscale proxy StatefulSet/Pod/Secret은 기존 Tailscale operator가 만든다. 인증 Secret은 승인된 관리자가 생성하며 KPS public scrape-config Secret만 Argo 관리다.
+
+**권한 위험:** observability의 privileged Pod 변경을 맡기면 Argo에 노드 파일·자격 접근의 실효 권한이 생긴다. 고정 이름 목록으로 Pod spec을 격리했다고 표현하지 않는다. Argo는 관측 namespace Secret cache를 읽을 수 있다.
+
+**권한 복구:** 기존 VAP의 관측 예외 철회와 원래 deny 확인 → 추가 binding/Role 철회 → 새 VAP/Binding 제거 순서다. 원래 deny를 복구하기 전 새 제한을 제거하지 않는다.
+
+**자원 gate:** 3개 node 기준 GKE 기본 요청은 885m/2112Mi이며 gateway/Prometheus PVC는 2Gi/10Gi다. 합성 fixture 최대335m/576Mi와 PVC1Gi는 별도다. 관측 rollout과 fixture를 순차 실행하고 기존 앱 활성화도 Deployment 하나씩 진행한다. fresh node별 allocatable·기존 요청·Pod overhead·일반/init/sidecar peak·Pending Pod·taint/affinity·PD topology와 surge까지 계산한다. 기존 워크로드 축소·노드 증설은 이 계획에서 수행하지 않는다.
+
+**합성 검증 제한:** `obs-gke-proof-*` 자원만 생성·UID 기록·정리한다. private ECR image를 GKE 신규 namespace에서 pull할 기존 경로가 없으면 credential 복사·신규 발급·이미지 게시로 우회하지 않는다. 이 경우 공개 pinned nginx로 공통 chart env/CA 주입·로그·replica 수집만 검증하며 합성 SDK 앱은 미검증으로 남긴다. SDK/DB/storage trace는 기존 GKE 모임룸의 nonce SELECT·HEAD probe로 별도 확인한다. 합성 CNPG는 독립1 instance/PVC1Gi이며 실 업무 DB·bucket과 연결하지 않는다. 합성 PVC 삭제 외 운영 PVC는 보존한다.

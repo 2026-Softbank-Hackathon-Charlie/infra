@@ -1,0 +1,11 @@
+# Manual administrator application only; not a new Argo root target.
+googleServiceAccountEmail: charlie-argocd-gke@project-b47cdba3-db5b-42a2-9a6.iam.gserviceaccount.com
+managedNamespaces: [charlie-apps]
+createNamespaces: false
+dynamicApps:
+  enabled: true
+  grantAccess: true
+observability:
+  enabled: false
+  openExistingPolicy: false
+  grantAccess: false

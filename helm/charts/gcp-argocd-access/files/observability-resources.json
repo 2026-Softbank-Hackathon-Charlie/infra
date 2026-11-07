@@ -1,0 +1,95 @@
+[
+  {
+    "group": "",
+    "resource": "configmaps",
+    "names": [
+      "observability-alloy",
+      "observability-gateway",
+      "observability-metrics-query",
+      "observability-remote-endpoint"
+    ]
+  },
+  {
+    "group": "",
+    "resource": "persistentvolumeclaims",
+    "names": [
+      "observability-gateway-queue"
+    ]
+  },
+  {
+    "group": "",
+    "resource": "secrets",
+    "names": [
+      "monitoring-prometheus-scrape-confg"
+    ]
+  },
+  {
+    "group": "",
+    "resource": "serviceaccounts",
+    "names": [
+      "monitoring-kube-state-metrics",
+      "monitoring-node-exporter",
+      "monitoring-operator",
+      "monitoring-prometheus",
+      "observability-agent",
+      "observability-gateway"
+    ]
+  },
+  {
+    "group": "",
+    "resource": "services",
+    "names": [
+      "monitoring-kube-state-metrics",
+      "monitoring-node-exporter",
+      "monitoring-operator",
+      "monitoring-prometheus",
+      "observability-central",
+      "observability-gateway",
+      "observability-gke-query-ingress",
+      "observability-metrics-query"
+    ]
+  },
+  {
+    "group": "apps",
+    "resource": "daemonsets",
+    "names": [
+      "monitoring-node-exporter",
+      "observability-alloy"
+    ]
+  },
+  {
+    "group": "apps",
+    "resource": "deployments",
+    "names": [
+      "monitoring-kube-state-metrics",
+      "monitoring-operator",
+      "observability-gateway",
+      "observability-metrics-query"
+    ]
+  },
+  {
+    "group": "monitoring.coreos.com",
+    "resource": "prometheuses",
+    "names": [
+      "monitoring-prometheus"
+    ]
+  },
+  {
+    "group": "monitoring.coreos.com",
+    "resource": "servicemonitors",
+    "names": [
+      "monitoring-kube-state-metrics",
+      "monitoring-node-exporter",
+      "monitoring-operator",
+      "monitoring-prometheus"
+    ]
+  },
+  {
+    "group": "networking.k8s.io",
+    "resource": "networkpolicies",
+    "names": [
+      "observability-from-tailnet",
+      "observability-gateway-ingress"
+    ]
+  }
+]

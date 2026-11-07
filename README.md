@@ -1062,3 +1062,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/charts/hopcharlie-platform/templates/onprem-network.yaml](helm/charts/hopcharlie-platform/templates/onprem-network.yaml)
 - [helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml](helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml)
 - [docs/adr/0084-isolate-onprem-registration-capabilities.md](docs/adr/0084-isolate-onprem-registration-capabilities.md)
+- [docs/adr/0087-bound-gke-observability-argocd-writes.md](docs/adr/0087-bound-gke-observability-argocd-writes.md) — GKE 관측 Argo의 단계별 admission·권한 위임과 실효 권한 (채택)
+- [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
+- [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록
+- [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
