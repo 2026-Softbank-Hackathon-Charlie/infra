@@ -1,8 +1,8 @@
 # 0074. 한 환경에 등록한 앱 DB도 짝의 primary로 태어나고, 상대가 생길 때 tailnet 객체를 더한다
 
 - 날짜: 2026-11-07
-- 상태: 제안 (차트 분기와 검사 준비. 플랫폼이 `peerPresent`를 쓰는 변경은 platform 저장소에서 따로 한다)
-- 관련 ADR: [0063](0063-born-paired-app-databases-for-two-environment-apps.md), [0064](0064-platform-creates-management-app-db-routes.md), [0050](0050-let-migrations-own-app-database-topology.md). platform 쪽 설계는 platform ADR 0030이 다룬다.
+- 상태: 제안 (차트 분기와 검사 준비. 플랫폼이 `peerPresent`를 쓰는 변경은 platform ADR 0037, platform PR #111이 한다)
+- 관련 ADR: [0063](0063-born-paired-app-databases-for-two-environment-apps.md), [0064](0064-platform-creates-management-app-db-routes.md), [0050](0050-let-migrations-own-app-database-topology.md). platform 쪽 설계는 platform ADR 0037(한 환경 앱의 짝, 환경 더하기와 빼기)이 다루고, 짝 자체는 platform ADR 0030이 다룬다.
 
 ## 배경과 제약
 
@@ -11,12 +11,13 @@
 - ADR 0063의 짝은 등록할 때 두 환경을 함께 고른 앱에만 생긴다. 한 환경으로 등록한 postgres 앱은 토폴로지 없는 독립 primary로 태어나고, primary로 태어난 DB는 나중에 분산 토폴로지의 primary로 바꾸려면 살아 있는 Cluster를 patch하고 CNPG가 만든 CA와 계정을 넘겨받아야 한다.
 - 차트가 그리는 Cluster의 `replica`, `externalClusters`, `certificates`는 ApplicationSet이 생성 뒤 무시한다(ADR 0050, 0063). 그래서 처음부터 같은 값으로 그려 두면 나중에 바꿀 일이 없다.
 - 상대 환경이 아직 없을 때 `dbnetwork.yaml`이 그리는 세 객체(ingress Service `<cluster>-ts`, egress Service `<cluster>-to-<peer>`, NetworkPolicy `<cluster>-replication`)는 쓸 곳이 없다. ingress와 egress Service는 각각 Tailscale 프록시 파드 1개와 tailnet 장치 1개를 만든다. egress는 존재하지 않는 tailnet 호스트 `hop-db-<peer>-<instance>`를 가리킨다.
+- 2026-11-07 kind 리허설(platform ADR 0037의 "확인한 사실")에서 `replica.self == replica.primary`이고 `replica.source`가 아직 없는 상대를 가리키는 primary Cluster는 상대 없이도 healthy였고, 앱의 읽기와 쓰기도 그대로 됐다. `replica.self == replica.primary`인 Cluster는 primary로 돌고 `source`의 externalCluster에 접속하지 않는다.
 - 차트 안에서 egress Service와 tailnet 호스트를 부르는 곳은 Cluster의 `externalClusters[<cluster>-<peer>].connectionParameters.host`와 `replica.source`뿐이다. 네임스페이스 NetworkPolicy `hopcharlie-app`, 백업(ObjectStore, ScheduledBackup), 봉인 Secret은 상대를 참조하지 않는다. ApplicationSet의 `externalName` 무시 설정은 ExternalName Service가 있을 때만 적용된다. 공용 프록시 정책(`hopcharlie-db-network`의 `platform-apps.yaml`)과 플랫폼 계정 VAP는 네임스페이스 레이블 `hopcharlie.dev/db-topology`만 본다.
 
 가정과 미확인:
 
-- `replica.self == replica.primary`인 Cluster는 primary로 돌고 `source`의 externalCluster에 접속하지 않는다고 본다. egress Service가 없는 상태에서 primary가 healthy한지는 실제 클러스터에서 확인하지 않았다.
-- 관리 EKS의 앱 DB 경로(ADR 0064, `db-<env>-<instance>`)는 ingress 호스트 `hop-db-<env>-<instance>`를 가리킨다. `peerPresent: false` 동안 이 호스트가 없으므로 그 경로로는 접속되지 않는다. 플랫폼이 이 경로를 만드는 시점은 platform 쪽에서 정한다.
+- 위 primary의 동작은 kind에서 확인했고 운영 워크로드 클러스터(EKS, GKE)에서는 아직 확인하지 않았다. 운영에서는 platform ADR 0037의 적용 순서 3에서 확인한다.
+- 관리 EKS의 앱 DB 경로(ADR 0064, `db-<env>-<instance>`)는 ingress 호스트 `hop-db-<env>-<instance>`를 가리킨다. `peerPresent: false` 동안 이 호스트가 없으므로 그 경로로는 접속되지 않는다. 그래서 플랫폼은 짝의 두 환경이 모두 앱의 환경일 때만 이 경로를 만든다(platform ADR 0037).
 
 ## 검토한 대안
 
@@ -52,11 +53,11 @@ values:
 - 단점과 위험
   - 한 환경 앱의 디스크가 `storageSize` 대신 `topologyStorageSize`로 태어난다. GKE에서는 1Gi가 아니라 4Gi다.
   - 앱 계정 비밀번호와 CA를 처음부터 플랫폼이 만들어 봉인한다(ADR 0063과 같다).
-  - `peerPresent: false`인 동안 primary의 `externalClusters`와 `replica.source`는 없는 Service를 가리킨다. 위 가정이 틀리면 primary가 경고를 내거나 상태가 바뀔 수 있다.
-  - 관리 EKS 경로(ADR 0064)는 상대가 생기기 전에는 접속되지 않는다.
+  - `peerPresent: false`인 동안 primary의 `externalClusters`와 `replica.source`는 없는 Service를 가리킨다. kind에서는 primary가 healthy였으나, 운영 클러스터의 CNPG가 다르게 굴면 primary가 경고를 내거나 상태가 바뀔 수 있다.
+  - 관리 EKS 경로(ADR 0064)는 상대가 생기기 전에는 만들지 않는다(platform ADR 0037).
 - 후속 작업과 검증
-  1. platform: 한 환경 postgres 앱의 gitops 파일에 `dbTopology`, `pgApp`, `pgCA`, `peerPresent: false`를 쓰고, 환경을 더할 때 이 값을 지운다(platform ADR 0030).
-  2. 실제 워크로드 클러스터에서 `peerPresent: false`인 앱의 Cluster가 healthy한지, 상대를 더한 뒤 replica가 따라오는지 확인한다.
+  1. platform: 한 환경 postgres 앱의 gitops 파일에 `dbTopology`, `pgApp`, `pgCA`, `peerPresent: false`를 쓰고, 환경을 더할 때 이 값을 지운다(platform ADR 0037).
+  2. 운영 워크로드 클러스터에서 `peerPresent: false`인 앱의 Cluster가 healthy한지, 상대를 더한 뒤 replica가 따라오는지 확인한다. kind에서는 primary가 healthy임을 확인했다(platform ADR 0037).
 
 ## 관련 자료
 
