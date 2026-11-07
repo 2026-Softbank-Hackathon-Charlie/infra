@@ -27,10 +27,10 @@ variable "aws_build_role_name" {
 variable "repository_id" {
   type        = string
   default     = "hopcharlie-apps"
-  description = "Artifact Registry repository for platform-built app images, separate from charlie-apps."
+  description = "Artifact Registry repository for platform-built app images."
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", var.repository_id)) && var.repository_id != "charlie-apps"
-    error_message = "Use a valid repository ID other than charlie-apps (moimroom CI owns that one)."
+    condition     = can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", var.repository_id))
+    error_message = "Use a valid repository ID."
   }
 }
 variable "workload_identity_pool_id" {
@@ -75,7 +75,7 @@ variable "platform_repository_id" {
 }
 variable "image_scan_extra_repositories" {
   type        = list(string)
-  default     = ["charlie-apps"]
+  default     = []
   description = "Other Artifact Registry repositories in this project and region the image scanner may read."
   validation {
     condition     = alltrue([for r in var.image_scan_extra_repositories : can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", r))])

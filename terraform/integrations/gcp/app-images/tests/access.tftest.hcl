@@ -66,11 +66,6 @@ run "reject_wildcard_role" {
   variables { aws_build_role_name = "*" }
   expect_failures = [var.aws_build_role_name]
 }
-run "reject_moimroom_repository" {
-  command = plan
-  variables { repository_id = "charlie-apps" }
-  expect_failures = [var.repository_id]
-}
 run "only_the_platform_scan_workflow_on_main_reads_images" {
   command = plan
   assert {
@@ -86,8 +81,8 @@ run "only_the_platform_scan_workflow_on_main_reads_images" {
     error_message = "Only the platform repository may impersonate the scanner."
   }
   assert {
-    condition     = toset(keys(google_artifact_registry_repository_iam_member.image_scanner)) == toset(["hopcharlie-apps", "charlie-apps"]) && alltrue([for m in google_artifact_registry_repository_iam_member.image_scanner : m.role == "roles/artifactregistry.reader"])
-    error_message = "The scanner reads the two app image repositories and nothing else."
+    condition     = toset(keys(google_artifact_registry_repository_iam_member.image_scanner)) == toset(["hopcharlie-apps"]) && alltrue([for m in google_artifact_registry_repository_iam_member.image_scanner : m.role == "roles/artifactregistry.reader"])
+    error_message = "The scanner reads the app image repository and nothing else."
   }
 }
 run "reject_bad_platform_repository" {

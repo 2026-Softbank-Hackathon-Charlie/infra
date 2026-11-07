@@ -31,10 +31,8 @@ run "backup_is_disabled_by_default" {
 run "backup_scopes_native_identity_and_bucket_access" {
   command = plan
   variables {
-    enable_cnpg_poc_backup           = true
-    cnpg_poc_backup_bucket_name      = "charlie-test-cnpg-poc-backup"
-    enable_moimroom_image_publishing = true
-    moimroom_repository_id           = "246810123"
+    enable_cnpg_poc_backup      = true
+    cnpg_poc_backup_bucket_name = "charlie-test-cnpg-poc-backup"
   }
   assert {
     condition     = length(google_storage_bucket.cnpg_poc_backup) == 1 && length(google_service_account.cnpg_poc_backup) == 1 && length(google_service_account_iam_member.cnpg_poc_backup) == 1 && length(google_storage_bucket_iam_member.cnpg_poc_backup) == 2
@@ -58,8 +56,8 @@ run "backup_scopes_native_identity_and_bucket_access" {
     error_message = "Object operations and bucket metadata reads must remain additive grants on this backup bucket only."
   }
   assert {
-    condition     = toset(keys(google_project_iam_member.deploy)) == toset(["roles/container.admin", "roles/compute.networkAdmin"]) && toset(keys(google_project_iam_member.nodes)) == toset(["roles/container.defaultNodeServiceAccount", "roles/artifactregistry.reader"]) && length(google_service_account.moimroom_publisher) == 1 && google_artifact_registry_repository_iam_member.moimroom_publisher[0].role == "roles/artifactregistry.writer"
-    error_message = "Backup setup must preserve the separate image publisher and must not add project storage/IAM administration or node grants."
+    condition     = toset(keys(google_project_iam_member.deploy)) == toset(["roles/container.admin", "roles/compute.networkAdmin"]) && toset(keys(google_project_iam_member.nodes)) == toset(["roles/container.defaultNodeServiceAccount", "roles/artifactregistry.reader"])
+    error_message = "Backup setup must not add project storage/IAM administration or node grants."
   }
   assert {
     condition     = output.cnpg_poc_backup_bucket_name == "charlie-test-cnpg-poc-backup" && output.cnpg_poc_backup_destination_path == "gs://charlie-test-cnpg-poc-backup/source/" && output.cnpg_poc_backup_service_account_email == "charlie-cnpg-poc-backup@charlie-test-project.iam.gserviceaccount.com"

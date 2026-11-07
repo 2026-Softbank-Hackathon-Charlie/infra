@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-06
 - 상태: 채택
+- 2026-11-07 갱신([ADR 0075](0075-remove-moimroom-static-catalog-and-image-publishing.md)): AR `charlie-apps`를 지워 스캐너 추가 저장소 기본값을 빈 목록으로 바꿨다. 스캐너는 `hopcharlie-apps`만 읽는다.
 - 관련 ADR: [0042](0042-copy-app-images-to-artifact-registry-for-gke.md)
 
 ## 배경과 제약

@@ -34,26 +34,6 @@ variable "github_ref" {
     error_message = "Use one exact branch ref such as refs/heads/main."
   }
 }
-variable "enable_moimroom_image_publishing" {
-  type        = bool
-  default     = false
-  nullable    = false
-  description = "Create the dedicated main-branch moimroom image publisher."
-}
-variable "moimroom_repository_id" {
-  type        = string
-  default     = ""
-  nullable    = false
-  description = "Immutable numeric moimroom repository ID; required when image publishing is enabled."
-  validation {
-    condition     = var.moimroom_repository_id == "" || can(regex("^[0-9]+$", var.moimroom_repository_id))
-    error_message = "Use the immutable numeric moimroom repository ID, or omit it when publishing is disabled."
-  }
-  validation {
-    condition     = !var.enable_moimroom_image_publishing || var.moimroom_repository_id != ""
-    error_message = "moimroom_repository_id is required when enable_moimroom_image_publishing is true."
-  }
-}
 
 variable "enable_cnpg_poc_backup" {
   type        = bool

@@ -1,8 +1,7 @@
-# GitHub Actions roles that publish the platform, console and moimroom images to ECR
+# GitHub Actions roles that publish the platform and console images to ECR
 # (ADR 0024). Each role trusts only its own repository's main branch through
 # the account's GitHub OIDC provider, and pushes only to its own repository.
-# Platform and console workflows open an infra PR that pins the new digest;
-# moimroom publishes its digest in the run summary. These roles cannot deploy.
+# Both workflows open an infra PR that pins the new digest. These roles cannot deploy.
 locals {
   github_oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:oidc-provider/token.actions.githubusercontent.com"
   # Immutable subjects: gh api repos/<org>/<repo>/actions/oidc/customization/sub
@@ -15,10 +14,6 @@ locals {
     frontend = {
       subject    = "repo:2026-Softbank-Hackathon-Charlie@350278309/frontend@1441992854:ref:refs/heads/main"
       repository = aws_ecr_repository.console.name
-    }
-    moimroom = {
-      subject    = "repo:2026-Softbank-Hackathon-Charlie@350278309/moimroom@1442480764:ref:refs/heads/main"
-      repository = aws_ecr_repository.moimroom.name
     }
   }
 }

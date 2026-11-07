@@ -11,10 +11,10 @@
 #
 # Cost: none for IAM and the parameter; each bucket is billed for what it stores.
 # Cleanup: the platform deletes an instance's key, user and bucket with the
-# instance. It never deletes the backup bucket hopcharlie-eks-<app>---pg and
-# its user hopcharlie-app-<app>---pg (platform ADR 0025): before destroying,
-# an operator deletes them by that ADR's steps. ./tf.sh destroy fails on the
-# boundary while a user still has it, and it deletes
+# instance. Deleting an app also empties and deletes its backup bucket
+# hopcharlie-eks-<app>---pg and its user hopcharlie-app-<app>---pg (platform
+# ADR 0025, deletion by platform PR #110 and its ADR 0037). ./tf.sh destroy
+# fails on the boundary while a user still has it, and it deletes
 # /hopcharlie/app-secrets-key with every stored secret's key.
 
 locals {
@@ -111,10 +111,11 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Condition = local.app_own_buckets
       },
       # Backup buckets hopcharlie-eks-<app>---pg (platform ADR 0025) share the
-      # prefix; their objects are never read, written or removed by the platform.
+      # prefix; the platform never reads or writes their objects. It may delete
+      # them when it deletes the app (platform PR #110).
       {
         Effect   = "Deny"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"]
+        Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = "${local.app_bucket_arn}---pg/*"
       },
       # Create a user, and change its inline policy, only with the boundary.

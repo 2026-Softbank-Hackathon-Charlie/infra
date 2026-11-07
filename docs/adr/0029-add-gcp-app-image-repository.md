@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-03
 - 상태: 채택
+- 2026-11-07 갱신([ADR 0075](0075-remove-moimroom-static-catalog-and-image-publishing.md)): moimroom 이미지만 있던 AR `charlie-apps`를 bootstrap에서 지웠다. 플랫폼이 빌드한 앱 이미지는 `hopcharlie-apps`(ADR 0042)에 있다.
 - 관련 ADR: [0013](0013-add-gcp-workload.md)
 
 ## 배경과 제약

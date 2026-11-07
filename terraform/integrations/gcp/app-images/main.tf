@@ -5,9 +5,8 @@ locals {
   image_prefix = "${local.registry}/${var.project_id}/${var.repository_id}"
 }
 
-# Platform-built app images (ADR 0042). Separate from charlie-apps so an app
-# build cannot overwrite the images moimroom CI publishes. GKE nodes already
-# read every repository in the project (bootstrap node reader role).
+# Platform-built app images (ADR 0042). GKE nodes already read every
+# repository in the project (bootstrap node reader role).
 resource "google_artifact_registry_repository" "apps" {
   project       = var.project_id
   location      = var.region

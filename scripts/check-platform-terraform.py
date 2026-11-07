@@ -12,7 +12,7 @@ ASSETS = (
     '.terraform.lock.hcl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',
-    'host/envs.yaml', 'host/apps.yaml',
+    'host/envs.yaml',
 )
 
 

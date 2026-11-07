@@ -68,10 +68,10 @@ run "app_storage_contract" {
     condition = (
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[4] == { Effect = "Allow", Action = "s3:ListBucket", Resource = "arn:aws:s3:::hopcharlie-eks-*", Condition = { StringEquals = { "s3:ResourceAccount" = "123456789012" } } } &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[5] == { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject"], Resource = "arn:aws:s3:::hopcharlie-eks-*/*", Condition = { StringEquals = { "s3:ResourceAccount" = "123456789012" } } } &&
-      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6] == { Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"], Resource = "arn:aws:s3:::hopcharlie-eks-*---pg/*" } &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[6] == { Effect = "Deny", Action = ["s3:GetObject", "s3:PutObject"], Resource = "arn:aws:s3:::hopcharlie-eks-*---pg/*" } &&
       length([for st in jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement : st if st.Effect == "Allow" && contains(flatten([st.Action]), "s3:GetObject")]) == 1
     )
-    error_message = "The platform may list, read and write objects of this account's hopcharlie-eks-* buckets for file moves (ADR 0064), never of the ---pg backup buckets."
+    error_message = "The platform may list, read and write objects of this account's hopcharlie-eks-* buckets for file moves (ADR 0064), never read or write objects of the ---pg backup buckets, and may delete those objects when it deletes the app."
   }
   assert {
     condition     = random_bytes.app_secrets_key.length == 32 && aws_ssm_parameter.app_secrets_key.name == "/hopcharlie/app-secrets-key" && aws_ssm_parameter.app_secrets_key.type == "SecureString"

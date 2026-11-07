@@ -28,16 +28,8 @@ run "state_and_identity_are_scoped" {
     error_message = "Enable required APIs without disabling them on teardown and grant recommended node permissions."
   }
 }
-run "app_repository_reuses_node_pull_identity" {
+run "nodes_read_app_images" {
   command = plan
-  assert {
-    condition     = google_artifact_registry_repository.apps.project == var.project_id && google_artifact_registry_repository.apps.location == var.region && google_artifact_registry_repository.apps.repository_id == "charlie-apps" && google_artifact_registry_repository.apps.format == "DOCKER" && google_artifact_registry_repository.apps.mode == "STANDARD_REPOSITORY"
-    error_message = "Application images must use the standard Docker repository in the workload project's region."
-  }
-  assert {
-    condition     = output.app_image_repository_prefix == "asia-northeast3-docker.pkg.dev/charlie-test-project/charlie-apps"
-    error_message = "Expose the regional Docker prefix for image publication and GKE deployment."
-  }
   assert {
     condition     = toset(keys(google_project_iam_member.nodes)) == toset(["roles/container.defaultNodeServiceAccount", "roles/artifactregistry.reader"]) && google_project_iam_member.nodes["roles/artifactregistry.reader"].role == "roles/artifactregistry.reader"
     error_message = "Reuse the dedicated node's reader identity without adding image push permissions."

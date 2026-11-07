@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-03
 - 상태: 제안
+- 2026-11-07 갱신([ADR 0075](0075-remove-moimroom-static-catalog-and-image-publishing.md)): `host/apps.yaml`과 SSM `/hopcharlie/host/apps.yaml`을 지웠다. 플랫폼 차트는 이제 `envs.yaml`만 받는다.
 - 관련 ADR: [ADR 0015](0015-centralize-platform-terraform-ownership.md), [ADR 0016](0016-run-hopcharlie-platform-on-management-cluster.md)
 
 ## 배경과 제약

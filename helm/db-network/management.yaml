@@ -5,6 +5,8 @@
 # upgrade the management db-network release with this file without first
 # removing the gke peer: it would recreate db-gke pointing at a device that
 # no longer exists. The values stay because tests read them.
+# 2026-11-07 (ADR 0075): the EKS moimroom is gone too; hop-db-eks-moimroom
+# no longer has a database behind it.
 # Disabled profile only; manual Helm installation requires separate approval.
 enabled: false
 clusterId: management
