@@ -664,6 +664,13 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
 | [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
+| [terraform/platform/aws/onboarding/inspect.sh](terraform/platform/aws/onboarding/inspect.sh) | 기존 compose 앱 VM을 읽기만 하는 조사 스크립트(platform ADR 0042, SSM 문서 HopCharlie-Inspect) |
+| [terraform/platform/aws/onboarding/connect.sh](terraform/platform/aws/onboarding/connect.sh) | 승인 뒤 원본 DB 준비와 tailnet 연결 스크립트(HopCharlie-Connect) |
+| [terraform/platform/aws/onboarding/disconnect.sh](terraform/platform/aws/onboarding/disconnect.sh) | connect.sh가 더한 것을 되돌리는 스크립트(HopCharlie-Disconnect) |
+| [terraform/platform/aws/onboarding/.gitattributes](terraform/platform/aws/onboarding/.gitattributes) | VM에서 도는 스크립트의 줄바꿈을 LF로 고정 |
+| [terraform/platform/aws/onboarding/test/run.sh](terraform/platform/aws/onboarding/test/run.sh) | 로컬 docker compose 대역에서 세 스크립트를 SSM 없이 시험 |
+| [terraform/platform/aws/onboarding/test/checks.sh](terraform/platform/aws/onboarding/test/checks.sh) | 시험 결과 확인 함수 |
+| [terraform/platform/aws/onboarding/test/compose.yaml](terraform/platform/aws/onboarding/test/compose.yaml) | 시험용 compose 대역(postgres, 앱, 프록시) |
 | [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
 | [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
 | [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
