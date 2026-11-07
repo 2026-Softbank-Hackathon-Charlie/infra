@@ -3,38 +3,19 @@
   "title": "hopcharlie-app values: the gitops file (platform ADR 0011, pkg/appspec rules) and the environment profile",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "values",
-    "profile"
-  ],
+  "required": ["values", "profile"],
   "properties": {
-    "app": {
-      "type": "string"
-    },
-    "env": {
-      "type": "string"
-    },
-    "namespace": {
-      "type": "string"
-    },
-    "commit": {
-      "type": "string"
-    },
-    "deployment": {
-      "type": "string"
-    },
+    "app": { "type": "string" },
+    "env": { "type": "string" },
+    "namespace": { "type": "string" },
+    "commit": { "type": "string" },
+    "deployment": { "type": "string" },
     "values": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "app",
-        "services"
-      ],
+      "required": ["app", "services"],
       "properties": {
-        "app": {
-          "type": "string",
-          "pattern": "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$"
-        },
+        "app": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" },
         "services": {
           "type": "array",
           "minItems": 1,
@@ -42,112 +23,40 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "name",
-              "image"
-            ],
+            "required": ["name", "image"],
             "properties": {
-              "name": {
-                "$ref": "#/definitions/partName"
-              },
-              "image": {
-                "type": "string",
-                "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
-              },
-              "port": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 65535
-              },
-              "healthCheck": {
-                "type": "string",
-                "pattern": "^(/[^\\s]*)?$"
-              },
-              "public": {
-                "type": "boolean"
-              },
-              "replicas": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 5
-              },
-              "memory": {
-                "$ref": "#/definitions/quantity"
-              },
-              "cpu": {
-                "$ref": "#/definitions/quantity"
-              },
+              "name": { "$ref": "#/definitions/partName" },
+              "image": { "type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$" },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "healthCheck": { "type": "string", "pattern": "^(/[^\\s]*)?$" },
+              "public": { "type": "boolean" },
+              "replicas": { "type": "integer", "minimum": 0, "maximum": 5 },
+              "memory": { "$ref": "#/definitions/quantity" },
+              "cpu": { "$ref": "#/definitions/quantity" },
               "env": {
-                "type": [
-                  "object",
-                  "null"
-                ],
+                "type": ["object", "null"],
                 "propertyNames": {
                   "pattern": "^[A-Z_][A-Z0-9_]*$",
-                  "not": {
-                    "$ref": "#/definitions/reservedEnv"
-                  }
+                  "not": { "$ref": "#/definitions/reservedEnv" }
                 },
-                "additionalProperties": {
-                  "type": "string"
-                }
+                "additionalProperties": { "type": "string" }
               }
             },
             "allOf": [
-              {
-                "if": {
-                  "required": [
-                    "public"
-                  ],
-                  "properties": {
-                    "public": {
-                      "const": true
-                    }
-                  }
-                },
-                "then": {
-                  "required": [
-                    "port"
-                  ]
-                }
-              },
-              {
-                "if": {
-                  "required": [
-                    "healthCheck"
-                  ]
-                },
-                "then": {
-                  "required": [
-                    "port"
-                  ]
-                }
-              }
+              { "if": { "required": ["public"], "properties": { "public": { "const": true } } }, "then": { "required": ["port"] } },
+              { "if": { "required": ["healthCheck"] }, "then": { "required": ["port"] } }
             ]
           }
         },
         "resources": {
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "name",
-              "type"
-            ],
+            "required": ["name", "type"],
             "properties": {
-              "name": {
-                "$ref": "#/definitions/partName"
-              },
-              "type": {
-                "enum": [
-                  "postgres",
-                  "s3"
-                ]
-              }
+              "name": { "$ref": "#/definitions/partName" },
+              "type": { "enum": ["postgres", "s3"] }
             }
           }
         },
@@ -158,17 +67,10 @@
             "s3": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "accessKey",
-                "secretKey"
-              ],
+              "required": ["accessKey", "secretKey"],
               "properties": {
-                "accessKey": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "secretKey": {
-                  "$ref": "#/definitions/ciphertext"
-                }
+                "accessKey": { "$ref": "#/definitions/ciphertext" },
+                "secretKey": { "$ref": "#/definitions/ciphertext" }
               }
             },
             "app": {
@@ -177,178 +79,85 @@
               "propertyNames": {
                 "pattern": "^[A-Z_][A-Z0-9_]*$",
                 "maxLength": 64,
-                "not": {
-                  "$ref": "#/definitions/reservedEnv"
-                }
+                "not": { "$ref": "#/definitions/reservedEnv" }
               },
-              "additionalProperties": {
-                "$ref": "#/definitions/ciphertext"
-              }
+              "additionalProperties": { "$ref": "#/definitions/ciphertext" }
             },
-            "appChecksum": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
-            },
+            "appChecksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "pgBackup": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "accessKey",
-                "secretKey"
-              ],
+              "required": ["accessKey", "secretKey"],
               "properties": {
-                "accessKey": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "secretKey": {
-                  "$ref": "#/definitions/ciphertext"
-                }
+                "accessKey": { "$ref": "#/definitions/ciphertext" },
+                "secretKey": { "$ref": "#/definitions/ciphertext" }
               }
             },
             "pgApp": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "username",
-                "password",
-                "dbname",
-                "host",
-                "port",
-                "uri",
-                "jdbc-uri"
-              ],
+              "required": ["username", "password", "dbname", "host", "port", "uri", "jdbc-uri"],
               "properties": {
-                "username": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "password": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "dbname": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "host": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "port": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "uri": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "jdbc-uri": {
-                  "$ref": "#/definitions/ciphertext"
-                }
+                "username": { "$ref": "#/definitions/ciphertext" },
+                "password": { "$ref": "#/definitions/ciphertext" },
+                "dbname": { "$ref": "#/definitions/ciphertext" },
+                "host": { "$ref": "#/definitions/ciphertext" },
+                "port": { "$ref": "#/definitions/ciphertext" },
+                "uri": { "$ref": "#/definitions/ciphertext" },
+                "jdbc-uri": { "$ref": "#/definitions/ciphertext" }
               }
             },
             "pgCA": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ca.crt",
-                "ca.key"
-              ],
+              "required": ["ca.crt", "ca.key"],
               "properties": {
-                "ca.crt": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "ca.key": {
-                  "$ref": "#/definitions/ciphertext"
-                }
+                "ca.crt": { "$ref": "#/definitions/ciphertext" },
+                "ca.key": { "$ref": "#/definitions/ciphertext" }
               }
             },
             "pgLegacy": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "username",
-                "password"
-              ],
+              "required": ["username", "password"],
               "properties": {
-                "username": {
-                  "$ref": "#/definitions/ciphertext"
-                },
-                "password": {
-                  "$ref": "#/definitions/ciphertext"
-                }
+                "username": { "$ref": "#/definitions/ciphertext" },
+                "password": { "$ref": "#/definitions/ciphertext" }
               }
             }
           },
           "dependencies": {
-            "app": [
-              "appChecksum"
-            ],
-            "appChecksum": [
-              "app"
-            ],
-            "pgApp": [
-              "pgCA"
-            ],
-            "pgCA": [
-              "pgApp"
-            ]
+            "app": ["appChecksum"],
+            "appChecksum": ["app"],
+            "pgApp": ["pgCA"],
+            "pgCA": ["pgApp"]
           }
         },
         "dbTopology": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "primary",
-            "peer"
-          ],
+          "required": ["primary", "peer"],
           "properties": {
-            "primary": {
-              "$ref": "#/definitions/envName"
-            },
-            "peer": {
-              "$ref": "#/definitions/envName"
-            },
-            "peerPresent": {
-              "type": "boolean"
-            },
+            "primary": { "$ref": "#/definitions/envName" },
+            "peer": { "$ref": "#/definitions/envName" },
+            "peerPresent": { "type": "boolean" },
             "members": {
               "type": "array",
               "minItems": 2,
               "maxItems": 3,
               "uniqueItems": true,
-              "items": {
-                "$ref": "#/definitions/envName"
-              }
+              "items": { "$ref": "#/definitions/envName" }
             },
             "external": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "name",
-                "host",
-                "user",
-                "passwordSecret",
-                "sslmode"
-              ],
+              "required": ["name", "host", "user", "passwordSecret", "sslmode"],
               "properties": {
-                "name": {
-                  "const": "legacy"
-                },
-                "host": {
-                  "type": "string",
-                  "pattern": "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$"
-                },
-                "user": {
-                  "type": "string",
-                  "pattern": "^[a-z_][a-z0-9_]{0,62}$"
-                },
-                "passwordSecret": {
-                  "type": "string",
-                  "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
-                },
-                "sslmode": {
-                  "enum": [
-                    "prefer",
-                    "require",
-                    "verify-ca",
-                    "verify-full"
-                  ]
-                }
+                "name": { "const": "legacy" },
+                "host": { "type": "string", "pattern": "^hop-db-legacy-[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" },
+                "user": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
+                "passwordSecret": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" },
+                "sslmode": { "enum": ["prefer", "require", "verify-ca", "verify-full"] }
               }
             }
           }
@@ -357,61 +166,26 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "image": {
-              "type": "string",
-              "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
-            },
-            "database": {
-              "$ref": "#/definitions/pgName"
-            },
-            "owner": {
-              "$ref": "#/definitions/pgName"
-            },
-            "storageSize": {
-              "$ref": "#/definitions/quantity"
-            },
+            "image": { "type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$" },
+            "database": { "$ref": "#/definitions/pgName" },
+            "owner": { "$ref": "#/definitions/pgName" },
+            "storageSize": { "$ref": "#/definitions/quantity" },
             "parameters": {
               "type": "object",
-              "propertyNames": {
-                "enum": [
-                  "max_connections",
-                  "max_wal_senders",
-                  "max_worker_processes",
-                  "max_prepared_transactions",
-                  "max_locks_per_transaction"
-                ]
-              },
-              "additionalProperties": {
-                "type": "string",
-                "pattern": "^[0-9]{1,7}$"
-              }
+              "propertyNames": { "enum": ["max_connections", "max_wal_senders", "max_worker_processes", "max_prepared_transactions", "max_locks_per_transaction"] },
+              "additionalProperties": { "type": "string", "pattern": "^[0-9]{1,7}$" }
             }
           }
         },
-        "onboardingCold": {
-          "type": "boolean"
-        },
+        "onboardingCold": { "type": "boolean" },
         "backup": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "bucket": {
-              "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
-            },
-            "path": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
-            }
+            "bucket": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$" },
+            "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
           },
-          "dependencies": {
-            "bucket": [
-              "path"
-            ],
-            "path": [
-              "bucket"
-            ]
-          }
+          "dependencies": { "bucket": ["path"], "path": ["bucket"] }
         }
       }
     },
@@ -419,6 +193,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "onpremRegistration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enrollmentID", "clusterUID"],
+          "properties": {
+            "enrollmentID": {"type": "string", "pattern": "^enr_[a-f0-9]{24}$"},
+            "clusterUID": {"type": "string", "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"}
+          }
+        },
         "observability": {
           "type": "object",
           "additionalProperties": false,
@@ -482,111 +265,42 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "type": {
-              "enum": [
-                "ClusterIP",
-                "NodePort",
-                "LoadBalancer"
-              ]
-            },
-            "externalTrafficPolicy": {
-              "enum": [
-                "",
-                "Cluster",
-                "Local"
-              ]
-            },
-            "port": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 65535
-            },
-            "annotations": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
+            "type": { "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+            "externalTrafficPolicy": { "enum": ["", "Cluster", "Local"] },
+            "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+            "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
           }
         },
         "ingress": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "className": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$"
-            },
-            "hostSuffix": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)?$"
-            }
+            "enabled": { "type": "boolean" },
+            "className": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" },
+            "hostSuffix": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)?$" }
           }
         },
-        "imagePullSecrets": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "resources": {
-          "type": "object"
-        },
-        "progressDeadlineSeconds": {
-          "type": "integer",
-          "minimum": 10
-        },
-        "preStopSleepSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 20
-        },
-        "podSecurity": {
-          "enum": [
-            "",
-            "privileged",
-            "baseline",
-            "restricted"
-          ]
-        },
-        "runAsUser": {
-          "type": "integer",
-          "minimum": 1
-        },
+        "imagePullSecrets": { "type": "array", "items": { "type": "string" } },
+        "resources": { "type": "object" },
+        "progressDeadlineSeconds": { "type": "integer", "minimum": 10 },
+        "preStopSleepSeconds": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "podSecurity": { "enum": ["", "privileged", "baseline", "restricted"] },
+        "runAsUser": { "type": "integer", "minimum": 1 },
         "postgres": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "storageSize": {
-              "type": "string"
-            },
-            "storageClass": {
-              "type": "string"
-            },
-            "topologyStorageSize": {
-              "type": "string"
-            },
-            "resources": {
-              "type": "object"
-            },
+            "storageSize": { "type": "string" },
+            "storageClass": { "type": "string" },
+            "topologyStorageSize": { "type": "string" },
+            "resources": { "type": "object" },
             "backup": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "enabled": {
-                  "type": "boolean"
-                },
-                "schedule": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "retentionPolicy": {
-                  "type": "string",
-                  "pattern": "^[1-9][0-9]*[dwm]$"
-                }
+                "enabled": { "type": "boolean" },
+                "schedule": { "type": "string", "minLength": 1 },
+                "retentionPolicy": { "type": "string", "pattern": "^[1-9][0-9]*[dwm]$" }
               }
             }
           }
@@ -595,175 +309,69 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "endpoint": {
-              "type": "string"
-            },
-            "region": {
-              "type": "string"
-            },
-            "pathStyle": {
-              "type": "boolean"
-            },
-            "bucketPrefix": {
-              "type": "string"
-            },
-            "credentialsSecret": {
-              "type": "string"
-            },
-            "accessKeyKey": {
-              "type": "string"
-            },
-            "secretKeyKey": {
-              "type": "string"
-            }
+            "endpoint": { "type": "string" },
+            "region": { "type": "string" },
+            "pathStyle": { "type": "boolean" },
+            "bucketPrefix": { "type": "string" },
+            "credentialsSecret": { "type": "string" },
+            "accessKeyKey": { "type": "string" },
+            "secretKeyKey": { "type": "string" }
           }
         },
         "quota": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "hard": {
-              "type": "object"
-            }
+            "enabled": { "type": "boolean" },
+            "hard": { "type": "object" }
           }
         },
         "limitRange": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "default": {
-              "type": "object"
-            },
-            "defaultRequest": {
-              "type": "object"
-            },
-            "max": {
-              "type": "object"
-            }
+            "enabled": { "type": "boolean" },
+            "default": { "type": "object" },
+            "defaultRequest": { "type": "object" },
+            "max": { "type": "object" }
           }
         },
         "networkPolicy": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "gatewayFrom": {
-              "type": "array",
-              "items": {
-                "type": "object"
-              }
-            },
-            "operatorNamespace": {
-              "type": "string"
-            },
-            "extraEgress": {
-              "type": "array",
-              "items": {
-                "type": "object"
-              }
-            }
+            "enabled": { "type": "boolean" },
+            "gatewayFrom": { "type": "array", "items": { "type": "object" } },
+            "operatorNamespace": { "type": "string" },
+            "extraEgress": { "type": "array", "items": { "type": "object" } }
           }
         },
         "dbNetwork": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "tailnetDomain": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.ts\\.net)?$"
-            },
-            "ingressTag": {
-              "type": "string",
-              "pattern": "^(tag:[a-z][a-z0-9-]*)?$"
-            },
-            "egressTag": {
-              "type": "string",
-              "pattern": "^(tag:[a-z][a-z0-9-]*)?$"
-            },
-            "ingressProxyClass": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$"
-            },
-            "egressProxyClass": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$"
-            },
-            "proxyNamespace": {
-              "type": "string",
-              "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$"
-            }
-          }
-        },
-        "onpremRegistration": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "enrollmentID",
-            "clusterUID"
-          ],
-          "properties": {
-            "enrollmentID": {
-              "type": "string",
-              "pattern": "^enr_[a-f0-9]{24}$"
-            },
-            "clusterUID": {
-              "type": "string",
-              "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
-            }
+            "enabled": { "type": "boolean" },
+            "tailnetDomain": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.ts\\.net)?$" },
+            "ingressTag": { "type": "string", "pattern": "^(tag:[a-z][a-z0-9-]*)?$" },
+            "egressTag": { "type": "string", "pattern": "^(tag:[a-z][a-z0-9-]*)?$" },
+            "ingressProxyClass": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" },
+            "egressProxyClass": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" },
+            "proxyNamespace": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" }
           }
         }
       }
     }
   },
   "definitions": {
-    "partName": {
-      "type": "string",
-      "pattern": "^[a-z]([a-z0-9-]{0,22}[a-z0-9])?$"
-    },
-    "envName": {
-      "type": "string",
-      "pattern": "^[a-z0-9-]+$"
-    },
-    "pgName": {
-      "type": "string",
-      "pattern": "^[a-z_][a-z0-9_]{0,62}$"
-    },
-    "ciphertext": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
-    },
-    "quantity": {
-      "type": "string",
-      "pattern": "^[0-9]+(\\.[0-9]+)?([eE][0-9]+|[mkMGTPE]|[KMGTPE]i)?$"
-    },
+    "partName": { "type": "string", "pattern": "^[a-z]([a-z0-9-]{0,22}[a-z0-9])?$" },
+    "envName": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "pgName": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
+    "ciphertext": { "type": "string", "pattern": "^[A-Za-z0-9+/]+={0,2}$" },
+    "quantity": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?([eE][0-9]+|[mkMGTPE]|[KMGTPE]i)?$" },
     "reservedEnv": {
       "anyOf": [
-        {
-          "enum": [
-            "PORT",
-            "DATABASE_URL",
-            "PGHOST",
-            "PGPORT",
-            "PGDATABASE",
-            "PGUSER",
-            "PGPASSWORD",
-            "JDBC_DATABASE_URL"
-          ]
-        },
-        {
-          "pattern": "^S3_"
-        }
+        { "enum": ["PORT", "DATABASE_URL", "PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD", "JDBC_DATABASE_URL"] },
+        { "pattern": "^S3_" }
       ]
     }
   }

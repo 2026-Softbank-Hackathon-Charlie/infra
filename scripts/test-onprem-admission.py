@@ -94,7 +94,7 @@ def argo(profile):
             'project':NAME,'destination':{'name':NAME,'namespace':'{{ .namespace }}'},'sources':[
                 {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ .namespace }}','valueFiles':['$gitops/{{ .path.path }}/{{ .path.filename }}'],'valuesObject':{'profile':profile}}},
                 {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','targetRevision':'main','ref':'gitops'}],
-            'syncPolicy':{'automated':{'prune':True,'selfHeal':True},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}}}}}
+            'syncPolicy':{'automated':{'prune':True,'selfHeal':True},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}}}}}}
     return project, appset
 
 

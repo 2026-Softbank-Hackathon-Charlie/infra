@@ -1,0 +1,20 @@
+{
+  "tagOwners": {
+    "tag:hop-onprem-api-client": ["tag:hop-db-operator-management"],
+    "tag:hop-onprem-k3s": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["tag:hop-onprem-api-client"],
+      "dst": ["tag:hop-onprem-k3s"],
+      "ip": ["tcp:6443"]
+    }
+  ],
+  "tests": [
+    {
+      "src": "tag:hop-onprem-api-client",
+      "accept": ["tag:hop-onprem-k3s:6443"],
+      "deny": ["tag:hop-onprem-k3s:22", "tag:hop-onprem-k3s:5432", "tag:hop-db-gke:6443", "tag:hop-db-eks:6443"]
+    }
+  ]
+}

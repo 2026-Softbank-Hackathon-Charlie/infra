@@ -1050,6 +1050,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 
 ### Onprem registration preparation (disabled)
 
+- [helm/db-network/onprem-registration-policy-fragment.json.example](helm/db-network/onprem-registration-policy-fragment.json.example)
 - [.github/workflows/onprem-admission.yml](.github/workflows/onprem-admission.yml)
 - [scripts/test-onprem-admission.py](scripts/test-onprem-admission.py)
 - [scripts/tests/test-onprem-registration.py](scripts/tests/test-onprem-registration.py)

@@ -76,11 +76,14 @@ spec:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.api.parity }}
-      {{- if .enabled }}
+      {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled }}
       annotations:
-        checksum/parity: {{ toJson .config | sha256sum }}
-      {{- end }}
+        {{- if .Values.api.parity.enabled }}
+        checksum/parity: {{ toJson .Values.api.parity.config | sha256sum }}
+        {{- end }}
+        {{- if (.Values.api.onpremRegistration | default dict).enabled }}
+        checksum/onprem-registration: {{ toJson .Values.api.onpremRegistration | sha256sum }}
+        {{- end }}
       {{- end }}
       labels:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
