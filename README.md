@@ -1085,3 +1085,9 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
 | [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
 | [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |
+
+## GCE application deployment preflight
+
+- [helm/charts/gce-workload-preflight/Chart.yaml](helm/charts/gce-workload-preflight/Chart.yaml)
+- [helm/charts/gce-workload-preflight/templates/resources.yaml](helm/charts/gce-workload-preflight/templates/resources.yaml)
+- [helm/charts/gce-workload-preflight/values.yaml](helm/charts/gce-workload-preflight/values.yaml)
