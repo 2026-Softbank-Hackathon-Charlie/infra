@@ -990,3 +990,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
 
 - [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
+
+### 관리 플랫폼의 모니터링 조회 연동
+
+- [docs/operations/platform-observability-query.md](docs/operations/platform-observability-query.md) — 관리 플랫폼에서 HyperDX·Prometheus를 조회하는 요청 경로, 인증, 앱별 접근 제어와 구현 항목
+- [docs/adr/0072-query-observability-through-management-platform.md](docs/adr/0072-query-observability-through-management-platform.md) — 플랫폼 백엔드가 관측 데이터를 조회하는 아키텍처 결정
