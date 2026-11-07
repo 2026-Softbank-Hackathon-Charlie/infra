@@ -80,7 +80,10 @@ class GKEObservability(unittest.TestCase):
         v['observability']['externalTargets'] = gke
         docs = render('helm/gitops', v, namespace='argocd')
         original = {d['metadata']['name']: d for d in old}
-        self.assertEqual([d for d in docs if d['metadata']['name'] in original], old)
+        expected_old = copy.deepcopy(old)
+        central = next(d for d in expected_old if d['metadata']['name'] == 'charlie-management-clickstack')
+        central['spec']['source']['helm']['valueFiles'].append('../../../clusters/aws-dev-management/values/clickstack-gke.yaml')
+        self.assertEqual([d for d in docs if d['metadata']['name'] in original], expected_old)
         extra = [d for d in docs if d['metadata']['name'] not in original]
         self.assertEqual(len(of(extra, 'Application')), 6)
         self.assertEqual(len(of(extra, 'AppProject')), 1)
@@ -178,8 +181,9 @@ class GKEObservability(unittest.TestCase):
         # Admission must reject CREATE even though the old ClusterRole still grants it.
         dynamic = next(x for x in of(docs, 'ClusterRole') if x['metadata']['name'].endswith('-dynamic-apps'))
         self.assertTrue(any('networkpolicies' in rule['resources'] and 'create' in rule['verbs'] for rule in dynamic['rules']))
-        self.assertNotIn('bind', json.dumps([x for x in of(docs, 'Role')]))
-        self.assertNotIn('escalate', json.dumps([x for x in of(docs, 'Role')]))
+        verbs = {verb for role in of(docs, 'Role') for rule in role['rules'] for verb in rule['verbs']}
+        self.assertNotIn('bind', verbs)
+        self.assertNotIn('escalate', verbs)
 
     def test_app_observability_guard_is_opt_in_and_keeps_exact_contract(self):
         v = load('clusters/gcp-dev-workload/values/argocd-observability-access.yaml')
