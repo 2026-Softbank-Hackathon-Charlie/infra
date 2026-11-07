@@ -22,8 +22,10 @@
 # then {"result":"ok"}. The tailnet device itself is deleted by the
 # platform through the Tailscale API; this logs the node out first.
 #
-# Exit codes: 0 done; 2 bad parameters; 3 docker unavailable; 5 a database
-# step failed.
+# Exit codes: 0 done; 2 bad parameters; 3 docker unavailable; 4 the
+# database container is not running (its changes are not undone: run again
+# once it runs); 5 a database step failed (a file it could not rewrite is
+# left as it was).
 set -euo pipefail
 umask 077
 
@@ -39,6 +41,40 @@ die() {
 	echo "disconnect: $2" >&2
 	exit "$1"
 }
+
+# remove_lines drops the lines matching an extended regex from a file in
+# the database container, keeping the file (inode, owner, mode), and prints
+# the removed lines once the file is written back. It fails, and leaves the
+# file as it was, when the copy beside the file cannot be written or does
+# not have exactly the other lines.
+remove_lines() { # file regex
+	# shellcheck disable=SC2016 # expanded inside the container
+	docker exec "$HC_DB_CONTAINER" sh -c '
+set -eu
+f=$1
+re=$2
+rc=0
+grep -qE "$re" "$f" || rc=$?
+[ "$rc" -eq 1 ] && exit 0
+[ "$rc" -eq 0 ] || exit 2
+t="$f.hopcharlie.$$"
+trap "rm -f \"$t\"" EXIT
+rc=0
+grep -vE "$re" "$f" >"$t" || rc=$?
+[ "$rc" -le 1 ] || exit 2
+total=$(grep -c "" "$f")
+removed=$(grep -cE "$re" "$f")
+kept=$(grep -c "" "$t" || true)
+[ "$kept" -eq $((total - removed)) ] || exit 3
+lines=$(grep -E "$re" "$f")
+cat "$t" >"$f"
+printf "%s\n" "$lines"' sh "$1" "$2"
+}
+
+# Sourced by the tests: the functions only.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+	return 0
+fi
 
 printf '%s' "$HC_DB_CONTAINER" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$' || die 2 "dbContainer is not valid"
 printf '%s' "$HC_APP" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$' || die 2 "appLabel is not valid"
@@ -73,8 +109,9 @@ rm -rf "${HC_STATE_DIR:?}/$HC_APP"
 # --- the database (reverse of steps 2 and 1) ---
 
 if [ "$(docker container inspect --format '{{.State.Status}}' "$HC_DB_CONTAINER" 2>/dev/null)" != running ]; then
-	echo '{"result":"ok","database":"not running"}'
-	exit 0
+	# Not done: the database changes are still there for the next run.
+	echo '{"result":"incomplete","database":"not running"}'
+	exit 4
 fi
 
 psql_db() {
@@ -82,30 +119,20 @@ psql_db() {
 	docker exec -i "$HC_DB_CONTAINER" sh -c 'exec psql -X -A -t -q -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}"'
 }
 
-# remove_lines drops the lines matching an extended regex from a file in
-# the database container, keeping the file (inode, owner, mode); it prints
-# the removed lines.
-remove_lines() { # file regex
-	# shellcheck disable=SC2016 # expanded inside the container
-	docker exec "$HC_DB_CONTAINER" sh -c '
-grep -E "$2" "$1" || exit 0
-t=$(mktemp)
-grep -vE "$2" "$1" > "$t" || true
-cat "$t" > "$1"
-rm -f "$t"' sh "$1" "$2"
-}
-
 files=$(printf 'show hba_file;\nshow config_file;\n' | psql_db) || die 5 "reading the file locations failed"
 hba_file=$(printf '%s\n' "$files" | sed -n 1p)
 config_file=$(printf '%s\n' "$files" | sed -n 2p)
 
+[ -n "$hba_file" ] && [ -n "$config_file" ] || die 5 "the server did not name its hba and config files"
 wal_re="^wal_keep_size = '1GB'  # $MARKER\$"
+removed=$(remove_lines "$config_file" "$wal_re") || die 5 "removing the wal_keep_size line from $config_file failed; the file is unchanged"
 while IFS= read -r line; do
 	[ -n "$line" ] && undone wal_keep_size_added "$line"
-done < <(remove_lines "$config_file" "$wal_re")
+done <<<"$removed"
+removed=$(remove_lines "$hba_file" "$HBA_RE") || die 5 "removing the hba line from $hba_file failed; the file is unchanged"
 while IFS= read -r line; do
 	[ -n "$line" ] && undone hba_line_added "$line"
-done < <(remove_lines "$hba_file" "$HBA_RE")
+done <<<"$removed"
 printf 'select pg_reload_conf();\n' | psql_db >/dev/null || die 5 "reloading the configuration failed"
 
 roles=$(

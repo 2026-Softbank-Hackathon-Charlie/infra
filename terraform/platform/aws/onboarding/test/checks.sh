@@ -108,6 +108,10 @@ rc=0
 HC_PUBLIC_KEY='not a key' bash $s/inspect.sh >/dev/null 2>&1 || rc=$?
 expect "bad key is exit 2" test "$rc" -eq 2
 
+expect "other database read" jq -e '[.db[0].others[] | select(.database == "other") | .indexes[].name] == ["public.notes_body_idx"]' doc.json
+expect "config writable" jq -e '.db[0].configWritable == true' doc.json
+expect "standby parameters" jq -e '.db[0].facts.maxWorkerProcesses > 0 and .db[0].facts.maxLocksPerTransaction > 0 and .db[0].facts.pendingConfig == []' doc.json
+
 # --- connect ---
 
 net=${project}_default
@@ -116,6 +120,24 @@ connect() {
 	HC_DB_CONTAINER=${project}-db-1 HC_NETWORK=$net HC_SUBNET=$subnet HC_HOSTNAME=hop-db-legacy-hctest \
 		HC_PUBLIC_KEY=$pub HC_APP=hctest HC_SKIP_TAILSCALE=1 HC_STATE_DIR=/tmp/hcstate bash $s/connect.sh
 }
+sql() { docker exec "${project}-db-1" psql -XAtq -U app -d app -c "$1"; }
+
+# A server with a setting waiting for a restart: nothing is changed.
+sql "alter system set shared_buffers = '200MB'" && sql 'select pg_reload_conf()' >/dev/null
+rc=0
+connect >/dev/null 2>&1 || rc=$?
+expect "pending restart is exit 8" test "$rc" -eq 8
+expect "pending restart changed nothing" test "$(sql "select count(*) from pg_roles where rolname = 'hopcharlie_replicator'")" -eq 0
+sql 'alter system reset shared_buffers' && sql 'select pg_reload_conf()' >/dev/null
+
+# A larger wal_keep_size stays.
+sql "alter system set wal_keep_size = '2GB'" && sql 'select pg_reload_conf()' >/dev/null
+connect >connect-wal.out 2>/dev/null || fail "connect.sh with wal_keep_size 2GB exits 0"
+expect "larger wal_keep_size is info" grep -q '"info":"wal_keep_size is already 2048MB"' connect-wal.out
+expect "larger wal_keep_size is not a change" bash -c "! grep -q wal_keep_size_added connect-wal.out"
+HC_DB_CONTAINER=${project}-db-1 HC_APP=hctest HC_STATE_DIR=/tmp/hcstate bash $s/disconnect.sh >/dev/null || fail "disconnect after the wal test"
+sql 'alter system reset wal_keep_size' && sql 'select pg_reload_conf()' >/dev/null
+
 connect >connect.out 2>connect.err || {
 	cat connect.err >&2
 	fail "connect.sh exits 0"
@@ -133,7 +155,9 @@ expect "replication connection" docker run --rm --network "$net" -e PGPASSWORD="
 expect "replication account cannot read data" bash -c "! docker run --rm --network $net -e PGPASSWORD=$pw postgres:17.11-alpine psql 'host=db user=hopcharlie_replicator dbname=app' -c 'select count(*) from users'"
 expect "postgres has no password login" bash -c "! docker run --rm --network $net -e PGPASSWORD= postgres:17.11-alpine psql -w 'host=db user=postgres dbname=app' -c 'select 1'"
 
+expect "first run is not a rotation" grep -q '"passwordRotated":false' connect.out
 connect >connect2.out 2>/dev/null || fail "connect.sh again exits 0"
+expect "rerun rotates the password" grep -q '"passwordRotated":true' connect2.out
 expect "rerun adds nothing" bash -c "! grep -q '\"new\":true' connect2.out"
 expect "rerun reports the roles" grep -q '"kind":"postgres_role_created",.*"new":false' connect2.out
 hba=$(docker exec "${project}-db-1" sh -c 'cat "$PGDATA/pg_hba.conf"')
@@ -156,6 +180,29 @@ expect "roles gone" test "$(docker exec "${project}-db-1" psql -XAtq -U app -d a
 expect "wal_keep_size back" test "$(docker exec "${project}-db-1" psql -XAtq -U app -d app -c 'show wal_keep_size')" = 0
 HC_DB_CONTAINER=${project}-db-1 HC_APP=hctest HC_STATE_DIR=/tmp/hcstate bash $s/disconnect.sh >disconnect2.out
 expect "disconnect again removes nothing" test "$(cat disconnect2.out)" = '{"result":"ok"}'
+
+# remove_lines in a container whose directory is read-only: it fails and
+# the file stays as it was (the file is a writable bind mount from a
+# volume, in the read-only /etc).
+ro=hcro-$$
+docker volume create "$ro" >/dev/null
+docker run --rm -v "$ro:/v" alpine:3.22 sh -c 'printf "a\nhost replication hopcharlie_replicator 10.0.0.0/24 scram-sha-256\nb\n" > /v/x.conf'
+docker run -d --rm --read-only --name "$ro" -v "$(docker volume inspect -f '{{.Mountpoint}}' "$ro")/x.conf:/etc/x.conf" alpine:3.22 sleep 120 >/dev/null
+rc=0
+# shellcheck disable=SC1091,SC2034 # sourced from the mounted scripts; used by remove_lines
+(HC_DB_CONTAINER=$ro && source $s/disconnect.sh && remove_lines /etc/x.conf "$HBA_RE") >ro.out 2>/dev/null || rc=$?
+expect "read-only remove_lines fails" test "$rc" -ne 0
+expect "read-only remove_lines printed nothing" test ! -s ro.out
+expect "read-only file unchanged" test "$(docker exec "$ro" grep -c '' /etc/x.conf)" -eq 3
+docker rm -f "$ro" >/dev/null
+docker volume rm "$ro" >/dev/null
+
+# A database container that is not running: not done.
+docker stop "${project}-db-1" >/dev/null
+rc=0
+HC_DB_CONTAINER=${project}-db-1 HC_APP=hctest HC_STATE_DIR=/tmp/hcstate bash $s/disconnect.sh >/dev/null 2>&1 || rc=$?
+expect "stopped database is exit 4" test "$rc" -eq 4
+docker start "${project}-db-1" >/dev/null
 
 if [ "$fails" -gt 0 ]; then
 	echo "$fails checks failed" >&2

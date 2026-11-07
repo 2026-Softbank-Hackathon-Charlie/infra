@@ -32,14 +32,24 @@
 # and tailscale_device_joined, in the order done ("new" false: an earlier
 # run did it). The last line is
 #
-#   {"result":"ok","replicationPassword":"<envelope>"}
+#   {"result":"ok","replicationPassword":"<envelope>","passwordRotated":<bool>}
 #
 # where the envelope (inspect.sh describes it) holds the new password of
-# hopcharlie_replicator, generated here. Every run sets a new one.
+# hopcharlie_replicator, generated here. Every run sets a new one;
+# passwordRotated true says the role existed, so whatever holds the old
+# password (the target's Secret) must take the new one. A wal_keep_size of
+# 1GB or more that was already set stays, and is an "info" line, not a
+# change.
+#
+# The Tailscale container is on the compose network: a manual docker
+# compose down cannot remove that network while it runs (the source's own
+# deploy is disabled from connecting on).
 #
 # Exit codes: 0 done; 2 bad parameters; 3 docker or the containers are not
 # as expected; 4 encryption failed; 5 a database step failed; 6 the
-# settings did not take effect; 7 the Tailscale device did not come up.
+# settings did not take effect; 7 the Tailscale device did not come up; 8
+# the server has configuration changes waiting for a restart or a file with
+# errors (nothing was changed).
 set -euo pipefail
 umask 077
 
@@ -49,6 +59,9 @@ REPLICATION_USER=hopcharlie_replicator
 TAILSCALE_TAG=tag:hop-legacy
 MARKER=hopcharlie-onboarding
 WAL_KEEP_LINE="wal_keep_size = '1GB'  # $MARKER"
+# Every session: no statement logged (a password is in one), no waiting
+# behind a lock.
+SESSION_SQL="set log_statement = 'none'; set log_min_duration_statement = -1; set log_min_error_statement = 'panic'; set pg_stat_statements.track_utility = off; set password_encryption = 'scram-sha-256'; set lock_timeout = '5s';"
 
 HC_DB_CONTAINER=${HC_DB_CONTAINER:-}
 HC_DB_SERVICE=${HC_DB_SERVICE:-}
@@ -139,6 +152,7 @@ printf "hcenc1.%s.%s" "$(openssl base64 -A -in wk)" "$(openssl base64 -A -in c)"
 append_line() { # file line
 	# shellcheck disable=SC2016 # expanded inside the container
 	docker exec "$HC_DB_CONTAINER" sh -c '
+set -eu
 if grep -qxF "$2" "$1"; then echo false; exit 0; fi
 [ -z "$(tail -c 1 "$1")" ] || printf "\n" >> "$1"
 printf "%s\n" "$2" >> "$1"
@@ -153,12 +167,14 @@ password=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
 # The statements are not logged (log_statement could print the password);
 # the roles this script creates carry the marker as their comment, which is
 # how a rerun and disconnect.sh know them from roles that were there.
+# Refuse a server that would apply something else with the reload.
+pending=$(printf '%s\n' "$SESSION_SQL" "select count(*) from (select name from pg_settings where pending_restart union all select name from pg_file_settings where error is not null) p;" | psql_db) ||
+	die 5 "reading the configuration state failed"
+[ "$pending" = 0 ] || die 8 "the server has settings waiting for a restart or configuration errors"
+
 roles=$(
 	psql_db <<SQL
-set log_statement = 'none';
-set log_min_duration_statement = -1;
-set log_min_error_statement = 'panic';
-set password_encryption = 'scram-sha-256';
+$SESSION_SQL
 select case when exists (select 1 from pg_roles where rolname = 'postgres') then 'postgres:' ||
   coalesce((select shobj_description(oid, 'pg_authid') = '$MARKER' from pg_roles where rolname = 'postgres')::text, 'false')
   else 'postgres:create' end;
@@ -178,12 +194,12 @@ SQL
 esac
 
 case "$roles" in
-*replicator:create*) verb=create new=true ;;
-*) verb=alter new=false ;;
+*replicator:create*) verb=create new=true rotated=false ;;
+*) verb=alter new=false rotated=true ;;
 esac
 # printf, not a here-document: bash may keep a here-document in a file.
-printf "%s
-" "set log_statement = 'none';" "set log_min_duration_statement = -1;" 	"set log_min_error_statement = 'panic';" "set password_encryption = 'scram-sha-256';" 	"$verb role $REPLICATION_USER login replication password '$password';" 	"comment on role $REPLICATION_USER is '$MARKER';" | psql_db >/dev/null ||
+printf '%s\n' "$SESSION_SQL" "$verb role $REPLICATION_USER login replication password '$password';" \
+	"comment on role $REPLICATION_USER is '$MARKER';" | psql_db >/dev/null ||
 	die 5 "setting up role $REPLICATION_USER failed"
 change replication_role_created "$REPLICATION_USER" "$new"
 
@@ -203,8 +219,16 @@ config_file=$(printf '%s\n' "$files" | sed -n 2p)
 
 added=$(append_line "$hba_file" "$hba_line") || die 5 "appending to $hba_file failed"
 change hba_line_added "$hba_line" "$added"
-added=$(append_line "$config_file" "$WAL_KEEP_LINE") || die 5 "appending to $config_file failed"
-change wal_keep_size_added "$WAL_KEEP_LINE" "$added"
+# A wal_keep_size of 1GB or more set by someone else stays.
+keep=$(printf '%s\n' "$SESSION_SQL" "select setting from pg_settings where name = 'wal_keep_size';" | psql_db) ||
+	die 5 "reading wal_keep_size failed"
+ours=$(docker exec "$HC_DB_CONTAINER" sh -c 'grep -cxF "$2" "$1" || true' sh "$config_file" "$WAL_KEEP_LINE")
+if [ "${ours:-0}" -eq 0 ] && [ "${keep:-0}" -ge 1024 ] 2>/dev/null; then
+	printf '{"info":"wal_keep_size is already %sMB","at":"%s"}\n' "$keep" "$(now)"
+else
+	added=$(append_line "$config_file" "$WAL_KEEP_LINE") || die 5 "appending to $config_file failed"
+	change wal_keep_size_added "$WAL_KEEP_LINE" "$added"
+fi
 
 applied=$(
 	psql_db <<SQL
@@ -213,7 +237,14 @@ select pg_sleep(1);
 select 'hba_errors:' || count(*) from pg_hba_file_rules where error is not null;
 select 'hba_line:' || count(*) from pg_hba_file_rules
   where type = 'host' and database = '{replication}' and user_name = '{$REPLICATION_USER}' and auth_method = 'scram-sha-256';
-select 'wal_keep_size:' || current_setting('wal_keep_size');
+select 'wal_keep_mb:' || setting from pg_settings where name = 'wal_keep_size';
+-- an earlier rule that takes replication connections from the network
+-- (the official image's loopback trust lines do not)
+select 'earlier_rules:' || count(*) from pg_hba_file_rules r
+  where r.line_number < (select min(line_number) from pg_hba_file_rules
+      where database = '{replication}' and user_name = '{$REPLICATION_USER}' and address = '${HC_SUBNET%/*}')
+    and r.type like 'host%' and ('replication' = any(r.database))
+    and coalesce(r.address, '') not in ('127.0.0.1', '::1');
 SQL
 ) || die 6 "reloading the configuration failed"
 case "$applied" in
@@ -223,9 +254,11 @@ esac
 case "$applied" in
 *hba_line:0*) die 6 "the replication hba line is not in effect" ;;
 esac
+kept=$(printf '%s\n' "$applied" | sed -n 's/^wal_keep_mb://p')
+[ "${kept:-0}" -ge 1024 ] 2>/dev/null || die 6 "wal_keep_size is under 1GB after the reload"
 case "$applied" in
-*wal_keep_size:1GB*) ;;
-*) die 6 "wal_keep_size is not 1GB after the reload" ;;
+*earlier_rules:0*) ;;
+*) die 6 "an earlier pg_hba.conf rule takes replication connections before $REPLICATION_USER's line" ;;
 esac
 
 # --- 3. the Tailscale container ---
@@ -239,7 +272,7 @@ printf '{"TCP":{"5432":{"TCPForward":"%s:5432"}}}\n' "$HC_DB_SERVICE" >"$serve_d
 chmod 644 "$serve_dir/serve.json"
 
 if [ "$HC_SKIP_TAILSCALE" = 1 ]; then
-	printf '{"result":"ok","replicationPassword":"%s","tailscale":"skipped"}\n' "$replication_password"
+	printf '{"result":"ok","replicationPassword":"%s","passwordRotated":%s,"tailscale":"skipped"}\n' "$replication_password" "$rotated"
 	exit 0
 fi
 
@@ -252,7 +285,10 @@ fi
 
 state=$(docker container inspect --format '{{.State.Status}}' "$ts_container" 2>/dev/null || true)
 case "$state" in
-running) change tailscale_container_started "$ts_container" false ;;
+running)
+	change tailscale_container_started "$ts_container" false
+	joined_before=true
+	;;
 '')
 	# The auth key goes in through the environment, not the command line.
 	# No compose label: the source's docker compose up leaves it alone.
@@ -281,6 +317,10 @@ for _ in $(seq 1 60); do
 	sleep 2
 done
 [ "$joined" = true ] || die 7 "the Tailscale device did not come up in 120s"
-change tailscale_device_joined "$HC_HOSTNAME" true
+if [ "${joined_before:-false}" = true ]; then
+	change tailscale_device_joined "$HC_HOSTNAME" false
+else
+	change tailscale_device_joined "$HC_HOSTNAME" true
+fi
 
-printf '{"result":"ok","replicationPassword":"%s"}\n' "$replication_password"
+printf '{"result":"ok","replicationPassword":"%s","passwordRotated":%s}\n' "$replication_password" "$rotated"

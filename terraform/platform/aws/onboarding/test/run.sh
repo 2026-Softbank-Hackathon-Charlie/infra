@@ -20,6 +20,10 @@ create index users_email_idx on users (email);
 create index users_email_c_idx on users (email collate "C");
 create table events (at text not null) partition by range (at);
 insert into users (email, name) select 'u' || g || '@example.com', 'n' || g from generate_series(1, 1000) g;
+create database other;
+\c other
+create table notes (body text);
+create index notes_body_idx on notes (body);
 SQL
 
 MSYS_NO_PATHCONV=1 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker:ro \

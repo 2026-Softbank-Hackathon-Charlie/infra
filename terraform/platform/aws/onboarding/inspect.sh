@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # HopCharlie-Inspect: read-only inspection of a VM that runs an app with
 # docker compose (platform ADR 0042, "1. 조사"). SSM Run Command runs it as
-# root; it changes nothing on the VM except its own output file under
-# HC_WORK_DIR, which holds no clear secret value.
+# root; it changes nothing on the VM but its own output file under
+# HC_WORK_DIR, which holds no clear secret value, and pulls the pinned
+# openssl image when docker does not have it.
 #
 # Parameters (environment, set by the SSM document from its parameters):
 #
@@ -64,7 +65,9 @@
 #
 # Exit codes: 0 done; 2 bad parameters; 3 docker unavailable; 4 encryption
 # failed; 5 the payload needs more chunks than the document has; 6 chunk
-# mode found no output of this key (not run, or cleaned).
+# mode found no output of this key (not run, or cleaned); 7 the openssl
+# image cannot be pulled (is Docker Hub reachable from the VM?). Exit 3 is
+# also bash older than 4.4.
 set -euo pipefail
 umask 077
 
@@ -86,6 +89,11 @@ die() {
 	echo "inspect: $2" >&2
 	exit "$1"
 }
+
+# 4.4 for empty arrays under set -u.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+	die 3 "bash 4.4 or later is needed (this is $BASH_VERSION)"
+fi
 
 case "$HC_MAX_CHUNK" in
 '' | *[!0-9]*) die 2 "maxChunk must be a number" ;;
@@ -139,6 +147,9 @@ esac
 
 command -v docker >/dev/null 2>&1 || die 3 "docker is not installed"
 docker info >/dev/null 2>&1 || die 3 "docker does not answer"
+if [ "$HC_MODE" = run ] && ! docker image inspect "$OPENSSL_IMAGE" >/dev/null 2>&1; then
+	docker pull -q "$OPENSSL_IMAGE" >/dev/null 2>&1 || die 7 "cannot pull $OPENSSL_IMAGE (is Docker Hub reachable?)"
+fi
 
 # json_str prints its argument as a JSON string.
 json_str() {
@@ -148,6 +159,8 @@ json_str() {
 	s=${s//$'\n'/\\n}
 	s=${s//$'\r'/\\r}
 	s=${s//$'\t'/\\t}
+	# Other control characters are dropped.
+	s=$(printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037')
 	printf '"%s"' "$s"
 }
 
@@ -164,6 +177,8 @@ db_sql() {
 \set ON_ERROR_STOP on
 set application_name = 'hopcharlie-inspect';
 set statement_timeout = '60s';
+-- never wait behind a lock: every read below is of the catalogs
+set lock_timeout = '1s';
 select pg_current_wal_lsn() as l1, extract(epoch from clock_timestamp()) as t1 \gset
 select pg_sleep(:sleep) \g /dev/null
 with
@@ -197,7 +212,7 @@ idx as (
          quote_ident(n.nspname) || '.' || quote_ident(ci.relname) as name,
          quote_ident(tn.nspname) || '.' || quote_ident(ct.relname) as tbl,
          cl.provider, cl.name as coll_name,
-         pg_relation_size(i.indexrelid) as size
+         ci.relpages::bigint * current_setting('block_size')::bigint as size
   from pg_index i
   join pg_class ci on ci.oid = i.indexrelid
   join pg_namespace n on n.oid = ci.relnamespace
@@ -236,7 +251,8 @@ checks as (
 tbls as (
   select quote_ident(n.nspname) || '.' || quote_ident(c.relname) as name,
          greatest(c.reltuples, 0)::bigint as nrows,
-         pg_total_relation_size(c.oid) as size
+         (c.relpages::bigint + coalesce((select t.relpages from pg_class t where t.oid = c.reltoastrelid), 0))
+           * current_setting('block_size')::bigint as size
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where c.relkind in ('r', 'p', 'm')
     and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg_toast%'
@@ -284,6 +300,13 @@ select json_build_object(
       greatest(extract(epoch from clock_timestamp()) - :t1, 0.001))::bigint,
   'connections', (select count(*) from pg_stat_activity where backend_type = 'client backend'),
   'maxConnections', current_setting('max_connections')::int,
+  'maxWorkerProcesses', current_setting('max_worker_processes')::int,
+  'maxPreparedTransactions', current_setting('max_prepared_transactions')::int,
+  'maxLocksPerTransaction', current_setting('max_locks_per_transaction')::int,
+  'walSendersUsed', (select count(*) from pg_stat_replication),
+  'pendingConfig', (select coalesce(json_agg(distinct name), '[]') from (
+      select name from pg_settings where pending_restart
+      union select coalesce(name, sourcefile || ':' || sourceline) from pg_file_settings where error is not null) p),
   'indexes', (select coalesce(json_agg(json_build_object('name', name, 'table', tbl, 'provider', provider,
       'collation', coll_name, 'sizeBytes', size) order by name), '[]') from idx),
   'collationDependent', (select coalesce(json_agg(name order by name), '[]') from (
@@ -293,17 +316,42 @@ select json_build_object(
 SQL
 }
 
-# db_facts prints the facts object of one postgres container, or an error.
-db_facts() { # container
-	local out err rc=0
-	err=$(mktemp)
+# psql_in runs SQL from stdin in one database of a container (the
+# container's POSTGRES_DB when empty) as its POSTGRES_USER.
+psql_in() { # container database sleep
 	# shellcheck disable=SC2016 # expanded inside the container
-	out=$(db_sql | docker exec -i "$1" sh -c 'exec psql -X -A -t -q -v sleep="$1" -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}"' sh "$HC_WAL_SAMPLE" 2>"$err") || rc=$?
-	if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
-		printf '{"container":%s,"facts":%s}' "$(json_str "$1")" "$out"
-	else
+	docker exec -i "$1" sh -c 'exec psql -X -A -t -q -v sleep="$2" -U "${POSTGRES_USER:-postgres}" -d "${1:-${POSTGRES_DB:-${POSTGRES_USER:-postgres}}}"' sh "$2" "$3"
+}
+
+# db_facts prints the facts object of one postgres container, or an error:
+# {"container", "facts", "others":[the same facts of each other database],
+# "othersError":[...], "configWritable"}. Of "others" only indexes and
+# collationDependent matter.
+db_facts() { # container
+	local out o err rc=0 files writable other others=() errs=()
+	err=$(mktemp)
+	out=$(db_sql | psql_in "$1" "" "$HC_WAL_SAMPLE" 2>"$err") || rc=$?
+	if [ "$rc" -ne 0 ] || [ -z "$out" ]; then
 		printf '{"container":%s,"error":%s}' "$(json_str "$1")" "$(json_str "psql exited $rc: $(head -c 300 "$err")")"
+		rm -f "$err"
+		return
 	fi
+	files=$(printf 'show hba_file;\nshow config_file;\n' | psql_in "$1" "" 0 2>/dev/null || true)
+	# shellcheck disable=SC2016 # expanded inside the container
+	writable=$(docker exec "$1" sh -c 'test -w "$1" && test -w "$2" && echo true || echo false' sh \
+		"$(printf '%s\n' "$files" | sed -n 1p)" "$(printf '%s\n' "$files" | sed -n 2p)" 2>/dev/null || echo false)
+	while IFS= read -r other; do
+		[ -n "$other" ] || continue
+		rc=0
+		o=$(db_sql | psql_in "$1" "$other" 0 2>"$err") || rc=$?
+		if [ "$rc" -eq 0 ] && [ -n "$o" ]; then
+			others+=("$o")
+		else
+			errs+=("$(json_str "$other: psql exited $rc: $(head -c 200 "$err")")")
+		fi
+	done < <(printf "select datname from pg_database where not datistemplate and datallowconn and datname <> current_database() and datname !~ '[[:cntrl:]]';\n" | psql_in "$1" "" 0 2>/dev/null || true)
+	printf '{"container":%s,"facts":%s,"others":[%s],"othersError":[%s],"configWritable":%s}' "$(json_str "$1")" "$out" \
+		"$(join ${others[@]+"${others[@]}"})" "$(join ${errs[@]+"${errs[@]}"})" "${writable:-false}"
 	rm -f "$err"
 }
 
@@ -377,7 +425,10 @@ for id in "${ids[@]}"; do
 	while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		var=${line#\"}
-		var=${var%%=*}
+		case $var in
+		*=*) var=${var%%=*} ;;
+		*) var=${var%\"} ;; # a variable without a value
+		esac
 		from_image=false
 		[ -n "${image_env[$line]:-}" ] && from_image=true
 		envs+=("{\"name\":\"$var\",\"image\":$from_image}")
@@ -413,6 +464,14 @@ done
 dbs=()
 for c in "${pg[@]}"; do
 	dbs+=("$(db_facts "$c")")
+	# The database's disk may not be docker's: the least free of both.
+	while IFS= read -r src; do
+		[ -n "$src" ] && [ -e "$src" ] || continue
+		kb=$(df -Pk "$src" 2>/dev/null | awk 'NR==2 {print $4}')
+		if [ -n "$kb" ] && [ $((kb * 1024)) -lt "$free_bytes" ]; then
+			free_bytes=$((kb * 1024))
+		fi
+	done < <(docker container inspect --format '{{range .Mounts}}{{.Source}}{{println}}{{end}}' "$c")
 done
 
 # The environment values, encrypted: {"<name>":["NAME=value",...]} goes
