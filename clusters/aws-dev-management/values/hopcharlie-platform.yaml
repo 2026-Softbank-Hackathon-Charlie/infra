@@ -7,7 +7,11 @@
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   },
   "gateway": {
-    "backends": "gke=http://shop.gke.hopcharlie.internal,eks=http://shop.eks.hopcharlie.internal,onprem=http://shop.onprem.hopcharlie.internal"
+    "backends": "gke=http://shop.gke.hopcharlie.internal,eks=http://shop.eks.hopcharlie.internal,onprem=http://shop.onprem.hopcharlie.internal",
+    "aiGatewayEgress": {
+      "namespace": "hopcharlie-ai",
+      "port": 8000
+    }
   },
   "api": {
     "corsOrigins": "https://console.hopcharlie.dev,http://localhost:5173",
