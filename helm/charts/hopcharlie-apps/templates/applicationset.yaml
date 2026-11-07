@@ -79,6 +79,17 @@ spec:
             - .spec.replica
             - select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters
             - .spec.certificates
+            # Meaningful only at creation, like replica: an onboarded app's
+            # database is born a replica of its source and the chart draws
+            # initdb after the cutover (infra ADR 0082).
+            - .spec.bootstrap
+        # The migration engine starts an onboarded app's Deployments at the
+        # cutover (platform ADR 0042); while the chart labels them cold,
+        # selfHeal must not put replicas 0 back (infra ADR 0082).
+        - group: apps
+          kind: Deployment
+          jqPathExpressions:
+            - select(.metadata.labels["hopcharlie.dev/onboarding-cold"] == "true") | .spec.replicas
         # The Tailscale operator points a database egress Service (ADR 0063) at
         # its proxy by rewriting externalName; selfHeal must not put the
         # chart's placeholder back. Only ExternalName Services with a tailnet

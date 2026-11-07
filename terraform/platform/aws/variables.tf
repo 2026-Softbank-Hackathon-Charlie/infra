@@ -15,3 +15,9 @@ variable "management_cluster" {
   type        = string
   default     = "charlie-dev-management"
 }
+
+variable "onboarding_second_region" {
+  description = "The other region the onboarding documents are in, besides region (the account's SCP allows ap-northeast-2 and ap-southeast-2)."
+  type        = string
+  default     = "ap-southeast-2"
+}

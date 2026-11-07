@@ -2,7 +2,9 @@
 Management EKS objects for the platform-created egress Services of registered
 apps (platform internal/dbroute). The platform API creates, in this namespace,
 one ExternalName Service db-<env>-<instance> per paired app environment and
-deletes it with the app; the operator runs its proxy with the ProxyClass
+deletes it with the app, and db-legacy-<app> to an onboarded app's source
+database outside the platform while it is onboarded (platform ADR 0042,
+infra ADR 0082); the operator runs its proxy with the ProxyClass
 below. Install as its own release (app-db-routes), never in the live
 db-network release that owns the static db-eks and db-gke proxies: with
 enabled false this chart renders only these objects, and none of their names
@@ -192,11 +194,11 @@ spec:
   validations:
     - expression: >-
         variables.managedBy == 'hopcharlie-platform' &&
-        object.metadata.name.matches('^db-(eks|gke|onprem)-[a-z0-9][a-z0-9-]{0,40}$') &&
-        variables.route in ['eks', 'gke', 'onprem'] &&
+        object.metadata.name.matches('^db-(eks|gke|onprem|legacy)-[a-z0-9][a-z0-9-]{0,40}$') &&
+        variables.route in ['eks', 'gke', 'onprem', 'legacy'] &&
         object.metadata.name.startsWith('db-' + variables.route + '-') &&
         variables.app.matches('^[a-z0-9][a-z0-9-]{0,62}$')
-      message: an app DB route is named db-<eks|gke|onprem>-<instance> and labelled app.kubernetes.io/managed-by=hopcharlie-platform, hopcharlie.dev/db-route and hopcharlie.dev/app
+      message: an app DB route is named db-<eks|gke|onprem|legacy>-<instance> and labelled app.kubernetes.io/managed-by=hopcharlie-platform, hopcharlie.dev/db-route and hopcharlie.dev/app
     - expression: >-
         object.spec.type == 'ExternalName' &&
         has(object.spec.externalName) && object.spec.externalName == 'placeholder' &&
@@ -207,9 +209,9 @@ spec:
     - expression: >-
         variables.tags == '{{ $routes.tag }}' &&
         variables.proxyClass == '{{ $name }}' &&
-        variables.fqdn.matches('^hop-db-(eks|gke|onprem)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.{{ $tailnet }}$') &&
+        variables.fqdn.matches('^hop-db-(eks|gke|onprem|legacy)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.{{ $tailnet }}$') &&
         variables.fqdn == 'hop-' + object.metadata.name + '.{{ $routes.tailnet }}' &&
-        variables.hostname.matches('^hop-db-management-to-(eks|gke|onprem)-[a-z0-9-]+$')
+        variables.hostname.matches('^hop-db-management-to-(eks|gke|onprem|legacy)-[a-z0-9-]+$')
       message: 'an app DB route uses tag {{ $routes.tag }}, proxy class {{ $name }}, the tailnet FQDN hop-<name>.{{ $routes.tailnet }} and a hop-db-management-to- hostname'
     - expression: >-
         variables.annotations.all(k, !k.startsWith('tailscale.com/') ||

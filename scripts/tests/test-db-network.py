@@ -578,10 +578,10 @@ class ManagementAppRoutesTests(unittest.TestCase):
                 self.assertNotIn('oldObject', text)
                 for needle in ("'tag:hop-db-client-management'", "'hopcharlie-app-db-egress-management'",
                                "'ExternalName'", "'placeholder'", '5432', "'hopcharlie-platform'",
-                               "object.metadata.name.matches('^db-(eks|gke|onprem)-[a-z0-9][a-z0-9-]{0,40}$')",
-                               "variables.route in ['eks', 'gke', 'onprem']",
-                               "'^hop-db-(eks|gke|onprem)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\\\.tail567fe8\\\\.ts\\\\.net$'",
-                               "'^hop-db-management-to-(eks|gke|onprem)-[a-z0-9-]+$'",
+                               "object.metadata.name.matches('^db-(eks|gke|onprem|legacy)-[a-z0-9][a-z0-9-]{0,40}$')",
+                               "variables.route in ['eks', 'gke', 'onprem', 'legacy']",
+                               "'^hop-db-(eks|gke|onprem|legacy)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\\\.tail567fe8\\\\.ts\\\\.net$'",
+                               "'^hop-db-management-to-(eks|gke|onprem|legacy)-[a-z0-9-]+$'",
                                "'hop-' + object.metadata.name + '.tail567fe8.ts.net'"):
                     self.assertIn(needle, text)
             else:

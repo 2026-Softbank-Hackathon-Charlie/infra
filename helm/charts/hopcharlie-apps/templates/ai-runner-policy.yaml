@@ -5,8 +5,11 @@ limit what a created Job runs, so without this policy the API could start any
 pod in the namespace: with another component's labels (the console and
 gateway Services select on them and would send it their traffic), another
 ServiceAccount, the namespace's Secrets or any image. This keeps its Jobs to
-the runner: label hopai, the platform ServiceAccount, the runner's images, and
-no Secret, hostPath, projected or claimed volumes or secret env.
+the runner: label hopai, the runner's ServiceAccount, the runner's images, and
+no Secret, hostPath, projected or claimed volumes or secret env. ConfigMap
+volumes are the runner's scripts and an onboarding's input (infra ADR 0082),
+the only ConfigMaps the second policy lets the API create or delete; it may
+delete only the runner's Jobs.
 */ -}}
 {{- if and .Values.platform.serviceAccount .Values.platform.aiRunner.enabled }}
 {{- $sa := printf "system:serviceaccount:%s:%s" .Values.platform.namespace .Values.platform.serviceAccount }}
@@ -37,14 +40,16 @@ spec:
       message: the platform creates AI runner Jobs only in its own namespace
     - expression: "has(object.spec.template.metadata.labels) && object.spec.template.metadata.labels['app.kubernetes.io/component'] == 'hopai'"
       message: an AI runner pod must carry app.kubernetes.io/component=hopai and no other component
-    - expression: {{ printf "has(variables.pod.serviceAccountName) && variables.pod.serviceAccountName == '%s'" .Values.platform.serviceAccount | quote }}
-      message: an AI runner pod runs as the platform ServiceAccount
+    - expression: {{ printf "has(variables.pod.serviceAccountName) && variables.pod.serviceAccountName == '%s'" (required "platform.aiRunner.serviceAccount is required with platform.aiRunner.enabled" .Values.platform.aiRunner.serviceAccount) | quote }}
+      message: an AI runner pod runs as the runner's own ServiceAccount, never the platform's (infra ADR 0082)
     - expression: {{ printf "variables.containers.all(c, %s.exists(p, c.image.startsWith(p)))" $allowed | quote }}
       message: an AI runner pod runs only the runner's images
     - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.secret) && !has(v.hostPath) && !has(v.projected) && !has(v.persistentVolumeClaim))"
       message: an AI runner pod mounts no Secret, hostPath, projected or claimed volume
     - expression: "variables.containers.all(c, !has(c.envFrom) && (!has(c.env) || c.env.all(e, !has(e.valueFrom))))"
       message: an AI runner pod reads no Secret or ConfigMap through env
+    - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.configMap) || v.configMap.name in ['hopcharlie-hopai-fetch', 'hopai-onboarding'] || v.configMap.name.matches('^hopai-onb-[0-9a-f]{12}$'))"
+      message: an AI runner pod mounts only the runner's scripts and an onboarding's input (hopai-onb-<id>)
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -52,5 +57,45 @@ metadata:
   name: hopcharlie-platform-ai-runner
 spec:
   policyName: hopcharlie-platform-ai-runner
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-ai-runner-cleanup
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE, DELETE]
+        resources: [configmaps]
+      - apiGroups: [batch]
+        apiVersions: ["*"]
+        operations: [DELETE]
+        resources: [jobs]
+  matchConditions:
+    - name: platform-service-account
+      expression: {{ printf "request.userInfo.username == '%s'" $sa | quote }}
+  validations:
+    - expression: {{ printf "request.namespace == '%s'" .Values.platform.namespace | quote }}
+      message: the platform changes AI runner objects only in its own namespace
+    - expression: >-
+        request.resource.resource != 'configmaps' ||
+        (request.operation == 'CREATE' ? object.metadata.name : oldObject.metadata.name).matches('^hopai-onb-[0-9a-f]{12}$')
+      message: the platform creates and deletes only an onboarding's hopai input ConfigMap hopai-onb-<id>
+    - expression: >-
+        request.resource.resource != 'jobs' ||
+        (has(oldObject.metadata.labels) && 'hopcharlie.dev/ai-run' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['hopcharlie.dev/ai-run'] == 'true')
+      message: the platform deletes only AI runner Jobs (label hopcharlie.dev/ai-run=true)
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-ai-runner-cleanup
+spec:
+  policyName: hopcharlie-platform-ai-runner-cleanup
   validationActions: [Deny]
 {{- end }}

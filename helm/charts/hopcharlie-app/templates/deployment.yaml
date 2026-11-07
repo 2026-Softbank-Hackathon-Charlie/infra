@@ -9,6 +9,11 @@ metadata:
   name: {{ printf "%s-%s" $.Values.values.app $svc.name }}
   labels:
     {{- include "hopcharlie-app.labels" $ctx | nindent 4 }}
+    {{- if $.Values.values.onboardingCold }}
+    # Down until the cutover starts it (platform ADR 0042): the ApplicationSet
+    # ignores spec.replicas of a Deployment with this label (infra ADR 0082).
+    hopcharlie.dev/onboarding-cold: "true"
+    {{- end }}
   {{- if or $.Values.commit $.Values.deployment }}
   # Not on the pods: a new deployment of the same commit restarts nothing.
   annotations:
@@ -20,7 +25,7 @@ metadata:
     {{- end }}
   {{- end }}
 spec:
-  replicas: {{ $svc.replicas | default 1 }}
+  replicas: {{ if $.Values.values.onboardingCold }}0{{ else if hasKey $svc "replicas" }}{{ $svc.replicas }}{{ else }}1{{ end }}
   revisionHistoryLimit: 3
   {{- if not $svc.port }}
   # A worker has no probe: it counts as available once it has run this long

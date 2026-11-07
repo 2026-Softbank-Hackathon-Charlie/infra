@@ -97,7 +97,9 @@ subjects:
 ---
 # Migrations of apps registered in two environments (ADR 0063). The migration
 # engine reads the CNPG Cluster (precheck) and merge-patches its
-# spec.replica.primary and promotionToken (demote, promote). RBAC cannot name
+# spec.replica.primary and promotionToken (demote, promote), or source from
+# legacy to the peer once an onboarded app's database is promoted (ADR 0082).
+# RBAC cannot name
 # the namespaces of apps registered later, so the role covers every Cluster
 # and the ValidatingAdmissionPolicy below narrows patch to those two fields,
 # and to a namespace the app chart labelled hopcharlie.dev/db-topology=true or
@@ -169,9 +171,20 @@ spec:
       message: the platform may change in spec.postgresql only parameters.archive_mode (on or always), which CNPG switches when a cluster is demoted or promoted
     - expression: >-
         has(oldObject.spec.replica) && has(object.spec.replica) &&
-        object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
-        oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)
-      message: the platform may change only spec.replica.primary and promotionToken
+        ((object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+          oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica) &&
+          (!(has(oldObject.spec.replica.source) && oldObject.spec.replica.source == 'legacy') ||
+           (has(object.spec.replica.primary) && has(oldObject.spec.replica.self) && object.spec.replica.primary == oldObject.spec.replica.self))) ||
+         (has(oldObject.spec.replica.source) && oldObject.spec.replica.source == 'legacy' &&
+          has(oldObject.spec.replica.primary) && has(oldObject.spec.replica.self) &&
+          oldObject.spec.replica.primary == oldObject.spec.replica.self &&
+          has(object.spec.replica.source) &&
+          object.spec.replica.source.startsWith(oldObject.metadata.name + '-') &&
+          has(oldObject.spec.externalClusters) &&
+          oldObject.spec.externalClusters.exists(c, c.name == object.spec.replica.source && c.name != 'legacy' && c.name != oldObject.spec.replica.self) &&
+          object.spec.replica.all(k, k == 'source' || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+          oldObject.spec.replica.all(k, k == 'source' || k in object.spec.replica)))
+      message: the platform may change only spec.replica.primary and promotionToken, or source of a promoted onboarded database from legacy to its peer
     - expression: >-
         (has(object.metadata.labels) ? object.metadata.labels : {}) == (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
         (has(object.metadata.annotations) ? object.metadata.annotations : {}) == (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})

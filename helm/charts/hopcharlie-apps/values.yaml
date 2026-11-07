@@ -58,6 +58,9 @@ platform:
   # those Jobs to the runner: its label, ServiceAccount and images.
   aiRunner:
     enabled: false
+    # The runner's own ServiceAccount (hopcharlie-platform hopai.yaml), whose
+    # AWS role only reads the runner's settings (infra ADR 0082).
+    serviceAccount: hopcharlie-hopai
     # Image name prefixes the runner's containers may use (hopai and awsCli).
     imagePrefixes: []
 

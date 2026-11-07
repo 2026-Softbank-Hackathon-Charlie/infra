@@ -3,6 +3,9 @@ mock_provider "aws" {
   mock_data "aws_subnets" { defaults = { ids = ["subnet-12345678"] } }
   mock_data "aws_ssm_parameter" { defaults = { insecure_value = "ami-12345678" } }
 }
+mock_provider "aws" {
+  alias = "second"
+}
 mock_provider "random" {}
 
 run "app_build_contract" {
