@@ -253,7 +253,7 @@ platform ADR 0016(앱마다 버킷과 그 버킷 전용 키)과 ADR 0019(앱 시
 
 | 리소스 | 내용 |
 | --- | --- |
-| `app-storage.tf` `aws_iam_role_policy.platform_app_storage` | 플랫폼 pod 역할이 platform의 aws 저장소 드라이버로 이 계정의 `hopcharlie-eks-*` 버킷을 만들고 비우고 지우며, `/hopcharlie-apps/` 경로의 IAM 사용자를 boundary를 붙일 때만 만들고 그 사용자의 인라인 정책과 액세스 키를 관리한다 |
+| `app-storage.tf` `aws_iam_role_policy.platform_app_storage` | 플랫폼 pod 역할이 platform의 aws 저장소 드라이버로 이 계정의 `hopcharlie-eks-*` 버킷을 만들고 비우고 지우며, `/hopcharlie-apps/` 경로의 IAM 사용자를 boundary를 붙일 때만 만들고 그 사용자의 인라인 정책과 액세스 키를 관리한다. 레지던시 검사가 버킷의 위치와 복제 규칙을 읽는다 |
 | `app-storage.tf` `aws_iam_policy.app_boundary` | 그 사용자의 permissions boundary `hopcharlie-app-boundary`. 이 계정의 `hopcharlie-eks-*` 버킷에서 객체 사용과 목록만 허용한다 |
 | `app-storage.tf` `aws_ssm_parameter.app_secrets_key` | 앱 시크릿 암호화 키. 아래 표 |
 | `host/envs.yaml`의 `eks` | `sealedSecretsCert`와 `storage`. 버킷 접두사, IAM 경로, boundary ARN은 `main.tf`의 `templatefile`이 `app-storage.tf`의 값으로 채운다 |

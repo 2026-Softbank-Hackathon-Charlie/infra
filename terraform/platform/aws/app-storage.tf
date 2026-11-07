@@ -141,6 +141,15 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Action   = "iam:GetUser"
         Resource = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:user/hopcharlie-app-*"
       },
+      # The residency gate measures the copy's buckets before every file
+      # migration (platform ADR 0021, 0048): where the bucket is and which
+      # buckets it replicates into. Read only.
+      {
+        Effect    = "Allow"
+        Action    = ["s3:GetBucketLocation", "s3:GetReplicationConfiguration"]
+        Resource  = local.app_bucket_arn
+        Condition = local.app_own_buckets
+      },
     ]
   })
 }
