@@ -163,6 +163,18 @@ data:
           if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
           if [ -n "$ts_id" ]; then printf 'PLATFORM_TAILSCALE_OAUTH_CLIENT_ID=%s\nPLATFORM_TAILSCALE_OAUTH_CLIENT_SECRET=%s\n' "$ts_id" "$ts_secret"; fi
         } > /config/api.env
+        if [ "${ONPREM_REGISTRATION:-0}" = 1 ]; then
+          # Dedicated OAuth credential; never fall back to compose onboarding.
+          registration_oauth="$(get onprem-registration-oauth)"
+          registration_flat="$(printf '%s' "$registration_oauth" | tr -d ' \t\n')"
+          registration_id="$(printf '%s' "$registration_flat" | sed -n 's/.*"clientId":"\([A-Za-z0-9_-]\{1,200\}\)".*/\1/p')"
+          registration_secret="$(printf '%s' "$registration_flat" | sed -n 's/.*"clientSecret":"\([A-Za-z0-9_-]\{1,200\}\)".*/\1/p')"
+          if [ -z "$registration_id" ] || [ -z "$registration_secret" ]; then
+            echo "invalid dedicated onprem registration OAuth configuration" >&2
+            exit 1
+          fi
+          printf 'PLATFORM_ONPREM_TAILSCALE_OAUTH_CLIENT_ID=%s\nPLATFORM_ONPREM_TAILSCALE_OAUTH_CLIENT_SECRET=%s\n' "$registration_id" "$registration_secret" >> /config/api.env
+        fi
         ;;
       *)
         echo "unknown FETCH=$FETCH" >&2

@@ -37,4 +37,9 @@ jobs:
       - name: Verify clean-copy and isolated command contract
         run: python3 scripts/test-platform-terraform.py
       - name: Format, backend-disabled initialization and validation of host, state and DNS roots
-        run: python3 scripts/check-platform-terraform.py
+        # Show an actionable diff for changes prepared without a local Terraform binary.
+        env:
+          TF_IN_AUTOMATION: 'true'
+        run: |
+          terraform fmt -check -diff terraform/platform/aws/onprem-registration.tf terraform/platform/aws/tests/onprem-registration.tftest.hcl
+          python3 scripts/check-platform-terraform.py

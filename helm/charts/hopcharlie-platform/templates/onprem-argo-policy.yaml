@@ -1,0 +1,75 @@
+{{- $cfg := .Values.api.onpremRegistration | default dict }}
+{{- if $cfg.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: {name: hopcharlie-onprem-argo}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [applicationsets, appprojects]
+  matchConditions:
+    - name: api-only
+      expression: request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api'
+  variables:
+    - name: obj
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+    - name: labels
+      expression: "has(variables.obj.metadata.labels) ? variables.obj.metadata.labels : {}"
+    - name: owner
+      expression: "'hopcharlie.dev/onprem-enrollment' in variables.labels ? variables.labels['hopcharlie.dev/onprem-enrollment'] : ''"
+    - name: environment
+      expression: "'hopcharlie.dev/env' in variables.labels ? variables.labels['hopcharlie.dev/env'] : ''"
+    - name: name
+      expression: "variables.obj.metadata.name"
+    - name: clusterUID
+      expression: "'hopcharlie.dev/onprem-cluster-uid' in variables.labels ? variables.labels['hopcharlie.dev/onprem-cluster-uid'] : ''"
+    - name: legacyRefresh
+      expression: "request.operation == 'UPDATE' && request.resource.resource == 'applicationsets' && variables.name == 'hopcharlie-apps' && object.spec == oldObject.spec"
+  validations:
+    - expression: >-
+        variables.legacyRefresh || (request.namespace == 'argocd' && variables.owner.matches('^enr_[a-f0-9]{24}$') &&
+        variables.name == 'hop-onprem-' + variables.owner.substring(4) &&
+        variables.clusterUID.matches('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$') &&
+        variables.environment.matches('^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$') && !(variables.environment in ['eks','gke']))
+      message: Argo resources must belong to the exact registration, cluster UID and environment
+    - expression: >-
+        variables.legacyRefresh || request.operation != 'UPDATE' || (has(oldObject.metadata.labels) &&
+        oldObject.metadata.labels['hopcharlie.dev/onprem-enrollment'] == variables.owner &&
+        oldObject.metadata.labels['hopcharlie.dev/onprem-cluster-uid'] == variables.clusterUID &&
+        oldObject.metadata.labels['hopcharlie.dev/env'] == variables.environment)
+      message: registration ownership, cluster UID and environment are immutable
+    - expression: >-
+        variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'appprojects' ||
+        object.spec == {
+          'sourceRepos':['https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git'],
+          'destinations':[
+            {'name':variables.name,'namespace':'*'}, {'name':variables.name,'namespace':'!kube-*'},
+            {'name':variables.name,'namespace':'!argocd'}, {'name':variables.name,'namespace':'!charlie-system'},
+            {'name':variables.name,'namespace':'!default'}, {'name':variables.name,'namespace':'!hopcharlie-*'}],
+          'clusterResourceWhitelist':[{'group':'','kind':'Namespace'}],
+          'namespaceResourceBlacklist':[{'group':'rbac.authorization.k8s.io','kind':'*'},{'group':'','kind':'Secret'}]}
+      message: project permits only fixed repos, its registered cluster and ordinary application namespaces; RBAC and Secret sync stay denied
+    - expression: >-
+        variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'applicationsets' ||
+        (size(object.spec) == 4 && object.spec.goTemplate == true && object.spec.goTemplateOptions == ['missingkey=error'] &&
+        object.spec.generators == [{'git':{'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','revision':'main','files':[{'path':'apps/*/' + variables.environment + '.yaml'}],'requeueAfterSeconds':30}}] &&
+        size(object.spec.template) == 2 && size(object.spec.template.metadata) == 2 &&
+        object.spec.template.metadata.name == '{{ "{{ .namespace }}" }}-' + variables.environment &&
+        object.spec.template.metadata.labels == {'hopcharlie.dev/app':'{{ "{{ .app }}" }}','hopcharlie.dev/instance':'{{ "{{ .namespace }}" }}','hopcharlie.dev/env':variables.environment,'hopcharlie.dev/onprem-enrollment':variables.owner} &&
+        size(object.spec.template.spec) == 4 && object.spec.template.spec.project == variables.name &&
+        object.spec.template.spec.destination == {'name':variables.name,'namespace':'{{ "{{ .namespace }}" }}'} &&
+        object.spec.template.spec.sources == [
+          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ "{{ .namespace }}" }}','valueFiles':['$gitops/{{ "{{ .path.path }}/{{ .path.filename }}" }}'],'valuesObject':{'profile':{{ toJson $cfg.profile }}}}},
+          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','targetRevision':'main','ref':'gitops'}] &&
+        object.spec.template.spec.syncPolicy == {'automated':{'prune':true,'selfHeal':true},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}})
+      message: application set has one fixed environment generator, approved chart and exact server profile with restricted PodSecurity
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: {name: hopcharlie-onprem-argo}
+spec: {policyName: hopcharlie-onprem-argo, validationActions: [Deny]}
+{{- end }}

@@ -57,6 +57,15 @@ run "bucket_permissions_are_limited_to_app_buckets" {
     error_message = "No impersonation, service account keys or project IAM changes."
   }
 }
+
+run "api_identity_is_explicit_opt_in" {
+  command = plan
+  variables { onprem_registration_enabled = true }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.platform.attribute_condition == "assertion.sub in [\"system:serviceaccount:charlie-platform:hopcharlie-platform\",\"system:serviceaccount:charlie-platform:hopcharlie-platform-api\"]" && length(google_service_account_iam_member.platform_api) == 1 && endswith(google_service_account_iam_member.platform_api[0].member, "/subject/system:serviceaccount:charlie-platform:hopcharlie-platform-api")
+    error_message = "API-only identity must keep GCS federation without adding wildcard subjects or changing storage permissions."
+  }
+}
 run "public_adc_uses_rotating_projected_jwt_and_impersonation" {
   command = plan
   assert {

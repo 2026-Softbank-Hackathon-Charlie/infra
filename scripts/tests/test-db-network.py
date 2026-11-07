@@ -572,7 +572,7 @@ class ManagementAppRoutesTests(unittest.TestCase):
                              {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}})
             self.assertEqual(spec['matchConditions'], [{
                 'name': 'platform-service-account',
-                'expression': f"request.userInfo.username == '{PLATFORM_SA}'"}])
+                'expression': f"request.userInfo.username == '{PLATFORM_SA}' || (request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api' && !{'object' if op == 'create' else 'oldObject'}.metadata.name.startsWith('hop-k3s-'))"}])
             text = '\n'.join(item['expression'] for item in spec.get('variables', []) + spec['validations'])
             if op == 'create':
                 self.assertNotIn('oldObject', text)

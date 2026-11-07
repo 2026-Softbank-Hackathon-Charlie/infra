@@ -1,0 +1,42 @@
+{{- if (.Values.api.onpremRegistration | default dict).enabled }}
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: hopcharlie-onprem-api-egress-management
+spec:
+  statefulSet:
+    pod:
+      labels: {hopcharlie.dev/onprem-api-proxy: egress}
+      tailscaleContainer:
+        resources:
+          requests: {cpu: 50m, memory: 128Mi}
+          limits: {memory: 512Mi}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: hopcharlie-onprem-api-proxy, namespace: hopcharlie-db-network}
+spec:
+  podSelector: {matchLabels: {hopcharlie.dev/onprem-api-proxy: egress}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: charlie-platform}}
+          podSelector: {matchLabels: {app.kubernetes.io/part-of: hopcharlie, app.kubernetes.io/component: api}}
+      ports: [{protocol: TCP, port: 6443}]
+    - from: [{ipBlock: {cidr: 0.0.0.0/0}}]
+      ports: [{protocol: UDP, port: 41641}]
+  egress:
+    - ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}, {protocol: TCP, port: 443}, {protocol: UDP}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: hopcharlie-onprem-api-client}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/part-of: hopcharlie, app.kubernetes.io/component: api}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: hopcharlie-db-network}}
+          podSelector: {matchLabels: {hopcharlie.dev/onprem-api-proxy: egress}}
+      ports: [{protocol: TCP, port: 6443}]
+{{- end }}

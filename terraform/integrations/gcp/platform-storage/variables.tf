@@ -1,3 +1,9 @@
+variable "onprem_registration_enabled" {
+  type        = bool
+  default     = false
+  description = "Trust the dedicated API-only Kubernetes subject before enabling onprem registration. Requires separate GCP plan approval."
+}
+
 variable "project_id" {
   type        = string
   description = "Existing Google Cloud project that holds the GKE app buckets."

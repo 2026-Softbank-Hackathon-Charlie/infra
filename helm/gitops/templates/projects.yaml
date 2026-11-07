@@ -37,6 +37,12 @@ spec:
     {{- end }}
     - server: {{ $target.endpoint | quote }}
       namespace: {{ if eq $purpose "management" }}charlie-platform{{ else }}charlie-apps{{ end }}
+    {{- if and (eq $purpose "management") (( $.Values.onpremRegistration | default dict).enabled) }}
+    - server: {{ $target.endpoint | quote }}
+      namespace: argocd
+    - server: {{ $target.endpoint | quote }}
+      namespace: hopcharlie-db-network
+    {{- end }}
   clusterResourceWhitelist:
     - {group: "", kind: Namespace}
     - {group: storage.k8s.io, kind: StorageClass}
@@ -48,6 +54,11 @@ spec:
     - {group: apiregistration.k8s.io, kind: APIService}
     - {group: networking.k8s.io, kind: IngressClass}
     - {group: elbv2.k8s.aws, kind: IngressClassParams}
+    {{- if and (eq $purpose "management") (( $.Values.onpremRegistration | default dict).enabled) }}
+    - {group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicy}
+    - {group: admissionregistration.k8s.io, kind: ValidatingAdmissionPolicyBinding}
+    - {group: tailscale.com, kind: ProxyClass}
+    {{- end }}
   namespaceResourceWhitelist:
     - {group: "*", kind: "*"}
 {{- if eq $purpose "management" }}

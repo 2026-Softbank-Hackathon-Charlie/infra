@@ -1,3 +1,7 @@
+{{- define "hopcharlie.apiServiceAccount" -}}
+{{- if (.Values.api.onpremRegistration | default dict).enabled -}}hopcharlie-platform-api{{- else -}}hopcharlie-platform{{- end -}}
+{{- end -}}
+
 {{- define "hopcharlie.labels" -}}
 app.kubernetes.io/part-of: hopcharlie
 app.kubernetes.io/component: {{ . }}
@@ -32,6 +36,9 @@ the "settings" volume. Call with (dict "root" $ "fetch" "api|gateway|postgres").
     - {name: PREFIX, value: {{ .root.Values.parameterPrefix | quote }}}
     - {name: FETCH, value: {{ .fetch | quote }}}
     {{- if eq .fetch "api" }}
+    {{- if (.root.Values.api.onpremRegistration | default dict).enabled }}
+    - {name: ONPREM_REGISTRATION, value: "1"}
+    {{- end }}
     # Only the API reads the GitHub App secrets; other pods keep their spec.
     - {name: GITHUB_APP_ID, value: {{ .root.Values.github.appId | quote }}}
     {{- if .root.Values.api.aiobs.enabled }}

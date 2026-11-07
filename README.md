@@ -1042,3 +1042,15 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [helm/gitops/templates/observability-external.yaml](helm/gitops/templates/observability-external.yaml) | GKE 관측 코드·준비 설정·검증 |
 | [scripts/tests/test-gke-observability.py](scripts/tests/test-gke-observability.py) | GKE 관측 코드·준비 설정·검증 |
 | [clusters/gcp-dev-workload/observability-namespace.yaml](clusters/gcp-dev-workload/observability-namespace.yaml) | 노드 로그·지표 agent용 namespace의 명시적 실행 준비 |
+
+### Onprem registration preparation (disabled)
+
+- [.github/workflows/onprem-admission.yml](.github/workflows/onprem-admission.yml)
+- [scripts/test-onprem-admission.py](scripts/test-onprem-admission.py)
+- [scripts/tests/test-onprem-registration.py](scripts/tests/test-onprem-registration.py)
+- [terraform/platform/aws/onprem-registration.tf](terraform/platform/aws/onprem-registration.tf)
+- [terraform/platform/aws/tests/onprem-registration.tftest.hcl](terraform/platform/aws/tests/onprem-registration.tftest.hcl)
+- [helm/charts/hopcharlie-platform/templates/onprem-registration.yaml](helm/charts/hopcharlie-platform/templates/onprem-registration.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml](helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-network.yaml](helm/charts/hopcharlie-platform/templates/onprem-network.yaml)
+- [docs/adr/0084-isolate-onprem-registration-capabilities.md](docs/adr/0084-isolate-onprem-registration-capabilities.md)

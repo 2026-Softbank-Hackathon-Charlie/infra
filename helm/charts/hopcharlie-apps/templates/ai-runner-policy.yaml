@@ -29,7 +29,7 @@ spec:
         resources: [jobs]
   matchConditions:
     - name: platform-service-account
-      expression: {{ printf "request.userInfo.username == '%s'" $sa | quote }}
+      expression: {{ printf "request.userInfo.username in ['%s', 'system:serviceaccount:charlie-platform:hopcharlie-platform-api']" $sa | quote }}
   variables:
     - name: pod
       expression: "object.spec.template.spec"
@@ -77,7 +77,7 @@ spec:
         resources: [jobs]
   matchConditions:
     - name: platform-service-account
-      expression: {{ printf "request.userInfo.username == '%s'" $sa | quote }}
+      expression: {{ printf "request.userInfo.username in ['%s', 'system:serviceaccount:charlie-platform:hopcharlie-platform-api']" $sa | quote }}
   validations:
     - expression: {{ printf "request.namespace == '%s'" .Values.platform.namespace | quote }}
       message: the platform changes AI runner objects only in its own namespace

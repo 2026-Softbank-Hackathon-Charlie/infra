@@ -10,6 +10,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts/check-platform-terraform.py'
 ASSETS = {
+    'onprem-registration.tf', 'tests/onprem-registration.tftest.hcl',
     'backend.tf', 'main.tf', 'eks.tf', 'app-build.tf', 'tests/app-build.tftest.hcl', 'image-publish.tf', 'tests/image-publish.tftest.hcl', 'app-storage.tf', 'tests/app-storage.tftest.hcl', 'onboarding.tf', 'tests/onboarding.tftest.hcl', 'onboarding/inspect.sh', 'onboarding/connect.sh', 'onboarding/disconnect.sh', 'outputs.tf', 'variables.tf', 'versions.tf',
     '.terraform.lock.hcl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
