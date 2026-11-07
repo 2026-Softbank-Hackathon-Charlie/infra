@@ -31,6 +31,18 @@ def render(enabled, profile=None):
 
 
 class RegistrationTests(unittest.TestCase):
+    def test_management_project_permission_preparation_is_opt_in(self):
+        for enabled in (False, True):
+            result=subprocess.run([os.environ.get('HELM','helm'),'template','root',str(ROOT/'helm/gitops'),'-n','argocd','--kube-version','1.35.0','-f',str(ROOT/'helm/gitops/ci/targets-values.yaml'),'--set','onpremRegistration.enabled='+str(enabled).lower()],capture_output=True,text=True,encoding='utf-8')
+            self.assertEqual(result.returncode,0,result.stderr)
+            docs=[d for d in yaml.safe_load_all(result.stdout) if d]
+            project=next(d for d in docs if d['kind']=='AppProject' and d['metadata']['name']=='charlie-addons-management')['spec']
+            namespaces={d['namespace'] for d in project['destinations']}
+            kinds={(d['group'],d['kind']) for d in project['clusterResourceWhitelist']}
+            self.assertEqual({'argocd','hopcharlie-db-network'} <= namespaces,enabled)
+            for pair in [('admissionregistration.k8s.io','ValidatingAdmissionPolicy'),('admissionregistration.k8s.io','ValidatingAdmissionPolicyBinding'),('tailscale.com','ProxyClass')]:
+                self.assertEqual(pair in kinds,enabled)
+
     def test_api_identity_is_opt_in(self):
         for enabled in (False, True):
             docs = render(enabled)

@@ -113,19 +113,25 @@ spec:
         (variables.annotations['hopcharlie.dev/registration-version'] == oldObject.metadata.annotations['hopcharlie.dev/registration-version'] && object.data['config'] == oldObject.data['config'])) &&
         timestamp(variables.annotations['hopcharlie.dev/token-expires-at']) >= timestamp(oldObject.metadata.annotations['hopcharlie.dev/token-expires-at']) &&
         object.data['server'] == oldObject.data['server'] &&
-        string(base64.decode(string(object.data['config']))).find('"caData":"[A-Za-z0-9+/=]+"') == string(base64.decode(string(oldObject.data['config']))).find('"caData":"[A-Za-z0-9+/=]+"'))
+        string(object.data['config']).find('"caData":"[A-Za-z0-9+/=]+"') == string(oldObject.data['config']).find('"caData":"[A-Za-z0-9+/=]+"'))
       message: rotation must advance registration version, preserve CA and endpoint, and never reduce expiry; equal version requires identical token config
+    - expression: "request.operation == 'DELETE' || object.type == 'Opaque'"
+      message: registration credential must have Opaque Secret type
+    - expression: "request.operation == 'DELETE' || (has(object.data) && size(object.data) == 4)"
+      message: registration credential requires exactly four data fields
+    - expression: "request.operation == 'DELETE' || string(object.data['name']) == object.metadata.name"
+      messageExpression: "'credential name mismatch; value type=' + (type(object.data['name']) == bytes ? 'bytes' : type(object.data['name']) == string ? 'string' : 'other') + ', length=' + string(size(object.data['name']))"
+    - expression: "request.operation == 'DELETE' || string(object.data['clusterResources']) == 'true'"
+      message: credential clusterResources must be true
     - expression: >-
-        request.operation == 'DELETE' || object.data.all(k, type(object.data[k]) == string)
-      message: Secret data must use the Kubernetes admission base64 string representation
+        request.operation == 'DELETE' || string(object.data['server']) ==
+        'https://hop-k3s-' + variables.owner.substring(4) + '.hopcharlie-db-network.svc.cluster.local:6443'
+      message: credential endpoint must be the exact owned API Service
     - expression: >-
-        request.operation == 'DELETE' || (object.type == 'Opaque' &&
-        has(object.data) && size(object.data) == 4 &&
-        string(base64.decode(string(object.data['name']))) == object.metadata.name && string(base64.decode(string(object.data['clusterResources']))) == 'true' &&
-        string(base64.decode(string(object.data['server']))) == 'https://hop-k3s-' + variables.owner.substring(4) + '.hopcharlie-db-network.svc.cluster.local:6443' &&
-        size(base64.decode(string(object.data['config']))) <= 65536 &&
-        string(base64.decode(string(object.data['config']))).matches('^[{]"bearerToken":"[A-Za-z0-9_.-]+","tlsClientConfig":[{]"caData":"[A-Za-z0-9+/=]+","insecure":false,"serverName":"kubernetes[.]default[.]svc"[}][}]$'))
-      message: credential data must contain only the owned API endpoint and verified TLS config
+        request.operation == 'DELETE' || (size(object.data['config']) <= 65536 &&
+        string(object.data['config']).matches('^[{]"bearerToken":"[A-Za-z0-9_.-]+","tlsClientConfig":[{]"caData":"[A-Za-z0-9+/=]+","insecure":false,"serverName":"kubernetes[.]default[.]svc"[}][}]$'))
+      message: credential config must contain only the token and verified TLS fields
+
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
