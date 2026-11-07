@@ -1,4 +1,11 @@
-mock_provider "google" {}
+mock_provider "google" {
+  mock_resource "google_container_node_pool" {
+    override_during = plan
+    defaults = {
+      version = "1.36.4-gke.2046003"
+    }
+  }
+}
 variables {
   project_id                     = "charlie-test-project"
   node_service_account_email     = "charlie-gke-nodes@charlie-test-project.iam.gserviceaccount.com"
@@ -25,6 +32,17 @@ run "private_nodes_restricted_api_and_storage" {
   assert {
     condition     = !google_compute_network.workload.auto_create_subnetworks && google_compute_subnetwork.workload.private_ip_google_access && google_compute_router_nat.egress.source_subnetwork_ip_ranges_to_nat == "LIST_OF_SUBNETWORKS"
     error_message = "Use a custom VPC and scope private-node egress NAT to the workload subnet."
+  }
+}
+run "control_plane_patch_preserves_node_pool" {
+  command = plan
+  assert {
+    condition     = google_container_cluster.workload.min_master_version == "1.36.4-gke.2377000" && google_container_cluster.workload.release_channel[0].channel == "REGULAR"
+    error_message = "Request the reviewed control-plane patch while retaining the Regular channel."
+  }
+  assert {
+    condition     = google_container_node_pool.workload.version == "1.36.4-gke.2046003" && google_container_node_pool.workload.node_count == 3 && google_container_node_pool.workload.management[0].auto_upgrade && google_container_node_pool.workload.management[0].auto_repair
+    error_message = "Leave the node version unmanaged and preserve three nodes with automatic upgrade and repair."
   }
 }
 run "allow_explicit_single_node_override" {
