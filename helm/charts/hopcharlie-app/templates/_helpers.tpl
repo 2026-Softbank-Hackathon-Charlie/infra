@@ -324,6 +324,6 @@ each empty when the platform left it out.
 - name: OTEL_K8S_POD_UID
   valueFrom: {fieldRef: {fieldPath: metadata.uid}}
 - name: OTEL_RESOURCE_ATTRIBUTES
-  value: {{ printf "service.version=%s,k8s.cluster.name=%s,k8s.namespace.name=%s,k8s.pod.uid=$(OTEL_K8S_POD_UID),cloud.provider=%s,cloud.region=%s,deployment.environment.name=%s" (.root.Values.commit | default "unknown") $o.clusterName .root.Release.Namespace $o.cloudProvider $o.region (.root.Values.env | default "unknown") | quote }}
+  value: {{ printf "service.version=%s,k8s.cluster.name=%s,k8s.namespace.name=%s,k8s.pod.uid=$(OTEL_K8S_POD_UID),cloud.provider=%s,cloud.region=%s,deployment.environment.name=%s,hopcharlie.environment.name=%s" (.root.Values.commit | default "unknown") $o.clusterName .root.Release.Namespace $o.cloudProvider $o.region (.root.Values.env | default "unknown") (.root.Values.env | default "unknown") | quote }}
 {{- end -}}
 {{- end -}}

@@ -1,5 +1,13 @@
 # Charlie Infra
 
+온프레미스 관측 준비:
+
+- [계약](clusters/onprem-dev-workload/observability-contract.json)
+- [로컬 renderer](scripts/render-onprem-observability.py)
+- [실제 차트 회귀](scripts/tests/test-onprem-observability.py)
+- [운영 준비 절차](docs/operations/onprem-observability.md)
+- [ADR 0092](docs/adr/0092-onprem-observability-preparation.md)
+
 ## 팀 공용 Headlamp
 
 `https://headlamp.hopcharlie.dev`의 한 화면에서 관리 EKS·워크로드 EKS·GKE를 전환합니다. EKS는 기존 개인 Cognito 로그인을 사용하며 GKE는 Google 로그인과 자동 토큰 갱신을 사용합니다. GKE 권한은 개인 IAM/RBAC를 따릅니다.
