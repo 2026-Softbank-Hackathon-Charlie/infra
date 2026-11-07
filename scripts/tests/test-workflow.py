@@ -19,6 +19,15 @@ class WorkflowGate(unittest.TestCase):
     def setUp(self):
         self.workflow = yaml.safe_load((ROOT / '.github/workflows/terraform-check.yml').read_text())
 
+    def test_feature_push_does_not_duplicate_the_pull_request_validation(self):
+        for filename in ('terraform-check.yml', 'terraform-gcp.yml'):
+            with self.subTest(workflow=filename):
+                workflow = yaml.safe_load((ROOT / '.github/workflows' / filename).read_text(encoding='utf-8'))
+                triggers = workflow.get('on', workflow.get(True))
+                self.assertIn('pull_request', triggers)
+                self.assertEqual(triggers['push'], {'branches': ['main']})
+                self.assertIn('workflow_dispatch', triggers)
+
     def test_event_matrix(self):
         job = self.workflow['jobs']['deploy']
         expression = job['if'].replace('needs.check.outputs.aws_changed', 'aws_changed').replace('github.event_name', 'event').replace('github.ref', 'ref').replace('inputs.action', 'action').replace('&&', 'and').replace('||', 'or')
