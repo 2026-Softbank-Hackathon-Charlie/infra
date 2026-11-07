@@ -78,6 +78,8 @@ values:
   #   dbTopology:
   #     primary: gke   # the env whose database is born primary
   #     peer: eks      # the env that is born a replica (same value in both files)
+  #     peerPresent: false  # only in the primary's file of an app with one env so far
+  #                         # (infra ADR 0074): no tailnet objects until the peer is added
 
 profile:
   # The Service of the public service, which the traffic gateway reaches.
