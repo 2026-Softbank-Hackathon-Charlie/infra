@@ -30,10 +30,15 @@ API의 신규 권한은 다음과 같다.
 
 새 장비 profile은 기존 onprem profile에서 출발하되 기존 노트북 전용 DB·S3·복제 경로는 복사하지 않는다. 연결 확인은 Kubernetes와 Hello World까지만 뜻한다. DB·스토리지·Sealed Secrets 기능은 별도 준비와 실제 검증 전까지 사용 가능하다고 표시하지 않는다.
 
+등록 profile은 내부 ClusterIP를 사용하고 기존 노트북의 Tailscale 웹 ProxyClass·태그·MinIO 송신 허용을 복사하지 않는다. AppSet은 해당 등록 ID와 클러스터 UID를 profile에 주입하고 앱 차트가 Namespace 라벨로 전달한다. 원격 admission이 자기 소유 Namespace만 허용하는 platform 설치 계약과 맞춘다. 기존 앱 Pod의 `automountServiceAccountToken: false`도 유지한다.
+
+Argo credential 갱신은 양수 registration-version과 UTC token-expires-at을 검사한다. 새 버전은 이전 버전보다 커야 하고 같은 버전은 같은 config를 재게시할 때만 허용한다. 만료가 줄거나 endpoint·CA가 바뀌면 거부한다. 만료일과 version의 잘못된 형식도 거부하며 실제 API 시험으로 검증한다.
+
 ## 영향과 후속 작업
 
 - 운영 적용은 승인 후 Terraform 계획 검토, 전용 OAuth와 Tailnet ACL 준비, 기존 admission 정책 갱신, 관리 AppProject 허용 범위 준비, 마지막으로 API feature 활성화 순서다. 현재 변경은 이 작업을 실행하지 않는다.
 - 관리 AppProject의 argocd·db-network 목적지와 VAP·ProxyClass 허용도 별도 기본 꺼짐 설정이다. 선행 설정이 없으면 배포를 활성화하지 않는다.
+- API 계정 분리 전 GCP storage WIF도 새 Kubernetes subject를 명시적으로 허용해야 기존 GCS/rclone 기능이 유지된다. 이 GCP 변경 역시 기본 꺼짐이며 별도 계획 검토와 승인 대상이다.
 - 실제 kind API와 공식 Argo CRD의 허용·거부 검증을 CI로 수행한다. 이 시험은 Tailscale 연결이나 실제 노트북 배포 성공을 증명하지 않는다.
 - IAM Terraform mock 검증은 정책 문서만 검사한다. 배포 후 실제 두 Pod Identity로 각 조회 동작과 부모 경로 거부를 확인해야 운영 경계가 입증된다.
 - platform의 Secret 발행·폐기는 GET 없이 동작해야 한다. 알려진 이름의 CREATE/UPDATE/DELETE와 기존 소유권 admission 검증을 사용한다.

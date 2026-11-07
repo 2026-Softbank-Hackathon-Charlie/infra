@@ -114,7 +114,7 @@ def main():
         # kubectl wait treats that as an accessor error instead of polling.
         for _ in range(60):
             current=json.loads(kube(['get','crd',obj['metadata']['name'],'-o','json']).stdout)
-            if any(c.get('type')=='Established' and c.get('status')=='True' for c in current.get('status',{}).get('conditions',[])):
+            if any(c.get('type')=='Established' and c.get('status')=='True' for c in ((current.get('status') or {}).get('conditions') or [])):
                 break
             time.sleep(1)
         else:

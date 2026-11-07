@@ -167,11 +167,7 @@
         "publicService": {
           "type": "ClusterIP",
           "port": 80,
-          "annotations": {
-            "tailscale.com/expose": "true",
-            "tailscale.com/tags": "tag:hop-app-onprem",
-            "tailscale.com/proxy-class": "hopcharlie-app-web-ingress-onprem"
-          }
+          "annotations": {}
         },
         "ingress": {
           "enabled": false
@@ -201,44 +197,8 @@
         },
         "networkPolicy": {
           "enabled": true,
-          "gatewayFrom": [
-            {
-              "namespaceSelector": {
-                "matchLabels": {
-                  "kubernetes.io/metadata.name": "hopcharlie-db-network"
-                }
-              },
-              "podSelector": {
-                "matchLabels": {
-                  "hopcharlie.dev/web-proxy": "ingress"
-                }
-              }
-            }
-          ],
-          "extraEgress": [
-            {
-              "to": [
-                {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "minio"
-                    }
-                  },
-                  "podSelector": {
-                    "matchLabels": {
-                      "app": "minio"
-                    }
-                  }
-                }
-              ],
-              "ports": [
-                {
-                  "protocol": "TCP",
-                  "port": 9000
-                }
-              ]
-            }
-          ]
+          "gatewayFrom": [],
+          "extraEgress": []
         },
         "observability": {
           "enabled": false,
@@ -246,8 +206,8 @@
           "endpoint": "",
           "caBundle": "",
           "clusterName": "",
-          "cloudProvider": "aws",
-          "region": "ap-northeast-2"
+          "cloudProvider": "onprem",
+          "region": ""
         },
         "podSecurity": "restricted"
       },
