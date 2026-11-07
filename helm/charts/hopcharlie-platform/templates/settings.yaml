@@ -64,7 +64,6 @@ data:
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
-        get host/apps.yaml > /config/apps.yaml
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"
