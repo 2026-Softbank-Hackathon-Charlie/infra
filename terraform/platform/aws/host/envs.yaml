@@ -44,3 +44,16 @@ environments:
     region: laptop
     kubeContext: onprem-hopcharlie
     sealedSecretsCert: /config/sealed-secrets/onprem.pem
+    # The laptop's MinIO (infra ADR 0081), reached from the management EKS
+    # through the Tailscale egress Service minio-onprem (port 80 -> 9000).
+    # Driver minio is only in the platform's minio image flavor (platform ADR
+    # 0016/0045): pin that image before this block reaches SSM, or the API
+    # refuses PLATFORM_ENVS_FILE and stops. The admin key is the MinIO root
+    # key in SSM rclone-env (ONPREM_MINIO_ADMIN_*).
+    storage:
+      driver: minio
+      bucketPrefix: hopcharlie-op-
+      region: us-east-1
+      endpoint: http://minio-onprem.hopcharlie-db-network.svc.cluster.local
+      adminAccessKeyEnv: ONPREM_MINIO_ADMIN_ACCESS_KEY
+      adminSecretKeyEnv: ONPREM_MINIO_ADMIN_SECRET_KEY

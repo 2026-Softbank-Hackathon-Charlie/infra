@@ -212,9 +212,10 @@
           "topologyStorageSize": "4Gi"
         },
         "s3": {
-          "endpoint": "https://s3.ap-northeast-2.amazonaws.com",
-          "region": "ap-northeast-2",
-          "bucketPrefix": "hopcharlie-eks-",
+          "endpoint": "http://minio.minio.svc.cluster.local:9000",
+          "region": "us-east-1",
+          "pathStyle": true,
+          "bucketPrefix": "hopcharlie-op-",
           "credentialsSecret": "app-s3"
         },
         "quota": {
@@ -253,6 +254,30 @@
                   "hopcharlie.dev/web-proxy": "ingress"
                 }
               }
+            }
+          ],
+          "extraEgress": [
+            {
+              "to": [
+                {
+                  "namespaceSelector": {
+                    "matchLabels": {
+                      "kubernetes.io/metadata.name": "minio"
+                    }
+                  },
+                  "podSelector": {
+                    "matchLabels": {
+                      "app": "minio"
+                    }
+                  }
+                }
+              ],
+              "ports": [
+                {
+                  "protocol": "TCP",
+                  "port": 9000
+                }
+              ]
             }
           ]
         },
