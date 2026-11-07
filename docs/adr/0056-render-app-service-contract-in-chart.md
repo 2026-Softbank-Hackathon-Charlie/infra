@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-05
 - 상태: 제안
+- 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). GKE 사본 `charlie-apps/moimroom-gcp`와 그 DB는 지웠다.
 - 관련 ADR: [0023](0023-deploy-github-apps-with-applicationset.md), [0050](0050-let-migrations-own-app-database-topology.md), platform ADR 0024(서비스 계약과 숫자의 근거)
 
 ## 배경과 제약

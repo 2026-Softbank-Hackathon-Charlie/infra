@@ -25,10 +25,10 @@ variable "service_account_id" {
 }
 variable "clusters" {
   type        = list(string)
-  default     = ["charlie-apps/moimroom-db-gke"]
+  default     = []
   description = "CNPG Clusters (namespace/name) whose Kubernetes service account, named after the Cluster, may act as the backup account."
   validation {
-    condition     = length(var.clusters) > 0 && alltrue([for c in var.clusters : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?/[a-z0-9]([a-z0-9-]*[a-z0-9])?$", c))])
+    condition     = alltrue([for c in var.clusters : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?/[a-z0-9]([a-z0-9-]*[a-z0-9])?$", c))])
     error_message = "Name each Cluster exactly as namespace/name; wildcards are not allowed."
   }
 }

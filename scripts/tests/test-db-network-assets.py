@@ -134,12 +134,10 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         catalog = yaml.safe_load((ROOT / 'terraform/platform/aws/host/apps.yaml').read_text(encoding='utf-8'))
         app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
         profiles = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text(encoding='utf-8'))
-        gke = yaml.safe_load((ROOT / 'clusters/gcp-dev-workload/values/moimroom-gcp.yaml').read_text(encoding='utf-8'))
         eks_namespace = app['environments']['eks'].get('namespace', app['namespace'])
         eks_prefix = profiles['environments']['eks']['profile']['s3']['bucketPrefix']
         expected = {
             'eks': f's3:{eks_prefix}{eks_namespace}',
-            'gke': 'gcs:' + gke['s3']['bucket'],
         }
         for environment, bucket in expected.items():
             with self.subTest(environment=environment):
@@ -159,7 +157,6 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
         expected = {
             'eks': ('moimroom', 'moimroom-db', 'EKS_MOIMROOM_PGPASSWORD', 's3:hopcharlie-eks-moimroom'),
-            'gke': ('charlie-apps', 'moimroom-db-gke', 'GKE_MOIMROOM_PGPASSWORD', 'gcs:charlie-414068132732-moimroom-gcp'),
         }
         for peer, (namespace, cluster, password_env, bucket) in expected.items():
             with self.subTest(peer=peer):

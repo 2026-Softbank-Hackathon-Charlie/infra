@@ -1,5 +1,10 @@
 # Remote ingress FQDNs observed on reciprocal workload Services, 2026-11-06:
 # GKE db-eks points to EKS; EKS db-gke points to GKE.
+# WARNING (2026-11-07): the GKE moimroom and these db-eks (GKE) and db-gke
+# routes were removed; hop-db-gke-moimroom no longer exists. Do not helm
+# upgrade the management db-network release with this file without first
+# removing the gke peer: it would recreate db-gke pointing at a device that
+# no longer exists. The values stay because tests read them.
 # Disabled profile only; manual Helm installation requires separate approval.
 enabled: false
 clusterId: management

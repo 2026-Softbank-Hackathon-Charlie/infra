@@ -3,10 +3,12 @@
 관련: [ADR0048](../adr/0048-connect-cloud-databases-with-scoped-migration-access.md), [infra #47](https://github.com/2026-Softbank-Hackathon-Charlie/infra/issues/47).
 이 문서는 **설치 전 코드 준비**다. 아래 실행은 클러스터·tailnet·Secret 변경 승인을 받은 운영자만 수행한다. 기본 예제는 모두 꺼져 있으며 웹앱 라우터와 기존 DB를 수정하지 않는다.
 
+> 2026-11-07: 손으로 배포했던 GKE moimroom(`charlie-apps/moimroom-gcp`, DB `moimroom-db-gke`와 `moimroom-gcp-db`, 버킷 `charlie-414068132732-moimroom-gcp`, Tailscale DB 경로 `db-eks`(GKE)와 `db-gke`(workload EKS, 관리 EKS))를 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). 아래에 나오는 GKE moimroom 이름과 주소는 그때의 기록이다.
+
 ## 1. 실행 전 확인
 
 1. 관리 EKS·workload EKS·workload GKE의 **운영자** kubeconfig/context를 준비한다. 기존 API kubeconfig는 `charlie-system/hopcharlie-platform`이며 operator 설치·권한 부여에는 사용하지 않는다. `kubectl config use-context`로 사용자 기본 컨텍스트를 바꾸지 않는다.
-2. source namespace/Cluster와 **새 target standby**를 확정한다. 예제의 `moimroom/moimroom-db`(EKS)와 `charlie-apps/moimroom-db-gke`(GKE, 보호 네임스페이스라 [ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)의 예외 쌍)는 catalog 기준이다. 기존 `charlie-apps/moimroom-gcp-db`·PoC primary를 target으로 덮어쓰지 않는다. 같은 CNPG Cluster의 다른 DB도 물리 복제 영향을 받는다.
+2. source namespace/Cluster와 **새 target standby**를 확정한다. 예제의 `moimroom/moimroom-db`(EKS)는 catalog 기준이다. GKE의 `charlie-apps/moimroom-db-gke`([ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)의 예외 쌍)는 2026-11-07에 지웠고 catalog와 예외에서도 뺐으므로 대상으로 쓰지 않는다. 기존 `charlie-apps/moimroom-gcp-db`·PoC primary를 target으로 덮어쓰지 않는다. 같은 CNPG Cluster의 다른 DB도 물리 복제 영향을 받는다.
 3. DB/API namespace의 기존 default-deny·DNS·Kubernetes API·CNPG·백업 허용 정책을 확인한다. 새 차트의 Egress allow만 먼저 설치하면 기존 정책이 없는 클라이언트를 격리할 수 있다. 노드 여유도 확인한다(standalone 합계 9 Pods, proxy 요청 각각 50m/128Mi, operator 각각 50m/128Mi; 측정값 아님). 고정 버전의 proxy/init 기본값은 **privileged**다. 전용 namespace의 Pod Security 허용을 별도 검토·승인하고, 정책이 막으면 앱 namespace의 보안을 낮추거나 우회하지 않는다.
 4. source·target의 양방향 `externalClusters`·replica topology, replication CA/client cert/key와 source 앱 비밀번호를 운영자가 준비한다. 엔진은 Secret을 복사하지 않는다. target은 `pg_is_in_recovery()=true`여야 하고 Plan의 `target.manifest`는 **생략**한다.
 5. 앱의 Argo self-heal이 `/spec/replica`를 되돌리지 않도록 합의된 동기화 제어·GitOps 반영/재개 절차를 준비한다. HTTP gateway 외부 writer(배치·직접 SQL 등)는 운영자가 중지한다. 현재 엔진 fence는 gateway 쓰기 hold이며 SQL 쓰기 주체 전체를 차단하지 않는다. 이전 도중 앱 업그레이드는 하지 않는다.
@@ -19,25 +21,7 @@ SQL 계정은 DB CONNECT, schema USAGE, 검증할 전체 행/컬럼 SELECT와 �
 
 ### 기존 GKE moimroom 앱 설정 재현
 
-`charlie-apps/moimroom-gcp`는 수동 적용한 Deployment이며 Helm release나 Argo CD 관리 대상이 아니다. 이미지 게시 workflow는 배포하지 않는다. [GKE profile](../../clusters/gcp-dev-workload/values/moimroom-gcp.yaml)은 이전 후 설정(`replicaCount: 1`, `seedSpaces: false`, `DATABASE_URL`은 기존 `moimroom-gke-dburl/uri` Secret 참조)과 현재 이미지·공개 S3 설정·기존 Secret 참조·resources를 함께 보존한다. Secret 값은 넣지 않는다. DB 대상 결정은 [ADR0053의 후속 작업](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/72)을 따른다.
-
-운영자가 준비한 moimroom 저장소의 `ca3c8f8e852ab6b57bd6390bcc7b5c69bee0ddb8` checkout을 사용한다. 다음 명령은 클러스터에 접근하지 않고 Deployment 하나만 파일로 출력한다. chart나 이미지를 바꿀 때는 profile과 전체 Deployment diff를 다시 검토한다.
-
-```bash
-mkdir -p .generated
-make render-gke-moimroom MOIMROOM_CHART=/path/to/moimroom/deploy/helm/moimroom > .generated/gke-moimroom.yaml
-```
-
-전체 chart의 Service template에는 GKE Internal LoadBalancer annotation 지원이 없다. 전체 chart를 적용하거나 `helm upgrade --install`로 인수하지 않는다. 기존 `moimroom-gcp`·`moimroom-gcp-internal` Service, CNPG Cluster, PVC, Secret은 이 경로에 포함하지 않는다. 렌더링은 향후 수동 배포의 입력이며 merge만으로 운영 리소스가 바뀌지 않는다.
-
-실제 조회·변경 승인을 별도로 받은 운영자만 명시적인 kubeconfig/context로 Deployment diff를 검토하고 적용한다. template은 `metadata.namespace`를 생략하므로 **apply에도 `--namespace charlie-apps`가 필수**다. Secret 갱신은 별도 작업이며, DB 연결이 바뀌었다면 이 profile의 참조와 승인된 Secret 대상이 같은지 먼저 확인한다.
-
-```bash
-kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps diff -f .generated/gke-moimroom.yaml
-# 위 diff의 Deployment 변경 승인을 받은 뒤에만 실행한다.
-kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps apply -f .generated/gke-moimroom.yaml
-kubectl --kubeconfig "$OperatorKubeconfig" --context "$Context" --namespace charlie-apps rollout status deployment/moimroom-gcp --timeout=5m
-```
+2026-11-07에 GKE moimroom Deployment를 지우면서 이 절의 렌더 profile(`clusters/gcp-dev-workload/values/moimroom-gcp.yaml`)과 `make render-gke-moimroom`도 지웠다.
 
 ## 2. Tailnet 정책과 operator 인증
 
@@ -110,7 +94,7 @@ Tailscale proxy의 TCP443·DNS·가변 목적지 UDP는 control/DERP/direct tran
 
 권한 helper는 기본 render-only이며 파일·kubeconfig를 읽거나 외부 호출을 하지 않는다.
 
-`charlie-apps` 같은 인프라 보호 네임스페이스는 helper가 거부한다. 예외는 코드의 `PROTECTED_EXCEPTIONS`에 정확히 일치하는 `(네임스페이스, CNPG Cluster)` 한 쌍뿐이며 지금은 GKE 운영 DB `charlie-apps/moimroom-db-gke`만 있다([ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)). 같은 네임스페이스의 다른 Cluster(예: 낡은 `moimroom-gcp-db`)는 계속 거부한다.
+`charlie-apps` 같은 인프라 보호 네임스페이스는 helper가 거부한다. [ADR0060](../adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)의 예외 쌍 `charlie-apps/moimroom-db-gke`는 그 Cluster를 지운 2026-11-07에 코드에서 뺐다. 지금은 예외가 없다.
 
 ```powershell
 python scripts/db-migration-access.py render --kubeconfig $OperatorKubeconfig --context $Context `

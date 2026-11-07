@@ -189,55 +189,16 @@ class MigrationAccessTests(unittest.TestCase):
         self.kube.add({'apiVersion': 'postgresql.cnpg.io/v1', 'kind': 'Cluster',
                        'metadata': {'name': cluster, 'namespace': namespace}})
 
-    def test_only_the_exact_live_moimroom_pair_may_use_a_protected_namespace(self):
-        # infra ADR 0060: charlie-apps holds the live moimroom database, nothing else there is allowed.
-        pair = {'namespace': 'charlie-apps', 'cluster': 'moimroom-db-gke'}
+    def test_the_removed_gke_moimroom_db_is_refused_like_any_protected_namespace(self):
+        # The ADR 0060 exception was removed with the manual GKE moimroom on 2026-11-07.
         self.seed_live_moimroom_db()
         for command in ('render', 'grant', 'revoke'):
-            with self.subTest(allowed=command):
-                code, _, error = self.invoke(command, **pair)
-                self.assertEqual(code, 0, error)
-        # The Role stays scoped to that one Cluster and to get/patch/migrate (ADR 0063).
-        self.kube = FakeKubectl()
-        self.seed_live_moimroom_db()
-        self.invoke('grant', **pair)
-        role = json.loads(self.kube.mutations('create')[0][1])
-        self.assertEqual(role['metadata']['namespace'], 'charlie-apps')
-        self.assertEqual(role['rules'], [{'apiGroups': ['postgresql.cnpg.io'], 'resources': ['clusters'],
-                                          'resourceNames': ['moimroom-db-gke'], 'verbs': ['get', 'patch', 'migrate']}])
-
-    def test_the_exception_does_not_widen_to_other_clusters_or_protected_namespaces(self):
-        refused = [
-            ('charlie-apps', 'moimroom-gcp-db'),   # the old independent database stays refused
-            ('charlie-apps', 'postgres-example'),
-            ('charlie-apps', 'moimroom-db'),
-            ('charlie-system', 'moimroom-db-gke'),
-            ('argocd', 'moimroom-db-gke'),
-            ('kube-system', 'moimroom-db-gke'),
-        ]
-        for namespace, cluster in refused:
-            self.seed_live_moimroom_db(namespace, cluster)
-        for namespace, cluster in refused:
-            for command in ('render', 'grant', 'revoke'):
-                with self.subTest(namespace=namespace, cluster=cluster, command=command):
-                    self.kube.calls.clear()
-                    code, _, error = self.invoke(command, namespace=namespace, cluster=cluster)
-                    self.assertEqual(code, 1)
-                    self.assertIn('reserved for infrastructure', error)
-                    self.assertEqual(self.kube.calls, [])
-
-    def test_the_exception_still_requires_the_cluster_to_exist(self):
-        # The exception only passes the protected-namespace check; the existence preflight is unchanged.
-        self.kube.add({'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'charlie-apps'}})
-        code, _, _ = self.invoke('grant', namespace='charlie-apps', cluster='moimroom-db-gke')
-        self.assertEqual(code, 1)
-        self.assertEqual(self.kube.mutations(), [])
-
-    def test_the_refusal_names_the_allowed_pairs(self):
-        code, _, error = self.invoke('render', namespace='charlie-apps', cluster='moimroom-gcp-db')
-        self.assertEqual(code, 1)
-        self.assertIn('reserved for infrastructure', error)
-        self.assertIn('charlie-apps/moimroom-db-gke', error)
+            with self.subTest(command=command):
+                self.kube.calls.clear()
+                code, _, error = self.invoke(command, namespace='charlie-apps', cluster='moimroom-db-gke')
+                self.assertEqual(code, 1)
+                self.assertIn('reserved for infrastructure', error)
+                self.assertEqual(self.kube.calls, [])
 
     def test_the_same_cluster_name_is_unchanged_outside_protected_namespaces(self):
         self.seed_live_moimroom_db('moimroom', 'moimroom-db-gke')
