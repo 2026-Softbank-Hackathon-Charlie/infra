@@ -28,7 +28,7 @@ run "app_storage_contract" {
   }
   assert {
     condition = (
-      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 10 &&
+      length(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement) == 11 &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Action == "s3:CreateBucket" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Resource == "arn:aws:s3:::hopcharlie-eks-*" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[0].Condition == { StringEquals = { "s3:LocationConstraint" = "ap-northeast-2" } } &&
@@ -53,9 +53,10 @@ run "app_storage_contract" {
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[8].Resource == "arn:aws:iam::123456789012:user/hopcharlie-apps/*" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Action == "iam:GetUser" &&
       jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Resource == "arn:aws:iam::123456789012:user/hopcharlie-app-*" &&
-      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Condition)
+      !can(jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[9].Condition) &&
+      jsondecode(aws_iam_role_policy.platform_app_storage.policy).Statement[10] == { Effect = "Allow", Action = ["s3:GetBucketLocation", "s3:GetReplicationConfiguration"], Resource = "arn:aws:s3:::hopcharlie-eks-*", Condition = { StringEquals = { "s3:ResourceAccount" = "123456789012" } } }
     )
-    error_message = "The platform may create users and set their inline policy only under /hopcharlie-apps/ with the boundary, and may only read users by the path-less name pattern."
+    error_message = "The platform may create users and set their inline policy only under /hopcharlie-apps/ with the boundary, and may only read users by the path-less name pattern. The residency gate may read the location and replication rules of this account's hopcharlie-eks-* buckets."
   }
   assert {
     condition = length(setintersection(

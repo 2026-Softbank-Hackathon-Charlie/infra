@@ -110,15 +110,6 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Resource  = "${local.app_bucket_arn}/*"
         Condition = local.app_own_buckets
       },
-      # The residency gate measures the copy's buckets before every file
-      # migration (platform ADR 0021, 0048): where the bucket is and which
-      # buckets it replicates into. Read only.
-      {
-        Effect    = "Allow"
-        Action    = ["s3:GetBucketLocation", "s3:GetReplicationConfiguration"]
-        Resource  = local.app_bucket_arn
-        Condition = local.app_own_buckets
-      },
       # Backup buckets hopcharlie-eks-<app>---pg (platform ADR 0025) share the
       # prefix; the platform never reads or writes their objects. It may delete
       # them when it deletes the app (platform PR #110).
@@ -149,6 +140,15 @@ resource "aws_iam_role_policy" "platform_app_storage" {
         Effect   = "Allow"
         Action   = "iam:GetUser"
         Resource = "arn:aws:iam::${data.aws_caller_identity.me.account_id}:user/hopcharlie-app-*"
+      },
+      # The residency gate measures the copy's buckets before every file
+      # migration (platform ADR 0021, 0048): where the bucket is and which
+      # buckets it replicates into. Read only.
+      {
+        Effect    = "Allow"
+        Action    = ["s3:GetBucketLocation", "s3:GetReplicationConfiguration"]
+        Resource  = local.app_bucket_arn
+        Condition = local.app_own_buckets
       },
     ]
   })
