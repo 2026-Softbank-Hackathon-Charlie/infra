@@ -583,6 +583,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-platform/templates/postgres.yaml](helm/charts/hopcharlie-platform/templates/postgres.yaml) | 플랫폼 PostgreSQL StatefulSet과 Service |
 | [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
+| [docs/adr/0091-opt-in-same-node-gateway-pod-failover.md](docs/adr/0091-opt-in-same-node-gateway-pod-failover.md) | 단일 상태 소유자 기반 동일 노드 파드 복구 준비·운영 승인 경계 (제안) |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
 | [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |

@@ -10,7 +10,9 @@
   },
   "gateway": {
     "backends": "",
-    "initialBackend": ""
+    "initialBackend": "",
+    "replicas": 1,
+    "exclusiveState": false
   },
   "api": {
     "corsOrigins": "",

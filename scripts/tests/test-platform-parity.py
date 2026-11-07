@@ -61,5 +61,42 @@ class ParityActivation(unittest.TestCase):
             self.assertNotEqual(render(values, check=False).returncode, 0)
 
 
+class GatewayPodFailover(unittest.TestCase):
+    def setUp(self):
+        self.values = json.loads(VALUES.read_text(encoding="utf-8"))
+
+    def test_default_keeps_one_gateway_and_existing_pvc(self):
+        docs = render(self.values)
+        deployment = docs[("Deployment", "hopcharlie-gateway")]
+        self.assertEqual(deployment["spec"]["replicas"], 1)
+        self.assertNotIn("-exclusive-state", deployment["spec"]["template"]["spec"]["containers"][0]["args"][0])
+        self.assertEqual(docs[("PersistentVolumeClaim", "hopcharlie-gateway-data")]["spec"]["accessModes"], ["ReadWriteOnce"])
+
+    def test_two_pods_require_lock_owner_and_same_node_affinity(self):
+        self.values["gateway"].update(replicas=2, exclusiveState=True)
+        docs = render(self.values)
+        deployment = docs[("Deployment", "hopcharlie-gateway")]
+        self.assertEqual(deployment["spec"]["replicas"], 2)
+        # Recreate prevents an old, non-exclusive binary and a new lock owner
+        # from serving simultaneously during first activation or downgrade.
+        self.assertEqual(deployment["spec"]["strategy"], {"type": "Recreate"})
+        pod = deployment["spec"]["template"]["spec"]
+        self.assertIn("-exclusive-state", pod["containers"][0]["args"][0])
+        affinity = pod["affinity"]["podAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+        self.assertEqual(affinity, [{"labelSelector": {"matchLabels": {"app.kubernetes.io/part-of": "hopcharlie", "app.kubernetes.io/component": "gateway"}}, "topologyKey": "kubernetes.io/hostname"}])
+        self.assertGreaterEqual(pod["terminationGracePeriodSeconds"], 50)
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertNotIn("livenessProbe", pod["containers"][0])
+        # Existing service and PVC are retained; no new node, LB or credential.
+        self.assertEqual(set(docs), set(render(json.loads(VALUES.read_text(encoding="utf-8")))))
+
+    def test_unsafe_replica_modes_fail_render(self):
+        for count, exclusive in ((2, False), (3, True), (0, True), (1.5, True)):
+            with self.subTest(count=count, exclusive=exclusive):
+                values = copy.deepcopy(self.values)
+                values["gateway"].update(replicas=count, exclusiveState=exclusive)
+                self.assertNotEqual(render(values, check=False).returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
