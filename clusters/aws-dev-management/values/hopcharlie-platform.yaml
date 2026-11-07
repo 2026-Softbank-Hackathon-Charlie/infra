@@ -153,6 +153,12 @@
           }
         ]
       }
+    },
+    "aiobs": {
+      "enabled": true,
+      "url": "http://clickstack-clickhouse-clickhouse-headless.observability.svc:8123",
+      "user": "app",
+      "table": "default.otel_logs"
     }
   },
   "gcp": {

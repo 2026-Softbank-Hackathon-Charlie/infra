@@ -30,6 +30,12 @@
     "parity": {
       "enabled": false,
       "config": {}
+    },
+    "aiobs": {
+      "enabled": false,
+      "url": "",
+      "user": "",
+      "table": ""
     }
   },
   "appDomain": "",

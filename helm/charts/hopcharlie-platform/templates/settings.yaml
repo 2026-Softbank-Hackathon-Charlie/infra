@@ -25,6 +25,7 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
+    #                   aiobs-clickhouse-password (with AIOBS_CLICKHOUSE),
     #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
     #                   public certificate), and with GITHUB_APP_ID
@@ -61,6 +62,16 @@ data:
         secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
+        # The password of the read-only ClickHouse user GET /v1/ai-activity uses
+        # (scripts/put-clickhouse-read-password.sh, infra ADR 0077). A missing
+        # parameter gives an empty file, so the API starts and the endpoint
+        # answers 502 until the parameter exists.
+        if [ -n "${AIOBS_CLICKHOUSE:-}" ]; then
+          ch_pw="$(aws ssm get-parameters --with-decryption --names "$PREFIX/clickhouse-read-password" \
+            --query 'Parameters[].Value' --output text | tr -d '\r')"
+          if [ "$ch_pw" = "None" ]; then ch_pw=""; fi
+          printf '%s' "$ch_pw" > /config/aiobs-clickhouse-password
+        fi
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
