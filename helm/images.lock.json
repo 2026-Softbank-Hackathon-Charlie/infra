@@ -48,6 +48,6 @@
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/apps/hyperdx-prometheus-auth:2.39.1-prom-auth-91eaba5cf7d5": "sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4": "sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:a89634a-minio": "sha256:480198186c6061d261a2e99acd8f0f19f711ecaa5d66568cf8921e90b2859b2b",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:cf9b57a": "sha256:e03f2c1934dbaef3a61da0691c8ee427eebf57c3cec16e4367f8ac3a85846743"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:eb9cc64": "sha256:c91920ebe96ce7e8b4ac39fb03a8eb78731c10d3f8d76f9e38639bd5eb31d70c"
   }
 }
