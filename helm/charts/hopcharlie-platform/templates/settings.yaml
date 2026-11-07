@@ -34,7 +34,8 @@ data:
     #                   github-app.pem and the webhook secret in api.env.
     #                   api.env also carries the console administrators
     #                   (platform-admins: name:bcrypt-hash,...) and, once it
-    #                   exists, the app secrets key (app-secrets-key).
+    #                   exists, the app secrets key (app-secrets-key) and
+    #                   the written record tokens (written-record-tokens).
     set -euo pipefail
     umask 077
 
@@ -64,6 +65,13 @@ data:
         secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
+        # The stream:token pairs apps append written records with (platform
+        # ADR 0041, infra ADR 0079). Optional like the app secrets key:
+        # without the parameter the API starts and refuses every
+        # POST /v1/written-records, as before.
+        written_tokens="$(aws ssm get-parameters --with-decryption --names "$PREFIX/written-record-tokens" \
+          --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$written_tokens" = "None" ]; then written_tokens=""; fi
         # The password of the read-only ClickHouse user GET /v1/ai-activity uses
         # (scripts/put-clickhouse-read-password.sh, infra ADR 0077). A missing
         # parameter gives an empty file, so the API starts and the endpoint
@@ -127,6 +135,7 @@ data:
           printf 'PLATFORM_TOKENS=%s\n' "$tokens"
           printf 'PLATFORM_ADMINS=%s\n' "$admins"
           if [ -n "$secrets_key" ]; then printf 'PLATFORM_SECRETS_KEY=%s\n' "$secrets_key"; fi
+          if [ -n "$written_tokens" ]; then printf 'PLATFORM_WRITTEN_RECORD_TOKENS=%s\n' "$written_tokens"; fi
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
           if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
