@@ -60,11 +60,11 @@ spec:
       message: registration ownership, cluster UID and environment are immutable
     - expression: >-
         variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'appprojects' ||
-        object.spec == {{ include "hopcharlie.registrationCEL" $project }}
+        dyn(object.spec) == {{ include "hopcharlie.registrationCEL" $project }}
       message: project permits only fixed repos, its registered cluster and ordinary application namespaces; RBAC and Secret sync stay denied
     - expression: >-
         variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'applicationsets' ||
-        object.spec == {{ include "hopcharlie.registrationCEL" $set }}
+        dyn(object.spec) == {{ include "hopcharlie.registrationCEL" $set }}
       message: application set has one fixed environment generator, approved chart and exact server profile with restricted PodSecurity
 ---
 apiVersion: admissionregistration.k8s.io/v1
