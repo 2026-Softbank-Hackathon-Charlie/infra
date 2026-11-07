@@ -1,7 +1,7 @@
 # 0068. 고정 HyperDX의 Prometheus 인증 전달을 한정 수정한다
 
 - 날짜: 2026-11-07
-- 상태: 제안
+- 상태: 채택 — 사용자 이미지 게시·한정 배포 승인, ECR 게시 완료, 사용자 PR 머지 후 운영 반영 예정
 - 관련 ADR: [0061](0061-private-otlp-ingress-for-aws-workload.md)
 
 ## 배경과 제약
@@ -27,3 +27,5 @@ compiled 파일에 종속되므로 원본 SHA·교체 횟수·문법이 일치�
 - [패치 및 원격 검증 준비](../../images/hyperdx-prometheus-auth/README.md)
 
 원격 검증 결과: CodeBuild42019641-7966-41f1-b967-30c2bb57a48b에서 patched17pass/0fail, 원본5pass/12fail을 확인했다. 로컬컨테이너실행 없이 원격 image build와 실제 compiled route를 검증했다. 게시·배포는 미실행이다.
+
+게시 결과와 확정 digest는 [패치 안내](../../images/hyperdx-prometheus-auth/README.md#게시-완료배포-대기)에 기록했다. 관리 values만 image를 바꾸며 기존 default upstream base와 데이터 구성 요소는 유지한다.

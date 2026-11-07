@@ -6,5 +6,13 @@
     "mongodb": "clickstack-mongodb-auth",
     "sources": "clickstack-ui-config",
     "otlpTLS": "clickstack-otlp-tls"
+  },
+  "hyperdx": {
+    "deployment": {
+      "image": {
+        "repository": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/apps/hyperdx-prometheus-auth",
+        "tag": "2.39.1-prom-auth-91eaba5cf7d5@sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85"
+      }
+    }
   }
 }

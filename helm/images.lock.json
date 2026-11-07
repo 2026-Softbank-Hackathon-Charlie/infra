@@ -46,6 +46,7 @@
     "docker.io/grafana/alloy:v1.21.3": "sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
     "docker.io/nginxinc/nginx-unprivileged:stable-alpine": "sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:85c82bb": "sha256:43303986cb5f9a47a682e41cbd171bfe5af7621017fad2922eeb1a12959eb618",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:b917180": "sha256:2a80b68ca10385f6e4de679ae881050fad2e4931d02a5625ce9adb9a00b753a2"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:b917180": "sha256:2a80b68ca10385f6e4de679ae881050fad2e4931d02a5625ce9adb9a00b753a2",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/apps/hyperdx-prometheus-auth:2.39.1-prom-auth-91eaba5cf7d5": "sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85"
   }
 }
