@@ -36,6 +36,9 @@ SQL 계정은 DB CONNECT, schema USAGE, 검증할 전체 행/컬럼 SELECT와 �
 | management | `tag:hop-db-operator-management` | `tag:hop-db-client-management` |
 | eks | `tag:hop-db-operator-eks` | `tag:hop-db-client-eks` |
 | gke | `tag:hop-db-operator-gke` | `tag:hop-db-client-gke` |
+| onprem | `tag:hop-db-operator-onprem` | `tag:hop-db-client-onprem` |
+
+onprem(노트북 k3s)은 정적 DB가 없는 platformApps 전용 프로필이다([ADR 0072](../adr/0072-add-onprem-as-paired-database-environment.md)). 앱 DB ingress 태그는 `tag:hop-db-onprem`이고, db-network는 [onprem.yaml](../../helm/db-network/onprem.yaml)로 설치한다. onprem 앱과 짝이 되는 클러스터의 client 태그가 `tag:hop-db-onprem:5432`에 닿아야 하고, `tag:hop-db-client-onprem`은 짝의 DB 태그 5432에 닿아야 한다.
 
 각 클러스터의 `hopcharlie-db-network` namespace에 `operator-oauth` Secret(`client_id`, `client_secret`)을 사전 생성한다. 값은 Terraform·Helm values·명령행 인자·평문 파일·채팅에 넣지 않는다. 계정 소유자 터미널의 다음 PowerShell 예시는 입력을 메모리에 보관하고 JSON을 kubectl stdin으로만 전달한다. `$OperatorKubeconfig`, `$Context`는 승인한 운영자 경로/컨텍스트로 먼저 지정한다.
 

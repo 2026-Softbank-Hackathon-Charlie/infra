@@ -20,6 +20,9 @@ tailscale.com/parent-resource-type: svc
     - ipBlock: {cidr: 0.0.0.0/0}
   ports:
     - {protocol: TCP, port: 443}
+    {{- with .Values.kubeApiServerPort }}{{ if ne (int .) 443 }}
+    - {protocol: TCP, port: {{ int . }}}
+    {{- end }}{{ end }}
 # GKE NodeLocal DNSCache answers the kube-dns ClusterIP from a hostNetwork pod,
 # which the kube-dns podSelector above never matches (ADR 0052).
 - ports:

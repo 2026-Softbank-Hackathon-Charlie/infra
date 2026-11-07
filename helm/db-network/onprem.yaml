@@ -1,0 +1,17 @@
+# Laptop k3s (onprem) profile, infra ADR 0072. No static moimroom database
+# here: only the shared objects for platform apps paired with onprem
+# (ProxyClasses hopcharlie-app-db-<ingress|egress>-onprem and their
+# NetworkPolicies). Install after the operator (operator-values.yaml with
+# hostname hop-db-operator-onprem and tags tag:hop-db-operator-onprem /
+# tag:hop-db-client-onprem) and its CRDs exist, with --set enabled=true.
+enabled: false
+clusterId: onprem
+ingress:
+  tag: tag:hop-db-onprem
+egress:
+  tag: tag:hop-db-client-onprem
+  peers: {}
+platformApps:
+  enabled: true
+# k3s serves the Kubernetes API on 6443; the operator and proxies need it.
+kubeApiServerPort: 6443

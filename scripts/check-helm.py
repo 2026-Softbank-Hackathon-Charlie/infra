@@ -358,7 +358,7 @@ def main():
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
         # Born-paired app databases (ADR 0063) are on in the management values after
         # rollout steps 1-4; the chart renders the two settings only when set.
-        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local,onprem=db-onprem-{instance}.hopcharlie-db-network.svc.cluster.local"
         assert env.get("PLATFORM_APP_DB_TOPOLOGY") == "1" and env.get("PLATFORM_APP_DB_HOST_TEMPLATES") == hosts, env
         off_values = work / "platform-app-db-topology-off.json"
         off_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": False, "hostTemplates": "", "route": {"tailnet": "", "proxyClass": "", "tag": ""}}}}))

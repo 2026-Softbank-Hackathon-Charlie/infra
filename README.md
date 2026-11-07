@@ -618,6 +618,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
+| [clusters/onprem-dev-workload/hopcharlie-platform-access.yaml](clusters/onprem-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 onprem(노트북 WSL k3s)에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(GKE와 같은 규칙) |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
@@ -908,6 +909,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
 - [helm/db-network/management.yaml](helm/db-network/management.yaml)
 - [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
+- [helm/db-network/onprem.yaml](helm/db-network/onprem.yaml)
 - [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
 - [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
 - [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
@@ -984,6 +986,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
 - [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
 - [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
+- [docs/adr/0072-add-onprem-as-paired-database-environment.md](docs/adr/0072-add-onprem-as-paired-database-environment.md)
 
 - [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
 
