@@ -184,7 +184,12 @@
       "profile": {
         "publicService": {
           "type": "ClusterIP",
-          "port": 80
+          "port": 80,
+          "annotations": {
+            "tailscale.com/expose": "true",
+            "tailscale.com/tags": "tag:hop-app-onprem",
+            "tailscale.com/proxy-class": "hopcharlie-app-web-ingress-onprem"
+          }
         },
         "ingress": {
           "enabled": false
@@ -236,7 +241,20 @@
         },
         "networkPolicy": {
           "enabled": true,
-          "gatewayFrom": []
+          "gatewayFrom": [
+            {
+              "namespaceSelector": {
+                "matchLabels": {
+                  "kubernetes.io/metadata.name": "hopcharlie-db-network"
+                }
+              },
+              "podSelector": {
+                "matchLabels": {
+                  "hopcharlie.dev/web-proxy": "ingress"
+                }
+              }
+            }
+          ]
         },
         "dbNetwork": {
           "enabled": true,
