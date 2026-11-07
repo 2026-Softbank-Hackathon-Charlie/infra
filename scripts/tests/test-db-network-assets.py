@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Offline contracts shared by the DB network examples, ACLs and app guardrails."""
 import importlib.util
+import copy
 import json
+import os
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 import yaml
@@ -13,6 +17,61 @@ NAMESPACE = 'hopcharlie-db-network'
 
 
 class DatabaseNetworkAssetsTests(unittest.TestCase):
+    @staticmethod
+    def render_app(fixture='stateful', environment='onprem', edit=None):
+        chart = ROOT / 'helm/charts/hopcharlie-app'
+        values = yaml.safe_load((chart / f'ci/{fixture}-values.yaml').read_text(encoding='utf-8'))
+        profiles = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text(encoding='utf-8'))
+        values['profile'] = copy.deepcopy(profiles['environments'][environment]['profile'])
+        values['env'] = environment
+        if edit:
+            edit(values)
+        with tempfile.TemporaryDirectory(prefix='cnpg-api-egress-render-') as directory:
+            file = Path(directory) / 'values.json'
+            file.write_text(json.dumps(values), encoding='utf-8')
+            result = subprocess.run([os.environ.get('HELM', 'helm'), 'template', values['namespace'], str(chart),
+                                     '--namespace', values['namespace'], '-f', str(file)], capture_output=True, text=True, encoding='utf-8')
+        return result
+
+    def test_onprem_cnpg_api_backend_egress_is_database_only(self):
+        result = self.render_app()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+        policy = next(d for d in docs if d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'hopcharlie-cnpg-api')
+        self.assertEqual(policy['spec'], {
+            'podSelector': {'matchLabels': {'cnpg.io/cluster': 'moimroom-db'}},
+            'policyTypes': ['Egress'],
+            'egress': [{'to': [{'ipBlock': {'cidr': '172.17.124.166/32'}}], 'ports': [{'protocol': 'TCP', 'port': 6443}]}],
+        })
+        # No instanceRole/podRole selector: CNPG pgbasebackup Jobs must match.
+        namespace = next(d for d in docs if d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'hopcharlie-app')
+        self.assertFalse(any(port.get('port') == 6443 for rule in namespace['spec']['egress'] for port in rule.get('ports', [])))
+
+    def test_api_backend_egress_is_absent_without_postgres_or_opt_in(self):
+        cases = [('stateless', 'onprem', None), ('stateful', 'eks', None), ('stateful', 'gke', None),
+                 ('stateful', 'onprem', lambda v: v['profile']['networkPolicy'].update(cnpgApiServerEgress=[])),
+                 ('stateful', 'onprem', lambda v: v['profile']['networkPolicy'].update(enabled=False))]
+        for fixture, environment, edit in cases:
+            with self.subTest(fixture=fixture, environment=environment, edit=edit):
+                result = self.render_app(fixture, environment, edit)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+                self.assertFalse(any(d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'hopcharlie-cnpg-api' for d in docs))
+
+    def test_api_backend_egress_profile_is_explicit_and_schema_checked(self):
+        def custom(v):
+            v['profile']['networkPolicy']['cnpgApiServerEgress'] = [{'cidr': '10.20.0.5/32', 'port': 16443}]
+        result = self.render_app(edit=custom)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        policy = next(d for d in yaml.safe_load_all(result.stdout) if d and d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'hopcharlie-cnpg-api')
+        self.assertEqual(policy['spec']['egress'], [{'to': [{'ipBlock': {'cidr': '10.20.0.5/32'}}], 'ports': [{'protocol': 'TCP', 'port': 16443}]}])
+        for bad in [{'cidr': '172.17.124.166/32'}, {'cidr': 'any-host', 'port': 6443},
+                    {'cidr': '172.17.124.166/32', 'port': 0}, {'cidr': '172.17.124.166/32', 'port': 65536},
+                    {'cidr': '172.17.124.166/32', 'port': 6443, 'podSelector': {}}]:
+            with self.subTest(bad=bad):
+                result = self.render_app(edit=lambda v: v['profile']['networkPolicy'].update(cnpgApiServerEgress=[bad]))
+                self.assertNotEqual(result.returncode, 0, 'unsafe/ambiguous API egress profile rendered')
+
     def test_operator_credentials_are_external(self):
         values = yaml.safe_load((ASSETS / 'operator-values.yaml').read_text(encoding='utf-8'))
         self.assertEqual(values['fullnameOverride'], 'operator')
@@ -160,6 +219,9 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
             'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}},
             'podSelector': {'matchLabels': {'hopcharlie.dev/web-proxy': 'ingress'}},
         }])
+        self.assertEqual(profile['networkPolicy']['cnpgApiServerEgress'], [
+            {'cidr': '172.17.124.166/32', 'port': 6443},
+        ])
         backends = dict(t.split('=', 1) for t in platform['deploy']['backendTemplates'].split(','))
         self.assertEqual(backends['onprem'], f'http://app-onprem-{{instance}}.{NAMESPACE}.svc.cluster.local')
         self.assertEqual(backends['eks'], 'http://{instance}.eks.hopcharlie.internal')

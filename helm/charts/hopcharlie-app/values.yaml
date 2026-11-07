@@ -205,6 +205,9 @@ profile:
     # Egress: the namespace itself, DNS, TCP 443 and extraEgress
     # (NetworkPolicyEgressRules, e.g. an S3 endpoint on another port).
     extraEgress: []
+    # Additional API server backend addresses/ports after Service translation.
+    # CNPG Pods and bootstrap Jobs only; no extra access for application Pods.
+    cnpgApiServerEgress: [] # [{cidr: 10.0.0.10/32, port: 6443}]
 
   # With values.dbTopology (infra ADR 0063): the Tailscale Services that carry
   # replication between the members' databases. The operator in
