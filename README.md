@@ -1003,3 +1003,5 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md](docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md) — API가 쓰기 기록 토큰을 SSM에서 선택적으로 읽는다 (제안)
 - [docs/adr/0080-fetch-optional-residency-policy-from-ssm.md](docs/adr/0080-fetch-optional-residency-policy-from-ssm.md) — API가 레지던시 정책을 SSM에서 선택적으로 읽어 시작 전 검사를 켠다 (제안)
 - [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)
+
+- [scripts/tests/test-platform-written-tokens.py](scripts/tests/test-platform-written-tokens.py) — 실제 설정 스크립트와 API entrypoint의 미설정·전달·접근 거부·리터럴 값 보존 검사
