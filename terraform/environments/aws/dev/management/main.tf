@@ -20,7 +20,7 @@ module "eks" {
   vpc_id                             = data.terraform_remote_state.foundation.outputs.vpc_id
   subnet_ids_by_az                   = data.terraform_remote_state.foundation.outputs.management_subnet_ids_by_az
   service_cidr                       = "172.20.0.0/16"
-  node_count_by_az                   = { "ap-northeast-2a" = 2 }
+  node_count_by_az                   = { "ap-northeast-2a" = 2, "ap-northeast-2c" = 2 }
   operator_principal_arn             = var.operator_principal_arn
   additional_operator_principal_arns = var.additional_operator_principal_arns
   argocd_deploy_role_arn             = data.terraform_remote_state.foundation.outputs.argocd_deploy_role_arns["management"]
