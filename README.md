@@ -1066,3 +1066,5 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
 - [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록
 - [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
+| [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+| [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |

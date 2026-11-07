@@ -1,0 +1,26 @@
+# Applied directly alongside Langfuse's existing manual support policies.
+# The HopCharlie Argo project has no permission in namespace langfuse.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: langfuse-hopai-ingress
+  namespace: langfuse
+  labels:
+    app.kubernetes.io/part-of: hopcharlie
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langfuse
+      app.kubernetes.io/instance: langfuse
+      app.kubernetes.io/component: web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: charlie-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: hopcharlie
+              app.kubernetes.io/component: hopai
+      ports: [{protocol: TCP, port: 3000}]

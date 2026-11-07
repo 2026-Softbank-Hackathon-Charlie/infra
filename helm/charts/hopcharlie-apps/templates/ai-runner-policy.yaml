@@ -46,8 +46,25 @@ spec:
       message: an AI runner pod runs only the runner's images
     - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.secret) && !has(v.hostPath) && !has(v.projected) && !has(v.persistentVolumeClaim))"
       message: an AI runner pod mounts no Secret, hostPath, projected or claimed volume
-    - expression: "variables.containers.all(c, !has(c.envFrom) && (!has(c.env) || c.env.all(e, !has(e.valueFrom))))"
-      message: an AI runner pod reads no Secret or ConfigMap through env
+    - expression: >-
+        variables.containers.all(c,
+          !has(c.envFrom) && (!has(c.env) || c.env.all(e,
+            !has(e.valueFrom)
+            {{- if ((.Values.platform.aiRunner.langfuse | default dict).enabled | default false) }}
+            || (c.name == 'hopai' && (
+              (has(e.valueFrom.secretKeyRef) &&
+               e.valueFrom.secretKeyRef.name == 'hopcharlie-langfuse-auth' &&
+               (!has(e.valueFrom.secretKeyRef.optional) || !e.valueFrom.secretKeyRef.optional) &&
+               ((e.name == 'LANGFUSE_PUBLIC_KEY' && e.valueFrom.secretKeyRef.key == 'public-key') ||
+                (e.name == 'LANGFUSE_SECRET_KEY' && e.valueFrom.secretKeyRef.key == 'secret-key')))
+              || (e.name == 'HOPCHARLIE_RUN_ID' && has(e.valueFrom.fieldRef) &&
+                  e.valueFrom.fieldRef.fieldPath == "metadata.labels['job-name']" &&
+                  (!has(e.valueFrom.fieldRef.apiVersion) || e.valueFrom.fieldRef.apiVersion == 'v1'))
+            ))
+            {{- end }}
+          ))
+        )
+      message: an AI runner may reference only its dedicated Langfuse project keys and Job name
     - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.configMap) || v.configMap.name in ['hopcharlie-hopai-fetch', 'hopai-onboarding'] || v.configMap.name.matches('^hopai-onb-[0-9a-f]{12}$'))"
       message: an AI runner pod mounts only the runner's scripts and an onboarding's input (hopai-onb-<id>)
 ---

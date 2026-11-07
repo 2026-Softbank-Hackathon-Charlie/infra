@@ -63,6 +63,9 @@ platform:
     serviceAccount: hopcharlie-hopai
     # Image name prefixes the runner's containers may use (hopai and awsCli).
     imagePrefixes: []
+    # Only the hopai container may reference its dedicated Langfuse project.
+    langfuse:
+      enabled: false
 
 # Environment name (the <env> of apps/<instance>/<env>.yaml) to its cluster
 # and the hopcharlie-app profile there. Files of an environment that is not
