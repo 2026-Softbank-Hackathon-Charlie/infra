@@ -130,6 +130,18 @@ data:
               env:
                 - {name: PLATFORM_URL, value: "http://hopcharlie-api:8080"}
                 - {name: HOME, value: /work}
+                {{- if .Values.hopai.langfuse.enabled }}
+                - {name: LANGFUSE_BASE_URL, value: {{ .Values.hopai.langfuse.baseURL | quote }}}
+                - name: LANGFUSE_PUBLIC_KEY
+                  valueFrom:
+                    secretKeyRef: {name: hopcharlie-langfuse-auth, key: public-key}
+                - name: LANGFUSE_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef: {name: hopcharlie-langfuse-auth, key: secret-key}
+                - name: HOPCHARLIE_RUN_ID
+                  valueFrom:
+                    fieldRef: {apiVersion: v1, fieldPath: "metadata.labels['job-name']"}
+                {{- end }}
               securityContext:
                 {{- include "hopcharlie.containerSecurity" . | nindent 16 }}
               resources:

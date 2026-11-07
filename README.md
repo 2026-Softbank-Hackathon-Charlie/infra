@@ -1092,3 +1092,4 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [scripts/apply-onprem-observability.py](scripts/apply-onprem-observability.py)
 - [scripts/tests/test-onprem-observability-apply.py](scripts/tests/test-onprem-observability-apply.py)
 - [docs/adr/0093-explicit-onprem-collector-installation.md](docs/adr/0093-explicit-onprem-collector-installation.md)
+- [docs/runbooks/hopai-langfuse.md](docs/runbooks/hopai-langfuse.md) — 실제 hopai 자동 계측 검증 결과, 활성화 관문과 미완료 사항

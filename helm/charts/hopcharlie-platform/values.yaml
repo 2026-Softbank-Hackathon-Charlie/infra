@@ -97,6 +97,10 @@
     "image": "",
     "maxRuns": 3,
     "keepFinishedSeconds": 86400,
-    "deadlineSeconds": 3600
+    "deadlineSeconds": 3600,
+    "langfuse": {
+      "enabled": false,
+      "baseURL": "http://langfuse-web.langfuse.svc.cluster.local:3000"
+    }
   }
 }

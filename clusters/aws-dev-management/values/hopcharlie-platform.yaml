@@ -262,7 +262,10 @@
   },
   "hopai": {
     "enabled": true,
-    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4@sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b"
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4@sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b",
+    "langfuse": {
+      "enabled": true
+    }
   },
   "observability": {
     "automaticJobs": true

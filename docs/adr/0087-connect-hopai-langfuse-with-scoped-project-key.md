@@ -34,3 +34,13 @@ hopai→Langfuse3000 egress는 HopCharlie chart가 관리한다. Langfuse ingres
 - [Langfuse ingress](../../clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml)
 - [Job template](../../helm/charts/hopcharlie-platform/templates/hopai.yaml)
 - [ai-sandbox](https://github.com/2026-Softbank-Hackathon-Charlie/ai-sandbox)
+
+## 2026-11-08 적용·검증 상태
+
+정책 PR infra#160과 계측 PR ai-sandbox#50을 main에 반영했다. 플랫폼 SA의 live server dry-run에서 전용 Secretrefs/Job 이름은 허용하고 다른 Secret·key·fieldRef·envFrom은 해당 VAP가 거부했다. CI workflow_dispatch 42390883630의 c7094f1a967c050116a2037d3bbd607e011b1874 Linux 바이너리를 기존 고정 이미지의 실행 파일만 교체해 발행했다.
+
+승인된 범위에서 기존 프로젝트 키를 전용 client Secret으로 복사하고 양쪽 3000 정책을 적용했다. 검증 Job hopai-langfuse-check-1794093660은 exit0, 실제 모델 HTTP2회·메모리 도구1회를 실행했다. 그러나 exporter 오류가 발생했고 이 Job의 span은 API v2 및 ClickHouse에서 0건이었다. 따라서 실제 자동 수집 검증은 실패이며 활성화 PR을 병합하지 않는다. 빈 JSON/protobuf OTLP 요청은200, 기존 동일 합성 trace의 재전송은200/약0.2초였다. 이것으로 hopai Pod의 전송 성공을 주장하지 않는다.
+
+Job image/env/egress 활성화안은 별도 브랜치에서 렌더 검증했으며 미병합이다. platform은 Job YAML을 시작할 때만 캐시하고 API는 replica1/Recreate이므로 ConfigMap 변경만으로 다음 Job이 갱신되지 않는다. API checksum 재로딩·상태 집계 조회·중단/잔여 경합 수용은 추가 계획으로 독립 리뷰를 통과했지만 사용자 추가 승인 전이며 구현/실행하지 않았다. 이 제안은 기존 승인의 일부라고 간주하지 않는다.
+
+추가 운영 검증·승인 범위와 증거는 [운영 기록](../runbooks/hopai-langfuse.md)에 남긴다. 실제 모델 응답의 model/usage/입출력/부모관계는 저장되지 않았으므로 확인했다고 기록하지 않는다.
