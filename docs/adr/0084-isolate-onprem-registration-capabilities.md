@@ -42,6 +42,7 @@ Argo credential 갱신은 양수 registration-version과 UTC token-expires-at을
 - 실제 kind API와 공식 Argo CRD의 허용·거부 검증을 CI로 수행한다. 이 시험은 Tailscale 연결이나 실제 노트북 배포 성공을 증명하지 않는다.
 - IAM Terraform mock 검증은 정책 문서만 검사한다. 배포 후 실제 두 Pod Identity로 각 조회 동작과 부모 경로 거부를 확인해야 운영 경계가 입증된다.
 - platform의 Secret 발행·폐기는 GET 없이 동작해야 한다. 알려진 이름의 CREATE/UPDATE/DELETE와 기존 소유권 admission 검증을 사용한다.
+- Secret 삭제는 영속 상태가 terminal revoked인 등록만 수행한다. 같은 enrollment ID는 재활성화·재사용하지 않으므로 늦게 도착한 삭제 역시 해당 등록의 의도된 폐기다. ready/failed 일반 정리나 ID 재사용을 도입하면 UID/resourceVersion 사전조건 등 새로운 동시성 경계를 먼저 설계해야 한다.
 - 활성화 전 전용 API 이미지의 agent 바이너리, 이미지 digest, 원격 보호 admission, 기능 소비자 계약을 함께 검토한다. 현재는 Draft를 유지한다.
 
 ## 관련 자료

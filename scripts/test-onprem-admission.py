@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -48,7 +49,7 @@ def render(chart, values, namespace):
         path = Path(directory) / 'values.json'
         path.write_text(json.dumps(values), encoding='utf-8')
         output = subprocess.check_output(['helm', 'template', 'fixture', str(ROOT / chart),
-                    '-n', namespace, '-f', str(path)], text=True)
+                    '--kube-version','1.35.0','-n', namespace, '-f', str(path)], text=True)
     return [d for d in yaml.safe_load_all(output) if d]
 
 
@@ -98,6 +99,16 @@ def argo(profile):
     return project, appset
 
 
+def rendered_documents():
+    module_spec = importlib.util.spec_from_file_location('render_test', ROOT/'scripts/tests/test-onprem-registration.py')
+    module = importlib.util.module_from_spec(module_spec); module_spec.loader.exec_module(module)
+    docs = module.render(True)
+    apps = json.loads((ROOT/'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text())
+    docs += render('helm/charts/hopcharlie-apps', apps, 'argocd')
+    docs += render('helm/charts/hopcharlie-db-network', {'enabled':False,'managementAppRoutes':{'enabled':True,'tailnet':DOMAIN,'tag':'tag:hop-db-client-management'}},'hopcharlie-db-network')
+    return docs
+
+
 def main():
     assert os.environ.get('ONPREM_ADMISSION_FIXTURE') == '1', 'explicit disposable fixture opt-in required'
     context = subprocess.check_output(['kubectl','config','current-context'],text=True).strip()
@@ -119,12 +130,7 @@ def main():
             time.sleep(1)
         else:
             raise AssertionError('official Argo CRD did not become Established')
-    module_spec = importlib.util.spec_from_file_location('render_test', ROOT/'scripts/tests/test-onprem-registration.py')
-    module = importlib.util.module_from_spec(module_spec); module_spec.loader.exec_module(module)
-    docs = module.render(True)
-    apps = json.loads((ROOT/'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text())
-    docs += render('helm/charts/hopcharlie-apps', apps, 'argocd')
-    docs += render('helm/charts/hopcharlie-db-network', {'enabled':False,'managementAppRoutes':{'enabled':True,'tailnet':DOMAIN,'tag':'tag:hop-db-client-management'}},'hopcharlie-db-network')
+    docs = rendered_documents()
     kinds = {'ServiceAccount','Role','RoleBinding','ValidatingAdmissionPolicy','ValidatingAdmissionPolicyBinding'}
     for obj in docs:
         if obj['kind'] not in kinds: continue
@@ -204,4 +210,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1:] == ['--render-only']:
+        print('rendered admission fixture objects:',len(rendered_documents()))
+    elif not sys.argv[1:]:
+        main()
+    else:
+        raise SystemExit('usage: test-onprem-admission.py [--render-only]')

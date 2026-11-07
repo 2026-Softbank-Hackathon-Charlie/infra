@@ -21,6 +21,8 @@ jobs:
       - uses: azure/setup-helm@v4.3.1
         with: {version: v3.19.1}
       - run: python3 -m pip install PyYAML==6.0.3
+      - name: Check fixture syntax and chart contracts before provisioning
+        run: python3 scripts/test-onprem-admission.py --render-only
       - name: Install verified kind binary
         run: |
           curl --fail --location --retry 3 -o "$RUNNER_TEMP/kind" https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
