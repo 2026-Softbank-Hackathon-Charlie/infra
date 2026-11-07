@@ -996,4 +996,5 @@ DB network and temporary-access code; disabled examples require separate deploym
 ### hopai 활동 조회 (콘솔 이주 지도)
 
 - [docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md](docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md) — API가 관측 ClickHouse에서 hopai 호출을 읽는다 (제안)
+- [docs/adr/0078-manage-three-member-db-paths-with-gitops.md](docs/adr/0078-manage-three-member-db-paths-with-gitops.md) — 세 멤버 DB 경로의 GitOps 소유권과 primary source 준비의 최소 권한 (제안)
 - [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)

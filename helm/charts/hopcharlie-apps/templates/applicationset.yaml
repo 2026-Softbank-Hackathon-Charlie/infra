@@ -68,16 +68,16 @@ spec:
         # Syncs leave the ignored fields below as they are, not only the diff.
         syncOptions:
           - RespectIgnoreDifferences=true
-      # A migration (ADR 0050) sets these on the app's CNPG Cluster: the operator
-      # adds the peer and its certificate name, and the engine demotes and promotes
-      # through spec.replica. selfHeal must not put them back mid-migration, or both
-      # databases can end up writable.
+      # A migration owns replica and certificates (ADR 0050). Legacy clusters
+      # also keep operator-managed externalClusters. Three-member clusters
+      # declare every member in Git: ignoring that list would prevent adding
+      # the third member. replica stays ignored during demotion/promotion.
       ignoreDifferences:
         - group: postgresql.cnpg.io
           kind: Cluster
           jqPathExpressions:
             - .spec.replica
-            - .spec.externalClusters
+            - select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters
             - .spec.certificates
         # The Tailscale operator points a database egress Service (ADR 0063) at
         # its proxy by rewriting externalName; selfHeal must not put the
