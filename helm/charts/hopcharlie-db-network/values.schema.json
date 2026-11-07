@@ -6,6 +6,7 @@
   "properties": {
     "enabled": {"type": "boolean"},
     "clusterId": {"type": "string"},
+    "kubeApiServerPort": {"type": "integer", "minimum": 1, "maximum": 65535},
     "localDatabase": {
       "type": "object",
       "additionalProperties": false,

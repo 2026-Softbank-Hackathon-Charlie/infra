@@ -13,3 +13,5 @@ egress:
   peers: {}
 platformApps:
   enabled: true
+# k3s serves the Kubernetes API on 6443; the operator and proxies need it.
+kubeApiServerPort: 6443

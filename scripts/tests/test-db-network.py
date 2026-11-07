@@ -361,6 +361,8 @@ ONPREM_VALUES = {
     'ingress': {'tag': 'tag:hop-db-onprem'},
     'egress': {'tag': 'tag:hop-db-client-onprem', 'peers': {}},
     'platformApps': {'enabled': True},
+    # k3s serves the Kubernetes API on 6443, not 443 as EKS and GKE do.
+    'kubeApiServerPort': 6443,
 }
 
 
@@ -385,9 +387,23 @@ class OnpremPlatformAppsTests(unittest.TestCase):
         # The same shared policies as the cloud workload clusters.
         gke = dict(values_for('gke'), platformApps={'enabled': True})
         cloud = {(d['kind'], d['metadata']['name']): d for d in yaml.safe_load_all(DatabaseNetworkTests.render(gke).stdout) if d}
+        # The same shared policies as the cloud workload clusters, except that every
+        # rule that reaches the Kubernetes API also opens the k3s API port.
+        api_443 = {'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}], 'ports': [{'protocol': 'TCP', 'port': 443}]}
+        api_k3s = {'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}],
+                   'ports': [{'protocol': 'TCP', 'port': 443}, {'protocol': 'TCP', 'port': 6443}]}
         for doc in docs:
             if doc['kind'] == 'NetworkPolicy':
-                self.assertEqual(doc, cloud[('NetworkPolicy', doc['metadata']['name'])])
+                expected = cloud[('NetworkPolicy', doc['metadata']['name'])]
+                expected = json.loads(json.dumps(expected).replace(json.dumps(api_443), json.dumps(api_k3s)))
+                self.assertEqual(doc, expected)
+        operator = next(d for d in docs if d['metadata']['name'] == 'db-network-operator')
+        self.assertIn(api_k3s, operator['spec']['egress'])
+
+    def test_kube_api_server_port_must_be_a_port(self):
+        for port in (0, 65536, '6443', 443.5):
+            with self.subTest(port=port):
+                self.assertNotEqual(DatabaseNetworkTests.render(dict(ONPREM_VALUES, kubeApiServerPort=port)).returncode, 0)
 
     def test_profile_file_is_disabled_and_matches_tested_values(self):
         profile = yaml.safe_load((ROOT / 'helm/db-network/onprem.yaml').read_text(encoding='utf-8'))

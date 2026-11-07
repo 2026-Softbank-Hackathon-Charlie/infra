@@ -3,6 +3,10 @@
 enabled: false
 clusterId: "" # management, eks, gke or onprem
 
+# Port of the Kubernetes API behind kubernetes.default (operator and proxies
+# store their state through it). EKS and GKE serve 443; k3s serves 6443.
+kubeApiServerPort: 443
+
 # Workload profiles only. The namespace and CNPG Cluster must already exist.
 localDatabase:
   namespace: ""
