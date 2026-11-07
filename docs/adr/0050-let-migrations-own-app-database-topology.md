@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-05
 - 상태: 제안
+- 일부 대체: 세 멤버 Cluster의 `externalClusters` 소유권은 [0078](0078-manage-three-member-db-paths-with-gitops.md)이 대체한다. `replica`·`certificates` 무시는 유지한다.
 - 관련 ADR: [0023](0023-deploy-github-apps-with-applicationset.md), [0036](0036-app-routing-and-argo-apps.md), [0048](0048-connect-cloud-databases-with-scoped-migration-access.md)
 
 ## 배경과 제약
