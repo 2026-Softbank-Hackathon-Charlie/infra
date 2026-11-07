@@ -1,0 +1,149 @@
+{{- $obs := .Values.observability }}
+{{- if and (or $obs.openExistingPolicy $obs.grantAccess) (not $obs.enabled) }}
+{{- fail "observability exception/grant requires the installed observability guard" }}
+{{- end }}
+{{- if and $obs.enabled (not .Values.dynamicApps.enabled) }}
+{{- fail "observability requires dynamicApps.enabled" }}
+{{- end }}
+{{- if and $obs.grantAccess (not $obs.openExistingPolicy) }}
+{{- fail "observability grant requires the verified existing-policy exception" }}
+{{- end }}
+{{- if $obs.enabled }}
+{{- $name := printf "%s-observability" .Release.Name }}
+{{- $allowed := list }}
+{{- range (.Files.Get "files/observability-resources.json" | fromJsonArray) }}
+{{- $group := .group }}
+{{- $resource := .resource }}
+{{- range .names }}
+{{- $allowed = append $allowed (printf "%s/%s/%s" $group $resource .) }}
+{{- end }}
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*/*"]
+        operations: [CREATE, UPDATE, DELETE, CONNECT]
+        scope: Namespaced
+  matchConditions:
+    - name: argocd-google-identity
+      expression: {{ printf "request.userInfo.username == '%s'" .Values.googleServiceAccountEmail | quote }}
+    - name: reviewed-observability-boundary
+      expression: >-
+        request.namespace == 'observability' ||
+        (request.namespace == 'hopcharlie-db-network' &&
+         request.resource.group == 'networking.k8s.io' && request.resource.resource == 'networkpolicies' &&
+         request.name in ['observability-transport-egress-client', 'observability-transport-ingress-client'])
+  variables:
+    - name: allowed
+      expression: {{ $allowed | toJson | quote }}
+  validations:
+    - expression: >-
+        request.subResource == '' &&
+        ((request.namespace == 'observability' && request.operation in ['CREATE', 'UPDATE', 'DELETE'] &&
+          (request.resource.group + '/' + request.resource.resource + '/' + request.name) in variables.allowed) ||
+         (request.namespace == 'hopcharlie-db-network' && request.operation in ['UPDATE', 'DELETE']))
+      message: Argo observability writes must match the reviewed resource names; transport NetworkPolicy CREATE and all subresources are forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: [Deny]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: observability
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts, configmaps, persistentvolumeclaims, services]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments, daemonsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [prometheuses, servicemonitors, podmonitors]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Argo namespace cache receives these values. No Secret API read isolation is claimed.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [monitoring-prometheus-scrape-confg]
+    verbs: [update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: hopcharlie-db-network
+rules:
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+  # CREATE is denied by admission too: existing dynamic-apps RBAC is additive.
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    resourceNames: [observability-transport-egress-client, observability-transport-ingress-client]
+    verbs: [update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-read
+rules:
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [tailscale.com]
+    resources: [proxyclasses]
+    verbs: [get, list, watch]
+{{- if $obs.grantAccess }}
+{{- range list "observability" "hopcharlie-db-network" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ $.Values.googleServiceAccountEmail | quote }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}-read
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ .Values.googleServiceAccountEmail | quote }}
+{{- end }}
+{{- end }}

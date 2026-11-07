@@ -25,3 +25,9 @@ dynamicApps:
     - kube-system
     - observability
     - traefik
+
+# Ordered rollout: guard -> verified exception -> namespaced binding.
+observability:
+  enabled: false
+  openExistingPolicy: false
+  grantAccess: false
