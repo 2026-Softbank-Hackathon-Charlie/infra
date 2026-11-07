@@ -1,7 +1,7 @@
 # 0089. 이전 추천 Job은 클러스터 자격 증명을 가져오지 않는다
 
 - 날짜: 2026-11-08
-- 상태: 제안 — 로컬 구현·검증, 추천 CLI 이미지 pin과 배포는 별도 확인
+- 상태: 채택 — 구현 결정, 실제 운영 적용·AI 실행은 별도 확인
 - 관련 ADR: [0082 실행기 분리](0082-onboard-existing-compose-apps-infra.md), [0087 Langfuse 연결](0087-connect-hopai-langfuse-with-scoped-project-key.md)
 
 ## 배경과 제약
@@ -24,7 +24,7 @@ Job 자체의 `metadata.annotations['hopcharlie.dev/recommendations']='v1'`을 �
 
 - 실제 렌더된 fetch와 main shell을 fake AWS/hopai로 실행해 추천의 정확히 두 파라미터 조회·kube 파일 미생성·전용 명령, 기존 run/onboard 동작, 실패 차단과 값 로그 부재를 확인한다.
 - IAM·RBAC·Secret·네트워크·admission 정책과 ServiceAccount는 변경하지 않는다. 기존 역할에는 kubeconfig 조회 권한이 남는다. 추천이 임의의 실행 파일을 사용할 경우까지 막는 별도 IAM 격리를 증명하지 않는다.
-- 이 작성 시점 management image는 `a5b38a5` pin이고 새 recommend CLI 포함 여부를 확인하지 않았다. ai-sandbox #51의 CI 통과만으로 해당 image에 CLI가 있다고 판단하지 않는다. 지원 annotation이 먼저 운영에 반영되지 않도록 새 CLI가 포함된 기존 방식의 image build·digest pin을 이 변경과 함께 검토한 뒤 머지한다.
+- management image와 lock은 추천 CLI가 포함된 ai-sandbox main `21b5cb344594cdba121defc4511b341e112280c0`의 `21b5cb3@sha256:ddbd9cc74b4356f7459752301befe21af0b7b0241cb9b4dd8c50210451720994`로 함께 고정한다. 소스 CI [42400783996](https://github.com/2026-Softbank-Hackathon-Charlie/ai-sandbox/actions/runs/42400783996) 통과 후 기존 이미지 설정·레이어를 유지한 build/publish 결과를 루트 작업자가 전달했다. 이 슬라이스는 registry 자격 증명으로 별도 이미지를 만들거나 게시하지 않았다. 지원 annotation만 먼저 운영에 반영하지 않도록 pin과 템플릿을 함께 검토한다.
 - 실제 클라우드 조회·키 발급/저장·이미지 게시·Helm 배포·운영 AI 호출을 이 로컬 검사에서 수행하지 않았다. 추천 API의 보안 필터와 900초 캐시는 플랫폼의 별도 계약이다.
 
 ## 관련 자료
