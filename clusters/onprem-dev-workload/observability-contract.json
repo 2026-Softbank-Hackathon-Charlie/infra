@@ -1,0 +1,27 @@
+{
+  "enabled": false,
+  "clusterName": "charlie-dev-onprem-workload",
+  "environment": "onprem",
+  "deploymentEnvironment": "dev",
+  "cloudProvider": "onprem",
+  "region": "onprem",
+  "zone": "onprem",
+  "storageClassName": "local-path",
+  "sourceValuesDirectory": "clusters/gcp-dev-workload/values",
+  "charts": {
+    "alloy": "1.15.0",
+    "opentelemetry-collector": "0.175.0",
+    "kube-prometheus-stack": "91.8.2"
+  },
+  "activationRequiresExecutionApproval": true,
+  "requiredPreparation": [
+    "observability namespace and reviewed node capacity",
+    "Prometheus CRDs and namespace/cluster read RBAC",
+    "node log read permission and Alloy host paths",
+    "observability-client-auth, observability-upstream-auth, observability-client-ca, observability-upstream-ca, observability-gateway-tls",
+    "observability-metrics-query-auth and observability-metrics-query-tls",
+    "reviewed authenticated TLS path from onprem to central OTLP and reverse metrics query path",
+    "application observability profile CA and SDK support",
+    "fresh app/environment-specific receiving evidence before parity enforcement"
+  ]
+}

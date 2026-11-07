@@ -234,6 +234,11 @@
             "action": "upsert"
           },
           {
+            "key": "hopcharlie.environment.name",
+            "value": "gke",
+            "action": "upsert"
+          },
+          {
             "key": "cloud.availability_zone",
             "value": "asia-northeast3-a",
             "action": "upsert"

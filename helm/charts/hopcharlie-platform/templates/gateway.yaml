@@ -1,3 +1,13 @@
+{{- $replicas := toString .Values.gateway.replicas -}}
+{{- if not (or (eq $replicas "1") (eq $replicas "2")) -}}
+{{- fail "gateway.replicas must be 1 or 2" -}}
+{{- end -}}
+{{- if not (kindIs "bool" .Values.gateway.exclusiveState) -}}
+{{- fail "gateway.exclusiveState must be a boolean" -}}
+{{- end -}}
+{{- if and (eq $replicas "2") (not .Values.gateway.exclusiveState) -}}
+{{- fail "two gateway replicas require exclusiveState: independent gateway writers are unsafe" -}}
+{{- end -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -37,7 +47,9 @@ metadata:
   labels:
     {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ $replicas }}
+  # Also on first activation/downgrade: never overlap an old binary which
+  # does not take the file lock with a new exclusive owner.
   strategy:
     type: Recreate
   selector:
@@ -48,6 +60,18 @@ spec:
       labels:
         {{- include "hopcharlie.labels" "gateway" | nindent 8 }}
     spec:
+      {{- if .Values.gateway.exclusiveState }}
+      # One RWO volume and kernel flock/Unix sockets: same-node pod recovery.
+      # This deliberately does not claim node, AZ or region fault isolation.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "hopcharlie.labels" "gateway" | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 60
+      {{- end }}
       serviceAccountName: hopcharlie-platform
       automountServiceAccountToken: false
       securityContext:
@@ -64,7 +88,7 @@ spec:
               while IFS= read -r line || [ -n "$line" ]; do
                 case "$line" in ''|'#'*) ;; *=*) export "$line" ;; esac
               done < /config/gateway.env
-              exec hopcharlie-gateway -listen :8000 -admin-addr :9901 -state-file /data/gateway-state.json
+              exec hopcharlie-gateway -listen :8000 -admin-addr :9901 -state-file /data/gateway-state.json{{ if .Values.gateway.exclusiveState }} -exclusive-state{{ end }}
           env:
             - {name: GATEWAY_BACKENDS, value: {{ .Values.gateway.backends | quote }}}
             {{- with .Values.gateway.initialBackend }}

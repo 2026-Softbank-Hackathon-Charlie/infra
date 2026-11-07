@@ -12,6 +12,11 @@ hopai-<onboarding id> with optional false. It then creates that ConfigMap
 garbage collector deletes it with the Job. A plain run keeps the name
 hopai-onboarding, which nobody creates, and mounts an empty optional volume.
 
+A read-only recommendation sets KIND=recommend in both the init and main
+containers. It fetches only the AI key and callback token, never kubeconfigs.
+The Job metadata annotation is the platform's support handshake (ADR 0089).
+The pinned hopai image must support the recommend command before activation.
+
 The Job runs as its own ServiceAccount hopcharlie-hopai, whose Pod Identity
 role (terraform/platform/aws eks.tf) reads only what fetch.sh gets, not the
 platform role's (infra ADR 0082). It reads from SSM the Claude key, the sandbox-admin kubeconfigs of
@@ -44,8 +49,10 @@ data:
     set -euo pipefail
     umask 077
     get() { aws ssm get-parameter --with-decryption --name "$PREFIX/$1" --query Parameter.Value --output text | tr -d '\r'; }
-    get hopai/kube-eks > /config/eks.yaml
-    get hopai/kube-gke > /config/gke.yaml
+    if [ "${KIND:-}" != recommend ]; then
+      get hopai/kube-eks > /config/eks.yaml
+      get hopai/kube-gke > /config/gke.yaml
+    fi
     key="$(get hopai/anthropic-api-key)"
     # the first agent entry of name:role:token,... (the token may contain ':')
     tok="$(get platform-tokens | tr ',' '\n' | awk -F: '$2=="agent"{sub(/^[^:]*:[^:]*:/, ""); print; exit}')"
@@ -64,6 +71,8 @@ data:
     apiVersion: batch/v1
     kind: Job
     metadata:
+      annotations:
+        hopcharlie.dev/recommendations: v1
       labels:
         {{- include "hopcharlie.labels" "hopai" | nindent 8 }}
     spec:
@@ -108,6 +117,9 @@ data:
                 - |
                   set -eu
                   while IFS= read -r line || [ -n "$line" ]; do case "$line" in *=*) export "$line";; esac; done < /config/hopai.env
+                  # Facts and callback metadata are injected by the platform.
+                  # This branch never invokes a cluster or starts a migration.
+                  if [ "${KIND:-}" = recommend ]; then exec hopai recommend; fi
                   # The contract PR of an onboarding: hopai reads ONBOARDING, REPO,
                   # BRANCH, FACTS_FILE and CHECK_LOG_FILE (/onboarding) itself.
                   if [ "${KIND:-}" = onboard ]; then exec hopai onboard; fi

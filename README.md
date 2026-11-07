@@ -1,5 +1,13 @@
 # Charlie Infra
 
+온프레미스 관측 준비:
+
+- [계약](clusters/onprem-dev-workload/observability-contract.json)
+- [로컬 renderer](scripts/render-onprem-observability.py)
+- [실제 차트 회귀](scripts/tests/test-onprem-observability.py)
+- [운영 준비 절차](docs/operations/onprem-observability.md)
+- [ADR 0092](docs/adr/0092-onprem-observability-preparation.md)
+
 ## 팀 공용 Headlamp
 
 `https://headlamp.hopcharlie.dev`의 한 화면에서 관리 EKS·워크로드 EKS·GKE를 전환합니다. EKS는 기존 개인 Cognito 로그인을 사용하며 GKE는 Google 로그인과 자동 토큰 갱신을 사용합니다. GKE 권한은 개인 IAM/RBAC를 따릅니다.
@@ -377,7 +385,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 | 파일 | 역할 |
 | --- | --- |
-| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
+| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR·main push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
 | [.github/workflows/cnpg-migration-admission.yml](.github/workflows/cnpg-migration-admission.yml) | 임시 kind에서 세 환경의 실제 CNPG migration admission 검사 |
 | [.gitignore](.gitignore) | 로컬 비밀값·state·plan·kubeconfig·다운로드 산출물의 Git 추적 방지 |
 | [.terraform-version](.terraform-version) | Terraform CLI 버전 고정 |
@@ -583,6 +591,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [helm/charts/hopcharlie-platform/templates/postgres.yaml](helm/charts/hopcharlie-platform/templates/postgres.yaml) | 플랫폼 PostgreSQL StatefulSet과 Service |
 | [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
 | [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
+| [docs/adr/0091-opt-in-same-node-gateway-pod-failover.md](docs/adr/0091-opt-in-same-node-gateway-pod-failover.md) | 단일 상태 소유자 기반 동일 노드 파드 복구 준비·운영 승인 경계 (제안) |
 | [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
 | [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
 | [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |
@@ -1051,6 +1060,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
+| [docs/adr/0090-remove-duplicate-feature-push-ci.md](docs/adr/0090-remove-duplicate-feature-push-ci.md) | 기능 브랜치 push·PR 중복 검사 제거, 검증·배포 경계 유지 |
 
 ### Onprem registration preparation (disabled)
 
@@ -1072,4 +1082,6 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
 | [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
 | [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+| [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
+| [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
 | [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |

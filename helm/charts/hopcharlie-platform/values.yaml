@@ -11,6 +11,8 @@
   "gateway": {
     "backends": "",
     "initialBackend": "",
+    "replicas": 1,
+    "exclusiveState": false,
     "aiGatewayEgress": {
       "namespace": "",
       "port": 8000
