@@ -1,7 +1,7 @@
 # 0086. Langfuse 전용 cloud 리소스를 공통 Terraform 소스에서 지속 관리
 
 - 날짜: 2026-11-07
-- 상태: 제안 — 동일 자원은 실환경에 복원돼 있음. 이 소스 PR의 main merge·자동 apply는 별도 승인/계획 검토 전
+- 상태: 채택 — 공통 Terraform 소유권의 계획·source PR 게시 승인을 받음. 동일 자원은 실환경에 복원돼 있으며 main merge·자동 apply는 별도 실행 승인 전
 - 관련 ADR: [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md)
 
 ## 배경과 제약
