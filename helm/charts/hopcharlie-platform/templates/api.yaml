@@ -103,7 +103,6 @@ spec:
               exec hopcharlie-api -addr :8080 -state-dir /data/runs
           env:
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
-            - {name: PLATFORM_APPS_FILE, value: /config/apps.yaml}
             - {name: PLATFORM_GATEWAY_URL, value: "http://hopcharlie-gateway:9901"}
             # The canary sends synthetic reads through the public proxy, so a
             # migration of an app without users still has its target judged.

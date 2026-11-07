@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-04
 - 상태: 채택. 코드 준비 결정이며 실제 적용·게시 승인은 별도다.
+- 2026-11-07 갱신([ADR 0075](0075-remove-moimroom-static-catalog-and-image-publishing.md)): moimroom을 플랫폼에서 지워 ECR `hopcharlie/apps/moimroom`, 게시 역할, GCP 게시 SA·WIF provider·AR `charlie-apps`를 코드에서 지웠다.
 - 관련 ADR: [0012](0012-match-github-immutable-oidc-subject.md), [0024](0024-publish-images-from-github-actions.md), [0029](0029-add-gcp-app-image-repository.md)
 
 ## 배경과 제약

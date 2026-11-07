@@ -5,6 +5,8 @@
 
 > 2026-11-07: 손으로 배포했던 GKE moimroom(`charlie-apps/moimroom-gcp`, DB `moimroom-db-gke`와 `moimroom-gcp-db`, 버킷 `charlie-414068132732-moimroom-gcp`, Tailscale DB 경로 `db-eks`(GKE)와 `db-gke`(workload EKS, 관리 EKS))를 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). 아래에 나오는 GKE moimroom 이름과 주소는 그때의 기록이다.
 
+> 2026-11-07: moimroom 앱을 플랫폼에서 지웠고 앱 목록 파일 `host/apps.yaml`도 지웠다([ADR 0075](../adr/0075-remove-moimroom-static-catalog-and-image-publishing.md)). 이전 대상 앱은 플랫폼 앱 등록부에서 온다. 아래 catalog 단계는 그때의 기록이다.
+
 ## 1. 실행 전 확인
 
 1. 관리 EKS·workload EKS·workload GKE의 **운영자** kubeconfig/context를 준비한다. 기존 API kubeconfig는 `charlie-system/hopcharlie-platform`이며 operator 설치·권한 부여에는 사용하지 않는다. `kubectl config use-context`로 사용자 기본 컨텍스트를 바꾸지 않는다.

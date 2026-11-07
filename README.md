@@ -547,7 +547,6 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 | [terraform/bootstrap/gcp/.terraform.lock.hcl](terraform/bootstrap/gcp/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
-| [terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl](terraform/bootstrap/gcp/tests/moimroom-image-publish.tftest.hcl) | 모임룸의 선택적 WIF·저장소 게시 권한과 입력 검증 |
 | [terraform/bootstrap/gcp/cnpg-poc-backup.tf](terraform/bootstrap/gcp/cnpg-poc-backup.tf) | 선택적 PoC 백업 GCS·전용 계정·버킷 한정 Workload Identity |
 | [terraform/bootstrap/gcp/tests/cnpg-poc-backup.tftest.hcl](terraform/bootstrap/gcp/tests/cnpg-poc-backup.tftest.hcl) | PoC 백업의 비활성 기본값·정확한 KSA·버킷 권한 검사 |
 | [clusters/gcp-dev-workload/namespaces.yaml](clusters/gcp-dev-workload/namespaces.yaml) | GCP DB·인증서 컨트롤러 전용 namespace와 기본 Pod 보안 |
@@ -662,7 +661,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
 | [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
 | [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
-| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend·moimroom 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
+| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
 | [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
 | [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
 | [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
@@ -673,7 +672,6 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [terraform/platform/aws/.terraform.lock.hcl](terraform/platform/aws/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
 | [terraform/platform/aws/README.md](terraform/platform/aws/README.md) | 관리 호스트 운영·앱 helper 연결 안내 |
 | [terraform/platform/aws/backend.tf](terraform/platform/aws/backend.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/host/apps.yaml](terraform/platform/aws/host/apps.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
 | [terraform/platform/aws/host/envs.yaml](terraform/platform/aws/host/envs.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
 | [terraform/platform/aws/main.tf](terraform/platform/aws/main.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
 | [terraform/platform/aws/outputs.tf](terraform/platform/aws/outputs.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
@@ -931,6 +929,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md) | GCP runner 호스트를 최초의 2배인 8 vCPU/32 GB·동시 6개로 축소하고 디스크는 보존 |
 | [docs/adr/0068-record-three-node-gke-workload-capacity.md](docs/adr/0068-record-three-node-gke-workload-capacity.md) | 이미 적용된 GKE workload 3대 기준을 Terraform 기본값·예제·검사에 기록 |
 | [docs/adr/0070-declare-gke-control-plane-patch-target.md](docs/adr/0070-declare-gke-control-plane-patch-target.md) | GKE 제어 영역 최소 버전 목표와 노드 보존·실제 plan 검토·별도 적용 승인 범위 |
+| [docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md](docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md) | 지운 moimroom의 앱 목록 파일과 AWS·GCP 이미지 게시 자원 제거, 적용 순서 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |

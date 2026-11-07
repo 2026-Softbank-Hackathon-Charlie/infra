@@ -25,7 +25,7 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
-    #                   apps.yaml, kube/<cluster> (one kubeconfig per cluster),
+    #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
     #                   public certificate), and with GITHUB_APP_ID
     #                   github-app.pem and the webhook secret in api.env.
@@ -64,7 +64,6 @@ data:
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
-        get host/apps.yaml > /config/apps.yaml
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"

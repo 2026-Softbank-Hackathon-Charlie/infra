@@ -2,6 +2,7 @@
 
 - 날짜: 2026-11-05
 - 상태: 제안
+- 2026-11-07 갱신([ADR 0075](0075-remove-moimroom-static-catalog-and-image-publishing.md)): EKS와 onprem의 moimroom도 플랫폼에서 지웠고 앱 목록 파일 `host/apps.yaml`도 지웠다.
 - 2026-11-07 갱신: 손으로 배포했던 GKE moimroom을 지웠다. moimroom은 더 이상 GKE에서 돌지 않는다(EKS `moimroom/moimroom-db`와 onprem에서 돈다). `moimroom-db-gke`와 `moimroom-gcp-db`도 지웠고 앱 목록에서 gke 환경을 뺐다.
 - 관련 ADR: [0048](0048-connect-cloud-databases-with-scoped-migration-access.md), [0050](0050-let-migrations-own-app-database-topology.md)
 

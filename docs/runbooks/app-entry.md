@@ -11,6 +11,8 @@
 
 공개 주소만 읽는다. 1초마다 docker-doom 화면, moimroom 헬스 체크, docker-doom WebSocket 업그레이드(101)를 확인하고 실패만 남긴다.
 
+> 2026-11-07: moimroom 앱은 지웠다. 이 감시를 다시 쓸 때는 moimroom 줄을 빼거나 살아 있는 앱 주소로 바꾼다.
+
 ```bash
 while true; do
   t=$(date +%H:%M:%S)

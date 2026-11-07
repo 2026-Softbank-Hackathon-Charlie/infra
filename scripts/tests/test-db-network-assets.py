@@ -130,45 +130,6 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
             self.assertNotIn('password', env)
             self.assertNotIn('bucket', env)
 
-    def test_canonical_file_buckets_match_app_storage_profiles(self):
-        catalog = yaml.safe_load((ROOT / 'terraform/platform/aws/host/apps.yaml').read_text(encoding='utf-8'))
-        app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
-        profiles = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-apps.yaml').read_text(encoding='utf-8'))
-        eks_namespace = app['environments']['eks'].get('namespace', app['namespace'])
-        eks_prefix = profiles['environments']['eks']['profile']['s3']['bucketPrefix']
-        expected = {
-            'eks': f's3:{eks_prefix}{eks_namespace}',
-        }
-        for environment, bucket in expected.items():
-            with self.subTest(environment=environment):
-                self.assertEqual(app['environments'][environment]['bucket'], bucket)
-
-    def test_canonical_catalog_matches_management_services_and_preserves_workloads(self):
-        values = yaml.safe_load((ASSETS / 'management.yaml').read_text(encoding='utf-8'))
-        values['enabled'] = True
-        spec = importlib.util.spec_from_file_location('db_network_tests', ROOT / 'scripts/tests/test-db-network.py')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        result = module.DatabaseNetworkTests.render(values)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        services = {doc['metadata']['name']: doc for doc in yaml.safe_load_all(result.stdout)
-                    if doc and doc['kind'] == 'Service'}
-        catalog = yaml.safe_load((ROOT / 'terraform/platform/aws/host/apps.yaml').read_text(encoding='utf-8'))
-        app = next(app for app in catalog['apps'] if app['name'] == 'moimroom')
-        expected = {
-            'eks': ('moimroom', 'moimroom-db', 'EKS_MOIMROOM_PGPASSWORD', 's3:hopcharlie-eks-moimroom'),
-        }
-        for peer, (namespace, cluster, password_env, bucket) in expected.items():
-            with self.subTest(peer=peer):
-                env = app['environments'][peer]
-                metadata = services['db-' + peer]['metadata']
-                self.assertEqual(env['dbHost'], f"{metadata['name']}.{metadata['namespace']}.svc.cluster.local")
-                self.assertEqual(env.get('namespace', app['namespace']), namespace)
-                self.assertEqual(env['cnpgCluster'], cluster)
-                self.assertEqual(env['passwordEnv'], password_env)
-                self.assertEqual(env['bucket'], bucket)
-                self.assertNotIn('password', env)
-
     def test_active_management_allowlist_only_adds_db_network_namespace(self):
         values = yaml.safe_load((ROOT / 'clusters/aws-dev-management/values/hopcharlie-platform.yaml').read_text(encoding='utf-8'))
         self.assertEqual(values['api']['dsnHostSuffixes'], '.ts.net,.hopcharlie-db-network.svc.cluster.local')

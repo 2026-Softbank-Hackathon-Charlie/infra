@@ -49,16 +49,6 @@ resource "aws_ecr_lifecycle_policy" "console" {
   policy     = aws_ecr_lifecycle_policy.platform.policy
 }
 
-resource "aws_ecr_repository" "moimroom" {
-  name                 = "${local.name}/apps/moimroom"
-  image_tag_mutability = "IMMUTABLE"
-  force_delete         = false
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-}
-
 # --- secrets: generated here, stored as SSM SecureString, read by the platform pods ---
 
 resource "random_password" "db" {
@@ -121,8 +111,9 @@ resource "aws_ssm_parameter" "platform_tokens" {
 }
 
 # --- settings files the platform API pod reads (fetch-settings.sh in the
-# infra chart): environments and the apps a migration may move. The names keep
-# the host/ prefix of the retired EC2 host so existing readers still work. ---
+# infra chart): the environments. The apps a migration may move come from the
+# platform's app registry, not a file. The name keeps the host/ prefix of the
+# retired EC2 host so existing readers still work. ---
 
 locals {
   # Line endings are normalized so a Windows checkout (CRLF) and a Linux one
@@ -135,7 +126,6 @@ locals {
       app_iam_path      = local.app_iam_path
       app_boundary_arn  = local.app_boundary_arn
     }), "\r\n", "\n")
-    "apps.yaml" = replace(file("${path.module}/host/apps.yaml"), "\r\n", "\n")
   }
 }
 

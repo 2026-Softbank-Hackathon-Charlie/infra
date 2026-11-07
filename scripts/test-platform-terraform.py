@@ -14,7 +14,7 @@ ASSETS = {
     '.terraform.lock.hcl',
     'state/backend.tf', 'state/main.tf', 'state/.terraform.lock.hcl',
     'dns/backend.tf', 'dns/main.tf', 'dns/.terraform.lock.hcl',
-    'host/envs.yaml', 'host/apps.yaml',
+    'host/envs.yaml',
 }
 
 
@@ -61,7 +61,7 @@ class PlatformTerraformTests(unittest.TestCase):
         verify = load_script(SCRIPT, 'platform_verify')
         with tempfile.TemporaryDirectory() as temp:
             source = self.fixture(Path(temp))
-            (source / 'host/apps.yaml').unlink()
+            (source / 'host/envs.yaml').unlink()
             with patch.object(verify, 'SOURCE', source), patch.object(verify.subprocess, 'run') as run:
                 with self.assertRaises(FileNotFoundError):
                     verify.main()
