@@ -76,6 +76,12 @@ spec:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.api.parity }}
+      {{- if .enabled }}
+      annotations:
+        checksum/parity: {{ toJson .config | sha256sum }}
+      {{- end }}
+      {{- end }}
       labels:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
@@ -103,6 +109,11 @@ spec:
               exec hopcharlie-api -addr :8080 -state-dir /data/runs
           env:
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
+            {{- with .Values.api.parity }}
+            {{- if .enabled }}
+            - {name: PLATFORM_PARITY_FILE, value: /etc/parity/parity.json}
+            {{- end }}
+            {{- end }}
             - {name: PLATFORM_GATEWAY_URL, value: "http://hopcharlie-gateway:9901"}
             # The canary sends synthetic reads through the public proxy, so a
             # migration of an app without users still has its target judged.
@@ -197,6 +208,11 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: settings, mountPath: /config, readOnly: true}
+            {{- with .Values.api.parity }}
+            {{- if .enabled }}
+            - {name: parity, mountPath: /etc/parity, readOnly: true}
+            {{- end }}
+            {{- end }}
             {{- if .Values.hopai.enabled }}
             - {name: hopai-job, mountPath: /etc/hopai, readOnly: true}
             {{- end }}
@@ -206,6 +222,13 @@ spec:
             {{- end }}
       volumes:
         {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        {{- with .Values.api.parity }}
+        {{- if .enabled }}
+        - name: parity
+          configMap:
+            name: hopcharlie-parity
+        {{- end }}
+        {{- end }}
         {{- if .Values.hopai.enabled }}
         - name: hopai-job
           configMap:

@@ -985,3 +985,9 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
 
 - [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
+
+### 운영 환경 동등성 검사
+
+- [docs/adr/0076-enable-platform-parity-audit.md](docs/adr/0076-enable-platform-parity-audit.md) — 감사 모드 활성화와 검증 범위
+- [helm/charts/hopcharlie-platform/templates/parity.yaml](helm/charts/hopcharlie-platform/templates/parity.yaml) — 비밀값 없는 검사 설정
+- [scripts/tests/test-platform-parity.py](scripts/tests/test-platform-parity.py) — API 한정 활성화·설정 교체·안전 모드 검사

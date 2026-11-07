@@ -26,6 +26,10 @@
     },
     "appFiles": {
       "enabled": false
+    },
+    "parity": {
+      "enabled": false,
+      "config": {}
     }
   },
   "appDomain": "",
