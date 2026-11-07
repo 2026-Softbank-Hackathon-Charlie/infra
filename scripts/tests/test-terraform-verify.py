@@ -66,12 +66,13 @@ if os.environ.get('VERIFY_FAIL') == sys.argv[2]:
 
     def test_original_mock_runs_preserved(self):
         # Preserve the AWS suite, including four workload NetworkPolicy regressions and
-        # the three app entry DNS runs of ADR 0058 (no NLB, one NLB, two NLBs).
+        # the three app entry DNS runs of ADR 0058 (no NLB, one NLB, two NLBs),
+        # and four Langfuse storage/association runs of ADR 0086.
         roots = [ROOT / 'terraform' / verify.relative(stack) for stack in verify.ROOTS if not stack.startswith('integrations/')]
         tests = [p for root in roots for p in root.rglob('*.tftest.hcl')]
         cnpg = ROOT / 'terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl'
         runs = lambda path: __import__('re').findall(r'^run\s+"([^"]+)"', path.read_text(), __import__('re').M)
-        self.assertEqual(sum(len(runs(p)) for p in tests if p != cnpg), 35)
+        self.assertEqual(sum(len(runs(p)) for p in tests if p != cnpg), 39)
         self.assertIn(cnpg, tests)
         self.assertEqual(runs(cnpg), ['cnpg_backup_and_restore_boundaries'])
         self.assertEqual(len(roots), 6)
