@@ -34,6 +34,9 @@ the "settings" volume. Call with (dict "root" $ "fetch" "api|gateway|postgres").
     {{- if eq .fetch "api" }}
     # Only the API reads the GitHub App secrets; other pods keep their spec.
     - {name: GITHUB_APP_ID, value: {{ .root.Values.github.appId | quote }}}
+    {{- if .root.Values.api.aiobs.enabled }}
+    - {name: AIOBS_CLICKHOUSE, value: "1"}
+    {{- end }}
     {{- end }}
     - {name: HOME, value: /tmp}
   securityContext:

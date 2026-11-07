@@ -991,3 +991,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0076-enable-platform-parity-audit.md](docs/adr/0076-enable-platform-parity-audit.md) — 감사 모드 활성화와 검증 범위
 - [helm/charts/hopcharlie-platform/templates/parity.yaml](helm/charts/hopcharlie-platform/templates/parity.yaml) — 비밀값 없는 검사 설정
 - [scripts/tests/test-platform-parity.py](scripts/tests/test-platform-parity.py) — API 한정 활성화·설정 교체·안전 모드 검사
+
+### hopai 활동 조회 (콘솔 이주 지도)
+
+- [docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md](docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md) — API가 관측 ClickHouse에서 hopai 호출을 읽는다 (제안)
+- [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)

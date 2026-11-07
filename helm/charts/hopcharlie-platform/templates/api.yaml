@@ -109,6 +109,18 @@ spec:
               exec hopcharlie-api -addr :8080 -state-dir /data/runs
           env:
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
+            {{- with .Values.api.aiobs }}
+            {{- if .enabled }}
+            # GET /v1/ai-activity reads the AI runner's log lines from the observability
+            # ClickHouse (infra ADR 0077). The password comes from SSM (fetch-settings.sh).
+            - {name: PLATFORM_AIOBS_CLICKHOUSE_URL, value: {{ required "api.aiobs.url is required with api.aiobs.enabled" .url | quote }}}
+            - {name: PLATFORM_AIOBS_CLICKHOUSE_USER, value: {{ required "api.aiobs.user is required with api.aiobs.enabled" .user | quote }}}
+            - {name: PLATFORM_AIOBS_CLICKHOUSE_PASSWORD_FILE, value: /config/aiobs-clickhouse-password}
+            {{- with .table }}
+            - {name: PLATFORM_AIOBS_CLICKHOUSE_TABLE, value: {{ . | quote }}}
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.api.parity }}
             {{- if .enabled }}
             - {name: PLATFORM_PARITY_FILE, value: /etc/parity/parity.json}
