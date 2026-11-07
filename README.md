@@ -377,7 +377,7 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 
 | 파일 | 역할 |
 | --- | --- |
-| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR/push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
+| [.github/workflows/terraform-check.yml](.github/workflows/terraform-check.yml) | PR·main push 검증과 AWS 입력 변경 시 main 자동 apply·수동 실행 |
 | [.github/workflows/cnpg-migration-admission.yml](.github/workflows/cnpg-migration-admission.yml) | 임시 kind에서 세 환경의 실제 CNPG migration admission 검사 |
 | [.gitignore](.gitignore) | 로컬 비밀값·state·plan·kubeconfig·다운로드 산출물의 Git 추적 방지 |
 | [.terraform-version](.terraform-version) | Terraform CLI 버전 고정 |
@@ -1051,6 +1051,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
+| [docs/adr/0090-remove-duplicate-feature-push-ci.md](docs/adr/0090-remove-duplicate-feature-push-ci.md) | 기능 브랜치 push·PR 중복 검사 제거, 검증·배포 경계 유지 |
 
 ### Onprem registration preparation (disabled)
 
