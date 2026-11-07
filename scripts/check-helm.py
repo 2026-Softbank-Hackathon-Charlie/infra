@@ -492,6 +492,13 @@ def main():
         for want in ("'hopai'", "serviceAccountName == 'hopcharlie-hopai'", "/hopcharlie/hopai:", "aws-cli/aws-cli:", "has(v.secret)", "has(v.hostPath)", "envFrom",
                      "['hopcharlie-hopai-fetch', 'hopai-onboarding']", "'^hopai-onb-[0-9a-f]{12}$'"):
             assert want in rules, want
+        # This is not general Secret access: both env name and key must match.
+        for want in ("c.name == 'hopai'", "e.name == 'LANGFUSE_PUBLIC_KEY'",
+                     "e.name == 'LANGFUSE_SECRET_KEY'", "secretKeyRef.name == 'hopcharlie-langfuse-auth'",
+                     "secretKeyRef.key == 'public-key'", "secretKeyRef.key == 'secret-key'",
+                     "e.name == 'HOPCHARLIE_RUN_ID'", "metadata.labels['job-name']",
+                     "!e.valueFrom.secretKeyRef.optional"):
+            assert want in rules, want
         # An onboarding's hopai input ConfigMap and stopping its Job (infra ADR 0082).
         cleanup = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and d["metadata"]["name"] == "hopcharlie-platform-ai-runner-cleanup")["spec"]
         assert cleanup["matchConstraints"]["resourceRules"] == [
