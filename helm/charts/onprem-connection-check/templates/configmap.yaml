@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: onprem-connection-proof
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app.kubernetes.io/name: onprem-connection-check
+data:
+  clusterName: {{ .Values.clusterName | quote }}
+  purpose: management-connection-check

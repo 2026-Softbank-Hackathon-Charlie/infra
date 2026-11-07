@@ -1,0 +1,6 @@
+apiVersion: v2
+name: onprem-connection-check
+description: A ConfigMap-only check for a newly registered workload cluster.
+type: application
+version: 0.1.0
+appVersion: "1.0"

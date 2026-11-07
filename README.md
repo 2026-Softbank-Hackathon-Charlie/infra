@@ -986,3 +986,20 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
 
 - [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
+
+
+## 독립 K3s 연결 참고
+
+| 파일 | 설명 |
+| --- | --- |
+| [docs/adr/0021-add-independent-onprem-k3s-workload.md](docs/adr/0021-add-independent-onprem-k3s-workload.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/adr/0023-use-instance-scoped-temporary-ssh-for-k3s-inspection.md](docs/adr/0023-use-instance-scoped-temporary-ssh-for-k3s-inspection.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/adr/0024-bootstrap-single-node-k3s-on-gce.md](docs/adr/0024-bootstrap-single-node-k3s-on-gce.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/adr/0025-reuse-tailscale-operator-for-k3s-api.md](docs/adr/0025-reuse-tailscale-operator-for-k3s-api.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/adr/0026-scope-k3s-consumer-certificates.md](docs/adr/0026-scope-k3s-consumer-certificates.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/plans/onprem-k3s-installation.md](docs/plans/onprem-k3s-installation.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/plans/onprem-k3s-management-connection.md](docs/plans/onprem-k3s-management-connection.md) | 운영 식별정보 없는 연결 참고 |
+| [docs/plans/onprem-k3s-workload.md](docs/plans/onprem-k3s-workload.md) | 운영 식별정보 없는 연결 참고 |
+| [helm/charts/onprem-connection-check/Chart.yaml](helm/charts/onprem-connection-check/Chart.yaml) | 운영 식별정보 없는 연결 참고 |
+| [helm/charts/onprem-connection-check/templates/configmap.yaml](helm/charts/onprem-connection-check/templates/configmap.yaml) | 운영 식별정보 없는 연결 참고 |
+| [helm/charts/onprem-connection-check/values.yaml](helm/charts/onprem-connection-check/values.yaml) | 운영 식별정보 없는 연결 참고 |
