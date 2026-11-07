@@ -149,6 +149,20 @@ class DatabaseNetworkAssetsTests(unittest.TestCase):
         self.assertIs(profile['postgres']['backup']['enabled'], False)
         self.assertIs(profile['ingress']['enabled'], False)
         self.assertEqual(profile['publicService']['type'], 'ClusterIP')
+        # Web path: the public Service is exposed on the tailnet; the management egress
+        # Service app-onprem-<instance> and the gateway backend template reach it.
+        self.assertEqual(profile['publicService']['annotations'], {
+            'tailscale.com/expose': 'true',
+            'tailscale.com/tags': 'tag:hop-app-onprem',
+            'tailscale.com/proxy-class': 'hopcharlie-app-web-ingress-onprem',
+        })
+        self.assertEqual(profile['networkPolicy']['gatewayFrom'], [{
+            'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': NAMESPACE}},
+            'podSelector': {'matchLabels': {'hopcharlie.dev/web-proxy': 'ingress'}},
+        }])
+        backends = dict(t.split('=', 1) for t in platform['deploy']['backendTemplates'].split(','))
+        self.assertEqual(backends['onprem'], f'http://app-onprem-{{instance}}.{NAMESPACE}.svc.cluster.local')
+        self.assertEqual(backends['eks'], 'http://{instance}.eks.hopcharlie.internal')
         self.assertIs(profile['observability']['enabled'], False)
         # The app chart's proxies use the shared objects of the onprem db-network release.
         release = yaml.safe_load((ASSETS / 'onprem.yaml').read_text(encoding='utf-8'))

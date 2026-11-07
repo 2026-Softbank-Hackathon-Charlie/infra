@@ -74,6 +74,56 @@ spec:
       ports:
         - {protocol: UDP}
 ---
+# Web path to onprem apps (hand-made ExternalName Services app-onprem-<instance>,
+# port 80; see the onprem web path runbook). The platform API probes and the
+# traffic gateway proxies to them, so both may connect in on 80.
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: hopcharlie-app-web-egress-management
+spec:
+  statefulSet:
+    pod:
+      labels:
+        hopcharlie.dev/web-proxy: egress
+      tailscaleContainer:
+        resources:
+          {{- toYaml .Values.proxyResources | nindent 10 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-app-web-egress-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/web-proxy: egress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: charlie-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: hopcharlie
+            matchExpressions:
+              - {key: app.kubernetes.io/component, operator: In, values: [api, gateway]}
+      ports:
+        - {protocol: TCP, port: 80}
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    # Direct peers may use any destination UDP port after NAT.
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+---
 # No update or patch: the operator rewrites externalName and finalizers, so
 # the platform only creates and deletes (deletes and re-creates on drift).
 apiVersion: rbac.authorization.k8s.io/v1

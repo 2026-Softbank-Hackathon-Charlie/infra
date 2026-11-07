@@ -91,4 +91,52 @@ spec:
               cnpg.io/instanceRole: primary
       ports:
         - {protocol: TCP, port: 5432}
+{{- if eq .Values.clusterId "onprem" }}
+---
+# Web path of the laptop k3s (traffic gateway to the app's public Service).
+# Apps there expose the public Service on the tailnet with this class; the
+# management EKS egress proxy (management-app-routes.yaml) connects in.
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: hopcharlie-app-web-ingress-{{ .Values.clusterId }}
+spec:
+  statefulSet:
+    pod:
+      labels:
+        hopcharlie.dev/web-proxy: ingress
+      tailscaleContainer:
+        resources:
+          {{- toYaml .Values.proxyResources | nindent 10 }}
+---
+# Any port: the target port differs per app. The only destination is an app
+# namespace (labelled hopcharlie.dev/instance by the app chart).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-app-web-ingress-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      hopcharlie.dev/web-proxy: ingress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP, port: 41641}
+  egress:
+    {{- include "db-network.controlEgress" . | nindent 4 }}
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: UDP}
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - {key: hopcharlie.dev/instance, operator: Exists}
+      ports:
+        - {protocol: TCP}
+{{- end }}
 {{- end }}

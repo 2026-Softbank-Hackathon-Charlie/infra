@@ -378,8 +378,10 @@ class OnpremPlatformAppsTests(unittest.TestCase):
             ('NetworkPolicy', 'db-network-operator'),
             ('NetworkPolicy', 'platform-app-db-egress-proxy'),
             ('NetworkPolicy', 'platform-app-db-ingress-proxy'),
+            ('NetworkPolicy', 'platform-app-web-ingress-proxy'),
             ('ProxyClass', 'hopcharlie-app-db-egress-onprem'),
             ('ProxyClass', 'hopcharlie-app-db-ingress-onprem'),
+            ('ProxyClass', 'hopcharlie-app-web-ingress-onprem'),
         ])
         for doc in docs:
             if doc['kind'] == 'NetworkPolicy':
@@ -393,12 +395,29 @@ class OnpremPlatformAppsTests(unittest.TestCase):
         api_k3s = {'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}],
                    'ports': [{'protocol': 'TCP', 'port': 443}, {'protocol': 'TCP', 'port': 6443}]}
         for doc in docs:
-            if doc['kind'] == 'NetworkPolicy':
+            if doc['kind'] == 'NetworkPolicy' and doc['metadata']['name'] != 'platform-app-web-ingress-proxy':
                 expected = cloud[('NetworkPolicy', doc['metadata']['name'])]
                 expected = json.loads(json.dumps(expected).replace(json.dumps(api_443), json.dumps(api_k3s)))
                 self.assertEqual(doc, expected)
         operator = next(d for d in docs if d['metadata']['name'] == 'db-network-operator')
         self.assertIn(api_k3s, operator['spec']['egress'])
+
+    def test_onprem_web_ingress_proxy_is_labelled_and_reaches_only_app_namespaces(self):
+        docs = {(d['kind'], d['metadata']['name']): d
+                for d in yaml.safe_load_all(DatabaseNetworkTests.render(ONPREM_VALUES).stdout) if d}
+        pod = docs[('ProxyClass', 'hopcharlie-app-web-ingress-onprem')]['spec']['statefulSet']['pod']
+        self.assertEqual(pod['labels'], {'hopcharlie.dev/web-proxy': 'ingress'})
+        policy = docs[('NetworkPolicy', 'platform-app-web-ingress-proxy')]['spec']
+        self.assertEqual(policy['podSelector'], {'matchLabels': {'hopcharlie.dev/web-proxy': 'ingress'}})
+        self.assertEqual(policy['ingress'], [{'from': [{'ipBlock': {'cidr': '0.0.0.0/0'}}],
+                                              'ports': [{'protocol': 'UDP', 'port': 41641}]}])
+        self.assertEqual(policy['egress'][-1], {
+            'to': [{'namespaceSelector': {'matchExpressions': [
+                {'key': 'hopcharlie.dev/instance', 'operator': 'Exists'}]}}],
+            'ports': [{'protocol': 'TCP'}]})
+        # Cloud workload releases do not get the web path objects.
+        gke = DatabaseNetworkTests.render(dict(values_for('gke'), platformApps={'enabled': True}))
+        self.assertNotIn('web-proxy', gke.stdout)
 
     def test_kube_api_server_port_must_be_a_port(self):
         for port in (0, 65536, '6443', 443.5):
@@ -457,7 +476,9 @@ class ManagementAppRoutesTests(unittest.TestCase):
     def test_renders_only_route_objects_apart_from_the_live_release(self):
         self.assertEqual(sorted(self.docs), [
             ('NetworkPolicy', 'platform-app-db-egress-proxy'),
+            ('NetworkPolicy', 'platform-app-web-egress-proxy'),
             ('ProxyClass', 'hopcharlie-app-db-egress-management'),
+            ('ProxyClass', 'hopcharlie-app-web-egress-management'),
             ('Role', 'hopcharlie-platform-app-db-routes'),
             ('RoleBinding', 'hopcharlie-platform-app-db-routes'),
             ('ValidatingAdmissionPolicy', 'hopcharlie-platform-app-db-route-create'),
@@ -515,6 +536,20 @@ class ManagementAppRoutesTests(unittest.TestCase):
                      if d and d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'db-eks-proxy')
         self.assertEqual(policy['ingress'], proxy['ingress'])
         self.assertEqual(policy['egress'], proxy['egress'])
+
+    def test_web_egress_proxy_admits_only_platform_api_and_gateway_on_80(self):
+        pod = self.docs[('ProxyClass', 'hopcharlie-app-web-egress-management')]['spec']['statefulSet']['pod']
+        self.assertEqual(pod['labels'], {'hopcharlie.dev/web-proxy': 'egress'})
+        policy = self.docs[('NetworkPolicy', 'platform-app-web-egress-proxy')]['spec']
+        self.assertEqual(policy['podSelector'], {'matchLabels': {'hopcharlie.dev/web-proxy': 'egress'}})
+        self.assertEqual(policy['ingress'][0], {
+            'from': [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'charlie-platform'}},
+                      'podSelector': {'matchLabels': {'app.kubernetes.io/part-of': 'hopcharlie'},
+                                      'matchExpressions': [{'key': 'app.kubernetes.io/component',
+                                                            'operator': 'In', 'values': ['api', 'gateway']}]}}],
+            'ports': [{'protocol': 'TCP', 'port': 80}],
+        })
+        self.assertEqual(policy['egress'], self.docs[('NetworkPolicy', 'platform-app-db-egress-proxy')]['spec']['egress'])
 
     def test_platform_may_only_get_list_watch_create_delete_services_here(self):
         role = self.docs[('Role', 'hopcharlie-platform-app-db-routes')]
