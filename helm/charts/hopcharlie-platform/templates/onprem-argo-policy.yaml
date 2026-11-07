@@ -1,8 +1,21 @@
 {{- $cfg := .Values.api.onpremRegistration | default dict }}
 {{- if $cfg.enabled }}
+{{- $name := dict "__hopExpr" "variables.name" }}
+{{- $owner := dict "__hopExpr" "variables.owner" }}
+{{- $uid := dict "__hopExpr" "variables.clusterUID" }}
+{{- $environment := dict "__hopExpr" "variables.environment" }}
 {{- $profile := deepCopy $cfg.profile }}
-{{- $_ := unset $profile "onpremRegistration" }}
-{{- $profilePrefix := trimSuffix "}" (toJson $profile) }}
+{{- $_ := set $profile "onpremRegistration" (dict "enrollmentID" $owner "clusterUID" $uid) }}
+{{- $destinations := list }}
+{{- range $namespace := list "*" "!kube-*" "!argocd" "!charlie-system" "!default" "!hopcharlie-*" }}
+{{- $destinations = append $destinations (dict "name" $name "namespace" $namespace) }}
+{{- end }}
+{{- $project := dict "sourceRepos" (list "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git") "destinations" $destinations "clusterResourceWhitelist" (list (dict "group" "" "kind" "Namespace")) "namespaceResourceBlacklist" (list (dict "group" "rbac.authorization.k8s.io" "kind" "*") (dict "group" "" "kind" "Secret")) }}
+{{- $generator := dict "git" (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "revision" "main" "files" (list (dict "path" (dict "__hopExpr" "'apps/*/' + variables.environment + '.yaml'"))) "requeueAfterSeconds" 30) }}
+{{- $sources := list (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "targetRevision" "main" "path" "helm/charts/hopcharlie-app" "helm" (dict "releaseName" "{{ .namespace }}" "valueFiles" (list "$gitops/{{ .path.path }}/{{ .path.filename }}") "valuesObject" (dict "profile" $profile))) (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "targetRevision" "main" "ref" "gitops") }}
+{{- $sync := dict "automated" (dict "prune" true "selfHeal" true) "retry" (dict "limit" 10 "backoff" (dict "duration" "5s" "factor" 2 "maxDuration" "3m")) }}
+{{- $templateMeta := dict "name" (dict "__hopExpr" "'{{ .namespace }}-' + variables.environment") "labels" (dict "hopcharlie.dev/app" "{{ .app }}" "hopcharlie.dev/instance" "{{ .namespace }}" "hopcharlie.dev/env" $environment "hopcharlie.dev/onprem-enrollment" $owner) }}
+{{- $set := dict "goTemplate" true "goTemplateOptions" (list "missingkey=error") "generators" (list $generator) "template" (dict "metadata" $templateMeta "spec" (dict "project" $name "destination" (dict "name" $name "namespace" "{{ .namespace }}") "sources" $sources "syncPolicy" $sync)) }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata: {name: hopcharlie-onprem-argo}
@@ -47,28 +60,11 @@ spec:
       message: registration ownership, cluster UID and environment are immutable
     - expression: >-
         variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'appprojects' ||
-        object.spec == {
-          'sourceRepos':['https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git'],
-          'destinations':[
-            {'name':variables.name,'namespace':'*'}, {'name':variables.name,'namespace':'!kube-*'},
-            {'name':variables.name,'namespace':'!argocd'}, {'name':variables.name,'namespace':'!charlie-system'},
-            {'name':variables.name,'namespace':'!default'}, {'name':variables.name,'namespace':'!hopcharlie-*'}],
-          'clusterResourceWhitelist':[{'group':'','kind':'Namespace'}],
-          'namespaceResourceBlacklist':[{'group':'rbac.authorization.k8s.io','kind':'*'},{'group':'','kind':'Secret'}]}
+        object.spec == {{ include "hopcharlie.registrationCEL" $project }}
       message: project permits only fixed repos, its registered cluster and ordinary application namespaces; RBAC and Secret sync stay denied
     - expression: >-
         variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'applicationsets' ||
-        (size(object.spec) == 4 && object.spec.goTemplate == true && object.spec.goTemplateOptions == ['missingkey=error'] &&
-        object.spec.generators == [{'git':{'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','revision':'main','files':[{'path':'apps/*/' + variables.environment + '.yaml'}],'requeueAfterSeconds':30}}] &&
-        size(object.spec.template) == 2 && size(object.spec.template.metadata) == 2 &&
-        object.spec.template.metadata.name == '{{ "{{ .namespace }}" }}-' + variables.environment &&
-        object.spec.template.metadata.labels == {'hopcharlie.dev/app':'{{ "{{ .app }}" }}','hopcharlie.dev/instance':'{{ "{{ .namespace }}" }}','hopcharlie.dev/env':variables.environment,'hopcharlie.dev/onprem-enrollment':variables.owner} &&
-        size(object.spec.template.spec) == 4 && object.spec.template.spec.project == variables.name &&
-        object.spec.template.spec.destination == {'name':variables.name,'namespace':'{{ "{{ .namespace }}" }}'} &&
-        object.spec.template.spec.sources == [
-          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/infra.git','targetRevision':'main','path':'helm/charts/hopcharlie-app','helm':{'releaseName':'{{ "{{ .namespace }}" }}','valueFiles':['$gitops/{{ "{{ .path.path }}/{{ .path.filename }}" }}'],'valuesObject':{'profile':{{ $profilePrefix }},'onpremRegistration':{'enrollmentID':variables.owner,'clusterUID':variables.clusterUID}}}}},
-          {'repoURL':'https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git','targetRevision':'main','ref':'gitops'}] &&
-        object.spec.template.spec.syncPolicy == {'automated':{'prune':true,'selfHeal':true},'retry':{'limit':10,'backoff':{'duration':'5s','factor':2,'maxDuration':'3m'}}})
+        object.spec == {{ include "hopcharlie.registrationCEL" $set }}
       message: application set has one fixed environment generator, approved chart and exact server profile with restricted PodSecurity
 ---
 apiVersion: admissionregistration.k8s.io/v1

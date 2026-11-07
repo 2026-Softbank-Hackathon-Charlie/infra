@@ -57,6 +57,11 @@ spec:
     # The dedicated account obtains this Role only with registration enabled.
     - expression: "(request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api' && request.resource.resource == 'applicationsets' && object.metadata.name.startsWith('hop-onprem-')) || object.spec == oldObject.spec"
       message: the platform may only change annotations
+    - expression: >-
+        (has(object.metadata.labels) ? object.metadata.labels : {}) == (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
+        (has(object.metadata.ownerReferences) ? object.metadata.ownerReferences : []) == (has(oldObject.metadata.ownerReferences) ? oldObject.metadata.ownerReferences : []) &&
+        (has(object.metadata.finalizers) ? object.metadata.finalizers : []) == (has(oldObject.metadata.finalizers) ? oldObject.metadata.finalizers : [])
+      message: refresh cannot change labels, garbage-collection ownership or deletion finalizers
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

@@ -200,6 +200,14 @@ def main():
         saved=apply(original);decision('owned '+saved['kind']+' update',saved,True,'replace')
         bad=copy.deepcopy(saved);bad['metadata']['labels'][CLUSTER_UID]='ffffffff-ffff-ffff-ffff-ffffffffffff';decision(saved['kind']+' UID takeover',bad,False,'replace')
         foreign=copy.deepcopy(original);foreign['metadata']['name']='existing-infra';foreign=apply(foreign);decision('foreign '+foreign['kind']+' update',foreign,False,'replace')
+    legacy=copy.deepcopy(a);legacy['metadata']['name']='hopcharlie-apps';legacy=apply(legacy)
+    legacy['metadata'].setdefault('annotations',{})['argocd.argoproj.io/application-set-refresh']='true'
+    decision('legacy application set refresh annotation',legacy,True,'replace')
+    for label,mutate in [
+        ('labels',lambda o:o['metadata']['labels'].update({'hijacked':'true'})),
+        ('finalizers',lambda o:o['metadata'].update(finalizers=['example.test/blocked'])),
+        ('ownerReferences',lambda o:o['metadata'].update(ownerReferences=[{'apiVersion':'argoproj.io/v1alpha1','kind':'ApplicationSet','name':NAME,'uid':UID}]))]:
+        bad=copy.deepcopy(legacy);mutate(bad);decision('legacy refresh '+label+' mutation',bad,False,'replace')
     # Actual DELETE must be authorized by stored ownership, not caller labels.
     for kind,namespace,name in [('secret','argocd',NAME),('service','hopcharlie-db-network',HOST),('appproject','argocd',NAME),('applicationset','argocd',NAME)]:
         result=kube(['delete',kind,name,'-n',namespace,'--dry-run=server'],actor=True,allow_failure=True)

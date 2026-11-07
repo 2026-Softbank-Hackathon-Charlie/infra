@@ -2,6 +2,28 @@
 {{- if (.Values.api.onpremRegistration | default dict).enabled -}}hopcharlie-platform-api{{- else -}}hopcharlie-platform{{- end -}}
 {{- end -}}
 
+{{/* CEL admission enables homogeneous aggregate literals. Every aggregate
+value must explicitly be dyn so mixed JSON strings/lists/objects can compare
+exactly. __hopExpr is an internal builder marker, never an API input. */}}
+{{- define "hopcharlie.registrationCEL" -}}
+{{- if kindIs "map" . -}}
+  {{- if and (eq (len .) 1) (hasKey . "__hopExpr") -}}
+    {{- get . "__hopExpr" -}}
+  {{- else -}}
+    {{- $parts := list -}}
+    {{- range $key := keys . | sortAlpha -}}
+      {{- $parts = append $parts (printf "%s:dyn(%s)" (toJson $key) (include "hopcharlie.registrationCEL" (get $ $key))) -}}
+    {{- end -}}
+    {{- printf "{%s}" (join "," $parts) -}}
+  {{- end -}}
+{{- else if kindIs "slice" . -}}
+  {{- $parts := list -}}
+  {{- range . -}}{{- $parts = append $parts (printf "dyn(%s)" (include "hopcharlie.registrationCEL" .)) -}}{{- end -}}
+  {{- printf "[%s]" (join "," $parts) -}}
+{{- else -}}{{- toJson . -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "hopcharlie.labels" -}}
 app.kubernetes.io/part-of: hopcharlie
 app.kubernetes.io/component: {{ . }}
