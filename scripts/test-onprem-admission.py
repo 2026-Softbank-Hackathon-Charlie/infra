@@ -110,7 +110,15 @@ def main():
             data = response.read(4 << 20).decode()
         obj = yaml.safe_load(data)
         apply(obj)
-        kube(['wait','--for=condition=Established','crd/'+obj['metadata']['name'],'--timeout=60s'])
+        # A just-created CRD can temporarily have no status.conditions at all;
+        # kubectl wait treats that as an accessor error instead of polling.
+        for _ in range(60):
+            current=json.loads(kube(['get','crd',obj['metadata']['name'],'-o','json']).stdout)
+            if any(c.get('type')=='Established' and c.get('status')=='True' for c in current.get('status',{}).get('conditions',[])):
+                break
+            time.sleep(1)
+        else:
+            raise AssertionError('official Argo CRD did not become Established')
     module_spec = importlib.util.spec_from_file_location('render_test', ROOT/'scripts/tests/test-onprem-registration.py')
     module = importlib.util.module_from_spec(module_spec); module_spec.loader.exec_module(module)
     docs = module.render(True)
@@ -144,6 +152,7 @@ def main():
         ('additional secret field',lambda o:o['data'].update(admin='c2VjcmV0'))]:
         bad=copy.deepcopy(s);mutate(bad);decision('credential '+label,bad,False)
     saved = apply(s)
+    decision('owned credential unconditional update without GET',s,True,'replace')
     decision('owned credential rotation',saved,True,'replace')
     rotated=copy.deepcopy(saved);rotated['metadata']['annotations']['hopcharlie.dev/registration-version']='3';rotated['data']['config']=base64.b64encode(base64.b64decode(rotated['data']['config']).replace(b'eyJ.test.signature',b'eyJ.new.signature')).decode();decision('newer token rotation',rotated,True,'replace')
     for label,mutate in [
@@ -184,6 +193,7 @@ def main():
     for original in [p,a]:
         saved=apply(original);decision('owned '+saved['kind']+' update',saved,True,'replace')
         bad=copy.deepcopy(saved);bad['metadata']['labels'][CLUSTER_UID]='ffffffff-ffff-ffff-ffff-ffffffffffff';decision(saved['kind']+' UID takeover',bad,False,'replace')
+        foreign=copy.deepcopy(original);foreign['metadata']['name']='existing-infra';foreign=apply(foreign);decision('foreign '+foreign['kind']+' update',foreign,False,'replace')
     # Actual DELETE must be authorized by stored ownership, not caller labels.
     for kind,namespace,name in [('secret','argocd',NAME),('service','hopcharlie-db-network',HOST),('appproject','argocd',NAME),('applicationset','argocd',NAME)]:
         result=kube(['delete',kind,name,'-n',namespace,'--dry-run=server'],actor=True,allow_failure=True)
