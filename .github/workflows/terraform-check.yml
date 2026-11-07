@@ -24,7 +24,7 @@ permissions:
   contents: read
 jobs:
   terraform:
-    runs-on: [self-hosted, hopcharlie]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -78,7 +78,7 @@ jobs:
           TF_PLUGIN_CACHE_DIR: ${{ steps.provider-cache.outputs.path }}
         run: python3 scripts/terraform-verify.py --stack '${{ matrix.stack }}'
   helm:
-    runs-on: [self-hosted, hopcharlie]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +93,7 @@ jobs:
       - run: python3 -m pip install PyYAML==6.0.3
       - run: make helm-check
   scripts:
-    runs-on: [self-hosted, hopcharlie]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       aws_changed: ${{ steps.aws-scope.outputs.changed }}
@@ -136,7 +136,7 @@ jobs:
     needs: [terraform, helm, scripts]
     outputs:
       aws_changed: ${{ needs.scripts.outputs.aws_changed }}
-    runs-on: [self-hosted, hopcharlie]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require all checks to pass
@@ -149,7 +149,7 @@ jobs:
   deploy:
     needs: check
     if: github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.check.outputs.aws_changed == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.action == 'plan' || inputs.action == 'apply')))
-    runs-on: [self-hosted, hopcharlie]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     concurrency:
       group: charlie-terraform-apply
