@@ -40,6 +40,14 @@
       "url": "",
       "user": "",
       "table": ""
+    },
+    "onpremRegistration": {
+      "enabled": false,
+      "tailnetDomain": "tail567fe8.ts.net",
+      "profile": {},
+      "agentImage": "",
+      "tailscaleImage": "",
+      "helloImage": ""
     }
   },
   "appDomain": "",

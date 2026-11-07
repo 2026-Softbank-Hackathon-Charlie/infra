@@ -1048,6 +1048,20 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 | [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
 
+### Onprem registration preparation (disabled)
+
+- [helm/db-network/onprem-registration-policy-fragment.json.example](helm/db-network/onprem-registration-policy-fragment.json.example)
+- [.github/workflows/onprem-admission.yml](.github/workflows/onprem-admission.yml)
+- [scripts/test-onprem-admission.py](scripts/test-onprem-admission.py)
+- [scripts/tests/test-onprem-registration.py](scripts/tests/test-onprem-registration.py)
+- [scripts/tests/test-onprem-settings.py](scripts/tests/test-onprem-settings.py)
+- [terraform/platform/aws/onprem-registration.tf](terraform/platform/aws/onprem-registration.tf)
+- [terraform/platform/aws/tests/onprem-registration.tftest.hcl](terraform/platform/aws/tests/onprem-registration.tftest.hcl)
+- [helm/charts/hopcharlie-platform/templates/onprem-registration.yaml](helm/charts/hopcharlie-platform/templates/onprem-registration.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml](helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-network.yaml](helm/charts/hopcharlie-platform/templates/onprem-network.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml](helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml)
+- [docs/adr/0084-isolate-onprem-registration-capabilities.md](docs/adr/0084-isolate-onprem-registration-capabilities.md)
 - [docs/adr/0087-bound-gke-observability-argocd-writes.md](docs/adr/0087-bound-gke-observability-argocd-writes.md) — GKE 관측 Argo의 단계별 admission·권한 위임과 실효 권한 (채택)
 - [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
 - [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록

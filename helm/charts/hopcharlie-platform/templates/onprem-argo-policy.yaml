@@ -1,0 +1,77 @@
+{{- $cfg := .Values.api.onpremRegistration | default dict }}
+{{- if $cfg.enabled }}
+{{- $name := dict "__hopExpr" "variables.name" }}
+{{- $owner := dict "__hopExpr" "variables.owner" }}
+{{- $uid := dict "__hopExpr" "variables.clusterUID" }}
+{{- $environment := dict "__hopExpr" "variables.environment" }}
+{{- $profile := deepCopy $cfg.profile }}
+{{- $_ := set $profile "onpremRegistration" (dict "enrollmentID" "__HOP_ENROLLMENT__" "clusterUID" "__HOP_CLUSTER_UID__") }}
+{{- $valuesJSON := toJson (dict "profile" $profile) }}
+{{- $valuesExpr := replace "__HOP_ENROLLMENT__" "\" + variables.owner + \"" (toJson $valuesJSON) }}
+{{- $valuesExpr = replace "__HOP_CLUSTER_UID__" "\" + variables.clusterUID + \"" $valuesExpr }}
+{{- $destinations := list }}
+{{- range $namespace := list "*" "!kube-*" "!argocd" "!charlie-system" "!default" "!hopcharlie-*" }}
+{{- $destinations = append $destinations (dict "name" $name "namespace" $namespace) }}
+{{- end }}
+{{- $project := dict "sourceRepos" (list "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git") "destinations" $destinations "clusterResourceWhitelist" (list (dict "group" "" "kind" "Namespace")) "namespaceResourceBlacklist" (list (dict "group" "rbac.authorization.k8s.io" "kind" "*") (dict "group" "" "kind" "Secret")) }}
+{{- $generator := dict "git" (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "revision" "main" "files" (list (dict "path" (dict "__hopExpr" "'apps/*/' + variables.environment + '.yaml'"))) "requeueAfterSeconds" 30) }}
+{{- $sources := list (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/infra.git" "targetRevision" "main" "path" "helm/charts/hopcharlie-app" "helm" (dict "releaseName" "{{ .namespace }}" "valueFiles" (list "$gitops/{{ .path.path }}/{{ .path.filename }}") "values" (dict "__hopExpr" $valuesExpr))) (dict "repoURL" "https://github.com/2026-Softbank-Hackathon-Charlie/gitops.git" "targetRevision" "main" "ref" "gitops") }}
+{{- $sync := dict "automated" (dict "prune" true "selfHeal" true) "retry" (dict "limit" 10 "backoff" (dict "duration" "5s" "factor" 2 "maxDuration" "3m")) }}
+{{- $templateMeta := dict "name" (dict "__hopExpr" "'{{ .namespace }}-' + variables.environment") "labels" (dict "hopcharlie.dev/app" "{{ .app }}" "hopcharlie.dev/instance" "{{ .namespace }}" "hopcharlie.dev/env" $environment "hopcharlie.dev/onprem-enrollment" $owner) }}
+{{- $set := dict "goTemplate" true "goTemplateOptions" (list "missingkey=error") "generators" (list $generator) "template" (dict "metadata" $templateMeta "spec" (dict "project" $name "destination" (dict "name" $name "namespace" "{{ .namespace }}") "sources" $sources "syncPolicy" $sync)) }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: {name: hopcharlie-onprem-argo}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [applicationsets, appprojects]
+  matchConditions:
+    - name: api-only
+      expression: request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api'
+  variables:
+    - name: obj
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+    - name: labels
+      expression: "has(variables.obj.metadata.labels) ? variables.obj.metadata.labels : {}"
+    - name: owner
+      expression: "'hopcharlie.dev/onprem-enrollment' in variables.labels ? variables.labels['hopcharlie.dev/onprem-enrollment'] : ''"
+    - name: environment
+      expression: "'hopcharlie.dev/env' in variables.labels ? variables.labels['hopcharlie.dev/env'] : ''"
+    - name: name
+      expression: "variables.obj.metadata.name"
+    - name: clusterUID
+      expression: "'hopcharlie.dev/onprem-cluster-uid' in variables.labels ? variables.labels['hopcharlie.dev/onprem-cluster-uid'] : ''"
+    - name: legacyRefresh
+      expression: "request.operation == 'UPDATE' && request.resource.resource == 'applicationsets' && variables.name == 'hopcharlie-apps' && object.spec == oldObject.spec"
+  validations:
+    - expression: >-
+        variables.legacyRefresh || (request.namespace == 'argocd' && variables.owner.matches('^enr_[a-f0-9]{24}$') &&
+        variables.name == 'hop-onprem-' + variables.owner.substring(4) &&
+        variables.clusterUID.matches('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$') &&
+        variables.environment.matches('^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$') && !(variables.environment in ['eks','gke']))
+      message: Argo resources must belong to the exact registration, cluster UID and environment
+    - expression: >-
+        variables.legacyRefresh || request.operation != 'UPDATE' || (has(oldObject.metadata.labels) &&
+        oldObject.metadata.labels['hopcharlie.dev/onprem-enrollment'] == variables.owner &&
+        oldObject.metadata.labels['hopcharlie.dev/onprem-cluster-uid'] == variables.clusterUID &&
+        oldObject.metadata.labels['hopcharlie.dev/env'] == variables.environment)
+      message: registration ownership, cluster UID and environment are immutable
+    - expression: >-
+        variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'appprojects' ||
+        dyn(object.spec) == {{ include "hopcharlie.registrationCEL" $project }}
+      message: project permits only fixed repos, its registered cluster and ordinary application namespaces; RBAC and Secret sync stay denied
+    - expression: >-
+        variables.legacyRefresh || request.operation == 'DELETE' || request.resource.resource != 'applicationsets' ||
+        dyn(object.spec) == {{ include "hopcharlie.registrationCEL" $set }}
+      message: application set has one fixed environment generator, approved chart and exact server profile with restricted PodSecurity
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: {name: hopcharlie-onprem-argo}
+spec: {policyName: hopcharlie-onprem-argo, validationActions: [Deny]}
+{{- end }}

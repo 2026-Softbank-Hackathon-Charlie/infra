@@ -178,6 +178,6 @@ roleRef:
   name: hopcharlie-ai-runner
 subjects:
   - kind: ServiceAccount
-    name: hopcharlie-platform
+    name: {{ include "hopcharlie.apiServiceAccount" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}

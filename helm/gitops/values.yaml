@@ -32,5 +32,8 @@
     "automatic": {
       "enabled": false
     }
+  },
+  "onpremRegistration": {
+    "enabled": false
   }
 }

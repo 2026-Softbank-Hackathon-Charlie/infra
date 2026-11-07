@@ -7,6 +7,10 @@ kind: Namespace
 metadata:
   name: {{ .Release.Namespace }}
   labels:
+    {{- with .Values.profile.onpremRegistration }}
+    hopcharlie.dev/onprem-enrollment: {{ .enrollmentID | quote }}
+    hopcharlie.dev/onprem-cluster-uid: {{ .clusterUID | quote }}
+    {{- end }}
     {{- if .Values.profile.observability.enabled }}
     observability.hopcharlie.dev/enabled: "true"
     {{- end }}

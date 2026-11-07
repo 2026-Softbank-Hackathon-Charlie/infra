@@ -76,19 +76,22 @@ spec:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.api.parity }}
-      {{- if .enabled }}
+      {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled }}
       annotations:
-        checksum/parity: {{ toJson .config | sha256sum }}
-      {{- end }}
+        {{- if .Values.api.parity.enabled }}
+        checksum/parity: {{ toJson .Values.api.parity.config | sha256sum }}
+        {{- end }}
+        {{- if (.Values.api.onpremRegistration | default dict).enabled }}
+        checksum/onprem-registration: {{ toJson .Values.api.onpremRegistration | sha256sum }}
+        {{- end }}
       {{- end }}
       labels:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
-      serviceAccountName: hopcharlie-platform
+      serviceAccountName: {{ include "hopcharlie.apiServiceAccount" . }}
       # The deploy executor patches Argo CD Applications in this cluster, the AI
       # runner's Jobs are created here (hopai.yaml), and app DB routes too (ADR 0064).
-      automountServiceAccountToken: {{ or (not (empty .Values.deploy.builder)) .Values.hopai.enabled (not (empty .Values.api.appDbTopology.route.tailnet)) }}
+      automountServiceAccountToken: {{ or (not (empty .Values.deploy.builder)) .Values.hopai.enabled (not (empty .Values.api.appDbTopology.route.tailnet)) (.Values.api.onpremRegistration | default dict).enabled }}
       securityContext:
         {{- include "hopcharlie.podSecurity" 10001 | nindent 8 }}
       initContainers:
@@ -109,6 +112,15 @@ spec:
               exec hopcharlie-api -addr :8080 -state-dir /data/runs
           env:
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
+            {{- if (.Values.api.onpremRegistration | default dict).enabled }}
+            - {name: PLATFORM_ONPREM_REGISTRATION, value: "1"}
+            - {name: PLATFORM_ONPREM_PROFILE_FILE, value: /etc/onprem/profile.json}
+            - {name: PLATFORM_ONPREM_TAILNET_DOMAIN, value: {{ .Values.api.onpremRegistration.tailnetDomain | quote }}}
+            - {name: PLATFORM_ONPREM_AGENT_DIRECTORY, value: /usr/local/lib/hopcharlie-onprem-agent}
+            - {name: PLATFORM_ONPREM_AGENT_IMAGE, value: {{ required "onprem agentImage is required" .Values.api.onpremRegistration.agentImage | quote }}}
+            - {name: PLATFORM_ONPREM_TAILSCALE_IMAGE, value: {{ required "onprem tailscaleImage is required" .Values.api.onpremRegistration.tailscaleImage | quote }}}
+            - {name: PLATFORM_ONPREM_HELLO_IMAGE, value: {{ required "onprem helloImage is required" .Values.api.onpremRegistration.helloImage | quote }}}
+            {{- end }}
             {{- with .Values.api.aiobs }}
             {{- if .enabled }}
             # GET /v1/ai-activity reads the AI runner's log lines from the observability
@@ -231,6 +243,9 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: settings, mountPath: /config, readOnly: true}
+            {{- if (.Values.api.onpremRegistration | default dict).enabled }}
+            - {name: onprem-profile, mountPath: /etc/onprem, readOnly: true}
+            {{- end }}
             {{- with .Values.api.parity }}
             {{- if .enabled }}
             - {name: parity, mountPath: /etc/parity, readOnly: true}
@@ -245,6 +260,10 @@ spec:
             {{- end }}
       volumes:
         {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        {{- if (.Values.api.onpremRegistration | default dict).enabled }}
+        - name: onprem-profile
+          configMap: {name: hopcharlie-onprem-profile}
+        {{- end }}
         {{- with .Values.api.parity }}
         {{- if .enabled }}
         - name: parity

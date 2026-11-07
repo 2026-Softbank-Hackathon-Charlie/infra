@@ -159,6 +159,61 @@
       "url": "http://clickstack-clickhouse-clickhouse-headless.observability.svc:8123",
       "user": "app",
       "table": "default.otel_logs"
+    },
+    "onpremRegistration": {
+      "enabled": false,
+      "tailnetDomain": "tail567fe8.ts.net",
+      "profile": {
+        "publicService": {
+          "type": "ClusterIP",
+          "port": 80,
+          "annotations": {}
+        },
+        "ingress": {
+          "enabled": false
+        },
+        "progressDeadlineSeconds": 300,
+        "quota": {
+          "enabled": true,
+          "hard": {
+            "requests.cpu": "2",
+            "requests.memory": "4Gi",
+            "limits.memory": "8Gi",
+            "pods": "20",
+            "persistentvolumeclaims": "4",
+            "requests.storage": "20Gi",
+            "services.loadbalancers": "0"
+          }
+        },
+        "limitRange": {
+          "enabled": true,
+          "default": {
+            "memory": "256Mi"
+          },
+          "defaultRequest": {
+            "cpu": "50m",
+            "memory": "64Mi"
+          }
+        },
+        "networkPolicy": {
+          "enabled": true,
+          "gatewayFrom": [],
+          "extraEgress": []
+        },
+        "observability": {
+          "enabled": false,
+          "metricsEnabled": false,
+          "endpoint": "",
+          "caBundle": "",
+          "clusterName": "",
+          "cloudProvider": "onprem",
+          "region": ""
+        },
+        "podSecurity": "restricted"
+      },
+      "agentImage": "",
+      "tailscaleImage": "",
+      "helloImage": ""
     }
   },
   "gcp": {

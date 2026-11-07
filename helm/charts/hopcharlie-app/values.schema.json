@@ -193,6 +193,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "onpremRegistration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enrollmentID", "clusterUID"],
+          "properties": {
+            "enrollmentID": {"type": "string", "pattern": "^enr_[a-f0-9]{24}$"},
+            "clusterUID": {"type": "string", "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"}
+          }
+        },
         "observability": {
           "type": "object",
           "additionalProperties": false,

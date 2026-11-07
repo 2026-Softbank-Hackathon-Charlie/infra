@@ -170,7 +170,7 @@ spec:
         resources: [services]
   matchConditions:
     - name: platform-service-account
-      expression: request.userInfo.username == '{{ $platform }}'
+      expression: request.userInfo.username == '{{ $platform }}' || (request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api' && !object.metadata.name.startsWith('hop-k3s-'))
   # Missing labels or annotations read as ''.
   variables:
     - name: labels
@@ -244,7 +244,7 @@ spec:
         resources: [services]
   matchConditions:
     - name: platform-service-account
-      expression: request.userInfo.username == '{{ $platform }}'
+      expression: request.userInfo.username == '{{ $platform }}' || (request.userInfo.username == 'system:serviceaccount:charlie-platform:hopcharlie-platform-api' && !oldObject.metadata.name.startsWith('hop-k3s-'))
   validations:
     # The static db-eks and db-gke and the operator's headless Services lack the label.
     - expression: >-

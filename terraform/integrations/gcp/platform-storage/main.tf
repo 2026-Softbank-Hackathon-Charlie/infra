@@ -4,6 +4,7 @@ data "google_project" "target" {
 
 locals {
   subject        = "system:serviceaccount:${var.platform_namespace}:${var.platform_service_account}"
+  api_subject    = "system:serviceaccount:${var.platform_namespace}:hopcharlie-platform-api"
   provider_name  = "projects/${data.google_project.target.number}/locations/global/workloadIdentityPools/${var.workload_identity_pool_id}/providers/${var.workload_identity_provider_id}"
   token_audience = "https://iam.googleapis.com/${local.provider_name}"
   member         = "serviceAccount:${google_service_account.platform.email}"
@@ -58,7 +59,7 @@ resource "google_iam_workload_identity_pool_provider" "platform" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.platform.workload_identity_pool_id
   workload_identity_pool_provider_id = var.workload_identity_provider_id
   attribute_mapping                  = { "google.subject" = "assertion.sub" }
-  attribute_condition                = "assertion.sub == \"${local.subject}\""
+  attribute_condition                = var.onprem_registration_enabled ? "assertion.sub in ${jsonencode([local.subject, local.api_subject])}" : "assertion.sub == \"${local.subject}\""
   oidc {
     issuer_uri        = var.eks_oidc_issuer_url
     allowed_audiences = [local.token_audience]
@@ -76,6 +77,13 @@ resource "google_service_account_iam_member" "platform" {
   service_account_id = google_service_account.platform.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.platform.name}/subject/${local.subject}"
+}
+
+resource "google_service_account_iam_member" "platform_api" {
+  count              = var.onprem_registration_enabled ? 1 : 0
+  service_account_id = google_service_account.platform.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.platform.name}/subject/${local.api_subject}"
 }
 
 resource "google_project_iam_custom_role" "buckets" {
