@@ -17,7 +17,7 @@ locals {
 
   # The patterns repeat the scripts' own checks (terraform/platform/aws/
   # onboarding/*.sh), so SendCommand refuses what the script would.
-  public_key_rule = "^([A-Za-z0-9+/]{200,1200}|[A-Za-z0-9+/]{199,1199}=|[A-Za-z0-9+/]{198,1198}==)$" # base64 DER of the one-time RSA key, 200..1200 characters
+  public_key_rule = "^[A-Za-z0-9+/]{200,1000}[A-Za-z0-9+/]{0,200}={0,2}$" # base64 DER of the one-time RSA key; SSM regexes allow at most 1000 repeats, the scripts check 200..1200 exactly
   docker_name     = "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
   app_label       = "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$" # an app name, at most 32 characters
 
@@ -81,11 +81,10 @@ locals {
       try({ default = p.default }, {})
     ) }
     mainSteps = [for i, s in d.steps : merge(
-      # Inspect: no chunk is read after a failed inspection, and cleanup runs
-      # whatever happened before it. Connect and Disconnect fail on any
-      # non-zero exit of their one step (Disconnect 4: the database is stopped).
-      { for k, v in { onFailure = "exit" } : k => v if s.name == "inspect" },
-      { for k, v in { finallyStep = true } : k => v if s.name == "cleanup" },
+      # Steps run in order whatever the previous exit (SSM rejects onFailure
+      # here), so cleanup always runs; the platform reads no chunk after a
+      # failed inspection. Connect and Disconnect fail on any non-zero exit of
+      # their one step (Disconnect 4: the database is stopped).
       {
         action       = "aws:runShellScript"
         name         = s.name

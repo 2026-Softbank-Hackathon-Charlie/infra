@@ -84,7 +84,7 @@ managed policy `hopcharlie-platform-onboarding`을 플랫폼 역할에 붙인다
 | Connect | `dbContainer`, `network`, `subnet`, `tailscaleAuthKey`(`tskey-auth-`), `hostname`(`hop-db-legacy-<app>`), `publicKey`, `appLabel` | `connect`. `HC_DB_CONTAINER`, `HC_NETWORK`, `HC_SUBNET`, `HC_TS_AUTHKEY`, `HC_HOSTNAME`, `HC_PUBLIC_KEY`, `HC_APP` |
 | Disconnect | `dbContainer`, `appLabel` | `disconnect`. `HC_DB_CONTAINER`, `HC_APP` |
 
-- Inspect의 `inspect` 단계는 `onFailure: exit`라서 조사가 실패하면 chunk 단계를 돌지 않고, `cleanup`은 `finallyStep: true`라서 항상 돈다. Connect와 Disconnect는 단계가 하나이고 0이 아닌 종료 코드는 모두 문서 실패다(Connect 8은 설정 대기, Disconnect 4는 DB가 멈춤). 플랫폼은 `GetCommandInvocation`의 `ResponseCode`로 구별한다.
+- SSM은 `aws:runShellScript` 단계의 `onFailure`를 받지 않는다(2026-11-07 apply에서 `InvalidDocumentContent`). 단계는 앞 단계의 종료 코드와 상관없이 차례로 돌므로 `cleanup`은 항상 돈다. 조사가 실패하면 chunk 단계는 출력 파일이 없어 실패로 끝나고, 플랫폼은 그 출력을 읽지 않는다. SSM 정규식은 반복 횟수 1000까지만 받아서 publicKey 패턴을 나눠 쓰고, 정확한 길이는 스크립트가 다시 검사한다. Connect와 Disconnect는 단계가 하나이고 0이 아닌 종료 코드는 모두 문서 실패다(Connect 8은 설정 대기, Disconnect 4는 DB가 멈춤). 플랫폼은 `GetCommandInvocation`의 `ResponseCode`로 구별한다.
 
 ### 플랫폼 GCP 권한 (`terraform/integrations/gcp/platform-storage/onboarding.tf`)
 

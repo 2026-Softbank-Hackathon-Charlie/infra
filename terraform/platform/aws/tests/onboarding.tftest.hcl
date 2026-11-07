@@ -36,8 +36,8 @@ run "onboarding_documents_and_permissions" {
     error_message = "Each document carries its script file."
   }
   assert {
-    condition     = jsondecode(aws_ssm_document.onboarding["Inspect"].content).mainSteps[0].onFailure == "exit" && jsondecode(aws_ssm_document.onboarding["Inspect"].content).mainSteps[10].finallyStep == true && length([for s in jsondecode(aws_ssm_document.onboarding["Inspect"].content).mainSteps : s if can(s.onFailure) || can(s.finallyStep)]) == 2 && alltrue([for k in ["Connect", "Disconnect"] : !can(jsondecode(aws_ssm_document.onboarding[k].content).mainSteps[0].onFailure)])
-    error_message = "Inspect stops after a failed inspection and always cleans up; Connect and Disconnect fail on any non-zero exit."
+    condition     = alltrue([for k in ["Inspect", "Connect", "Disconnect"] : length([for s in jsondecode(aws_ssm_document.onboarding[k].content).mainSteps : s if can(s.onFailure) || can(s.finallyStep)]) == 0])
+    error_message = "SSM rejects onFailure on aws:runShellScript steps; steps run in order and cleanup runs after a failed inspection."
   }
   assert {
     condition     = toset([for s in jsondecode(aws_iam_policy.platform_onboarding.policy).Statement : s.Sid]) == toset(["Discover", "OnlyTheHopCharlieDocuments", "CommandsOnInstances", "OnlyTheOnboardingTag", "StopTaggedInstances", "NeverEksNodes", "NeverAutoScalingInstances", "NeverCommandsOnEksNodes", "NeverCommandsOnAutoScalingInstances", "NeverInfrastructureInstances", "NeverCommandsOnInfrastructureInstances"])
