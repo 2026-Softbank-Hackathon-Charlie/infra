@@ -1,0 +1,36 @@
+# A stand-in of an app that runs on a VM with docker compose, for run.sh.
+name: hcinspecttest
+services:
+  db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_DB: app
+      POSTGRES_PASSWORD: pw-db-0123456789
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 1s
+      retries: 30
+  app:
+    image: alpine:3.22
+    command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+    environment:
+      DATABASE_URL: postgres://app:pw-db-0123456789@db:5432/app
+      APP_SECRET: s3cr3t-value-for-test
+      S3_BUCKET: moimroom-files
+      AWS_ACCESS_KEY_ID: AKIATESTTESTTEST
+      AWS_SECRET_ACCESS_KEY: aws-secret-for-test
+      AWS_REGION: ap-northeast-2
+      MULTILINE: "line1\nline2=looks-like-a-name"
+    expose: ["8080"]
+  proxy:
+    image: alpine:3.22
+    command: ["sh", "-c", "trap 'exit 0' TERM; sleep infinity & wait"]
+    ports: ["18443:443"]
+    volumes:
+      - proxydata:/data
+volumes:
+  dbdata:
+  proxydata:
