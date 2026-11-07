@@ -150,3 +150,31 @@ spec:
       ports:
         - {protocol: TCP, port: 4318}
 {{- end }}
+
+{{- with .Values.gateway.aiGatewayEgress }}
+{{- if .namespace }}
+---
+# ai-gateway.<appDomain> is a registered app whose backend is the AI gateway
+# (cmd/gateway -ai-app) in its own namespace. Its inference listener is a pod
+# port outside egressPorts, so only the traffic gateway gets this one port
+# there. The AI gateway admin port (9901) stays loopback-only in its pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-gateway-ai-egress
+  labels:
+    {{- include "hopcharlie.labels" "gateway" | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: gateway}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .namespace | quote }}}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: ai-gateway}
+      ports:
+        - {protocol: TCP, port: {{ .port | int }}}
+{{- end }}
+{{- end }}

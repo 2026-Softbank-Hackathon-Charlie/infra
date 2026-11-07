@@ -10,7 +10,11 @@
   },
   "gateway": {
     "backends": "",
-    "initialBackend": ""
+    "initialBackend": "",
+    "aiGatewayEgress": {
+      "namespace": "",
+      "port": 8000
+    }
   },
   "api": {
     "corsOrigins": "",

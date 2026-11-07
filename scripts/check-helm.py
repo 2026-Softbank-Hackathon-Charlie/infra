@@ -356,6 +356,15 @@ def main():
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        # ai-gateway.<appDomain>: only the traffic gateway reaches only the AI gateway's inference port.
+        ai = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-gateway-ai-egress"]
+        assert len(ai) == 1, "management values route ai-gateway to its namespace"
+        assert ai[0]["spec"]["podSelector"] == {"matchLabels": {"app.kubernetes.io/component": "gateway"}}, ai[0]["spec"]["podSelector"]
+        assert ai[0]["spec"]["egress"] == [{
+            "to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "hopcharlie-ai"}},
+                    "podSelector": {"matchLabels": {"app.kubernetes.io/name": "ai-gateway"}}}],
+            "ports": [{"protocol": "TCP", "port": 8000}],
+        }], ai[0]["spec"]["egress"]
         # Born-paired app databases (ADR 0063) are on in the management values after
         # rollout steps 1-4; the chart renders the two settings only when set.
         hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local,onprem=db-onprem-{instance}.hopcharlie-db-network.svc.cluster.local"
