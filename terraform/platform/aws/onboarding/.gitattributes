@@ -1,0 +1,2 @@
+# The SSM documents embed these scripts: CRLF would break bash on the VM.
+* text eol=lf
