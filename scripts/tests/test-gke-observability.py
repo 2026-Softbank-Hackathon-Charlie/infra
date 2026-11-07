@@ -90,6 +90,7 @@ class GKEObservability(unittest.TestCase):
         source = app['spec']['sources'][0]
         self.assertEqual((source['chart'], source['targetRevision']), ('kube-prometheus-stack', '91.8.2'))
         self.assertEqual(source['helm']['releaseName'], 'monitoring')
+        self.assertTrue(source['helm']['skipCrds'])
         self.assertEqual(source['helm']['valueFiles'], ['$values/clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml'])
         self.assertEqual(app['spec']['destination']['server'], gke['gke']['endpoint'])
         self.assertNotIn('onprem', json.dumps(extra))
@@ -99,6 +100,83 @@ class GKEObservability(unittest.TestCase):
             bad['observability']['externalTargets']['gke'].update(patch)
             with self.assertRaises(ValueError):
                 render('helm/gitops', bad, namespace='argocd')
+
+    def test_argo_access_default_is_unchanged_and_stages_fail_closed(self):
+        v = load('clusters/gcp-dev-workload/values/argocd-observability-access.yaml')
+        chart = 'helm/charts/gcp-argocd-access'
+        baseline = render(chart, v, release='gcp-argocd-access')
+        implicit = copy.deepcopy(v)
+        implicit.pop('observability')
+        self.assertEqual(baseline, render(chart, implicit, release='gcp-argocd-access'))
+        old_policy = next(x for x in of(baseline, 'ValidatingAdmissionPolicy'))
+        v['observability']['enabled'] = True
+        guarded = render(chart, v, release='gcp-argocd-access')
+        self.assertIn(old_policy, guarded)
+        new_policy = next(x for x in of(guarded, 'ValidatingAdmissionPolicy') if x != old_policy)
+        name = new_policy['metadata']['name']
+        self.assertEqual(new_policy['spec']['failurePolicy'], 'Fail')
+        self.assertEqual(new_policy['spec']['matchConstraints']['resourceRules'][0]['resources'], ['*/*'])
+        self.assertTrue(any(x['spec'] == {'policyName': name, 'validationActions': ['Deny']} for x in of(guarded, 'ValidatingAdmissionPolicyBinding')))
+        self.assertFalse([b for b in of(guarded, 'RoleBinding') + of(guarded, 'ClusterRoleBinding') if b['metadata']['name'].startswith(name)])
+        v['observability']['openExistingPolicy'] = True
+        exception = render(chart, v, release='gcp-argocd-access')
+        changed = next(x for x in of(exception, 'ValidatingAdmissionPolicy') if x['metadata']['name'] == old_policy['metadata']['name'])
+        self.assertEqual(changed['spec']['validations'], old_policy['spec']['validations'])
+        self.assertEqual(changed['spec']['variables'], old_policy['spec']['variables'])
+        self.assertEqual(len(changed['spec']['matchConditions']), len(old_policy['spec']['matchConditions']) + 1)
+        self.assertFalse([b for b in of(exception, 'RoleBinding') if b['metadata']['name'] == name])
+        v['observability']['grantAccess'] = True
+        active = render(chart, v, release='gcp-argocd-access')
+        bindings = [b for b in of(active, 'RoleBinding') if b['metadata']['name'] == name]
+        self.assertEqual({b['metadata']['namespace'] for b in bindings}, {'observability', 'hopcharlie-db-network'})
+        for b in bindings:
+            self.assertEqual(b['subjects'][0]['name'], v['googleServiceAccountEmail'])
+        read_role = next(x for x in of(active, 'ClusterRole') if x['metadata']['name'] == name + '-read')
+        self.assertTrue(all(set(x['verbs']) == {'get', 'list', 'watch'} for x in read_role['rules']))
+        for flags in [(False, True, False), (False, False, True), (True, False, True)]:
+            bad = copy.deepcopy(v)
+            bad['observability'] = dict(zip(['enabled', 'openExistingPolicy', 'grantAccess'], flags))
+            with self.assertRaises(ValueError):
+                render(chart, bad)
+        bad = copy.deepcopy(v)
+        bad['dynamicApps'] = {'enabled': False, 'grantAccess': False}
+        with self.assertRaises(ValueError):
+            render(chart, bad)
+
+    def test_argo_allowlist_matches_actual_namespaced_manifests(self):
+        v = load('clusters/gcp-dev-workload/values/argocd-observability-access.yaml')
+        v['observability'].update(enabled=True, openExistingPolicy=True, grantAccess=True)
+        docs = render('helm/charts/gcp-argocd-access', v, release='gcp-argocd-access')
+        policy = next(x for x in of(docs, 'ValidatingAdmissionPolicy') if x['metadata']['name'].endswith('-observability'))
+        allowed = json.loads(policy['spec']['variables'][0]['expression'])
+        actual = {(rule['group'], rule['resource'], name) for rule in allowed for name in rule['names']}
+        expected = set()
+        plurals = {'ServiceAccount': 'serviceaccounts', 'ConfigMap': 'configmaps', 'PersistentVolumeClaim': 'persistentvolumeclaims',
+                   'Service': 'services', 'Deployment': 'deployments', 'DaemonSet': 'daemonsets', 'Prometheus': 'prometheuses',
+                   'ServiceMonitor': 'servicemonitors', 'PodMonitor': 'podmonitors', 'Secret': 'secrets', 'NetworkPolicy': 'networkpolicies'}
+        rendered = []
+        for variable, file, release in [('ALLOY_CHART', 'alloy.yaml', 'observability-agent'), ('OTEL_CHART', 'otel-gateway-automatic.yaml', 'observability-gateway'), ('KPS_CHART', 'kube-prometheus-stack.yaml', 'monitoring')]:
+            rendered.extend(render(os.environ[variable], load('clusters/gcp-dev-workload/values/' + file), release))
+        rendered.extend(render('helm/charts/observability-boundary', load('clusters/gcp-dev-workload/values/observability-boundary.yaml')))
+        transport = load('clusters/gcp-dev-workload/values/observability-transport.yaml')
+        transport['enabled'] = True
+        rendered.extend(render('helm/charts/observability-transport', transport))
+        for d in rendered:
+            if d['kind'] in plurals and d['metadata'].get('namespace', 'observability') == 'observability':
+                expected.add((d['apiVersion'].rpartition('/')[0], plurals[d['kind']], d['metadata']['name']))
+        self.assertEqual(actual, expected)
+        self.assertEqual({name for group, resource, name in actual if resource == 'secrets'}, {'monitoring-prometheus-scrape-confg'})
+        self.assertFalse(any('*' in p for entry in actual for p in entry))
+        expression = policy['spec']['validations'][0]['expression']
+        self.assertIn("request.subResource == ''", expression)
+        self.assertIn("request.namespace == 'hopcharlie-db-network' && request.operation in ['UPDATE', 'DELETE']", expression)
+        role = next(x for x in of(docs, 'Role') if x['metadata']['namespace'] == 'hopcharlie-db-network')
+        self.assertFalse(any('create' in rule['verbs'] for rule in role['rules']))
+        # Admission must reject CREATE even though the old ClusterRole still grants it.
+        dynamic = next(x for x in of(docs, 'ClusterRole') if x['metadata']['name'].endswith('-dynamic-apps'))
+        self.assertTrue(any('networkpolicies' in rule['resources'] and 'create' in rule['verbs'] for rule in dynamic['rules']))
+        self.assertNotIn('bind', json.dumps([x for x in of(docs, 'Role')]))
+        self.assertNotIn('escalate', json.dumps([x for x in of(docs, 'Role')]))
 
     def test_query_service_mode_preserves_aws_and_drops_aws_annotations_on_gke(self):
         aws = load('clusters/aws-dev-workload/values/observability-boundary.yaml')

@@ -54,6 +54,10 @@ spec:
       targetRevision: {{ $chart.version | quote }}
       helm:
         releaseName: {{ $chart.release }}
+{{- if eq $chart.chart "kube-prometheus-stack" }}
+        # CRDs belong to the explicit administrator bootstrap, not Argo sync.
+        skipCrds: true
+{{- end }}
         valueFiles: [{{ printf "$values/%s/values/%s" $gke.valuesDir $chart.values | quote }}]
     - repoURL: {{ $.Values.repoURL | quote }}
       targetRevision: {{ $.Values.revision | quote }}

@@ -84,6 +84,15 @@ spec:
   matchConditions:
     - name: argocd-google-identity
       expression: {{ printf "request.userInfo.username == '%s'" .Values.googleServiceAccountEmail | quote }}
+{{- if .Values.observability.openExistingPolicy }}
+    # The separate fail-closed observability guard must already be installed.
+    - name: exclude-reviewed-observability
+      expression: >-
+        !(request.namespace == 'observability' ||
+          (request.namespace == 'hopcharlie-db-network' &&
+           request.resource.group == 'networking.k8s.io' && request.resource.resource == 'networkpolicies' &&
+           request.name in ['observability-transport-egress-client', 'observability-transport-ingress-client']))
+{{- end }}
   variables:
     - name: protectedNamespaces
       expression: {{ .Values.dynamicApps.protectedNamespaces | toJson | quote }}
