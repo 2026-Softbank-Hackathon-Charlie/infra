@@ -354,7 +354,7 @@ def main():
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform")
         api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
-        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
+        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
         # Born-paired app databases (ADR 0063) are on in the management values after
         # rollout steps 1-4; the chart renders the two settings only when set.
