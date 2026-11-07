@@ -25,6 +25,8 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
+    #                   residency-policy.yaml (when host/residency-policy.yaml
+    #                   exists, with its PLATFORM_RESIDENCY_POLICY_FILE line),
     #                   aiobs-clickhouse-password (with AIOBS_CLICKHOUSE),
     #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
@@ -33,7 +35,7 @@ data:
     #                   api.env also carries the console administrators
     #                   (platform-admins: name:bcrypt-hash,...) and, once it
     #                   exists, the app secrets key (app-secrets-key) and
-    #                   stream-scoped append tokens (written-record-tokens).
+    #                   the written record tokens (written-record-tokens).
     set -euo pipefail
     umask 077
 
@@ -63,9 +65,10 @@ data:
         secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
-        # Optional stream:token credentials, separate from operator/agent
-        # tokens. Missing is allowed; an SSM access/network error still fails
-        # the init container instead of silently disabling receipt ingestion.
+        # The stream:token pairs apps append written records with (platform
+        # ADR 0041, infra ADR 0079). Optional like the app secrets key:
+        # without the parameter the API starts and refuses every
+        # POST /v1/written-records, as before.
         written_tokens="$(aws ssm get-parameters --with-decryption --names "$PREFIX/written-record-tokens" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$written_tokens" = "None" ]; then written_tokens=""; fi
@@ -82,6 +85,14 @@ data:
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
+        # The residency policy (platform ADR 0013, infra ADR 0080), read like
+        # app-secrets-key: without the parameter the API starts without the
+        # residency gate, as before. With it, a start that breaks the policy
+        # is refused. Parity is set from values instead (infra ADR 0076).
+        residency="$(aws ssm get-parameters --with-decryption --names "$PREFIX/host/residency-policy.yaml" \
+          --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$residency" = "None" ]; then residency=""; fi
+        if [ -n "$residency" ]; then printf '%s\n' "$residency" > /config/residency-policy.yaml; fi
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"
@@ -124,14 +135,10 @@ data:
           printf 'PLATFORM_TOKENS=%s\n' "$tokens"
           printf 'PLATFORM_ADMINS=%s\n' "$admins"
           if [ -n "$secrets_key" ]; then printf 'PLATFORM_SECRETS_KEY=%s\n' "$secrets_key"; fi
-          if [ -n "$written_tokens" ]; then
-            # api.env is sourced by the API entrypoint. Keep shell characters
-            # in a credential literal; never evaluate the SSM value as code.
-            printf "PLATFORM_WRITTEN_RECORD_TOKENS='%s'\n" \
-              "$(printf '%s' "$written_tokens" | sed "s/'/'\\\\''/g")"
-          fi
+          if [ -n "$written_tokens" ]; then printf 'PLATFORM_WRITTEN_RECORD_TOKENS=%s\n' "$written_tokens"; fi
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
+          if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
         } > /config/api.env
         ;;
       *)

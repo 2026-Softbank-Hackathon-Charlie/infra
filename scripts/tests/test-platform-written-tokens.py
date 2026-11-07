@@ -21,9 +21,12 @@ class WrittenTokenSettings(unittest.TestCase):
             str(ROOT / "helm/charts/hopcharlie-platform"), "-f",
             str(ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml")],
             text=True, encoding="utf-8")
+        docs = [d for d in yaml.safe_load_all(rendered) if d]
         cls.script = next(d["data"]["fetch-settings.sh"]
-            for d in yaml.safe_load_all(rendered)
+            for d in docs
             if d and d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-fetch-settings")
+        api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        cls.entrypoint = api["spec"]["template"]["spec"]["containers"][0]["args"][0]
 
     def execute(self, mode, token="app-demo:" + "fixture-only-token-" * 2, fetch="api"):
         with tempfile.TemporaryDirectory(prefix="written-token-settings-") as directory:
@@ -52,6 +55,10 @@ case "$*" in
 esac
 ''', encoding="utf-8", newline="\n")
             fake.chmod(0o700)
+            api_binary = work / "hopcharlie-api"
+            api_binary.write_text('#!/bin/sh\nprintf \'%s\' "${PLATFORM_WRITTEN_RECORD_TOKENS:-UNSET}"\n',
+                encoding="utf-8", newline="\n")
+            api_binary.chmod(0o700)
             script = work / "fetch-settings.sh"
             script.write_text(self.script.replace("/config", config.as_posix()), encoding="utf-8", newline="\n")
             environment = dict(os.environ, FETCH=fetch, PREFIX="/fixture", GITHUB_APP_ID="",
@@ -63,9 +70,10 @@ esac
             env_file = config / "api.env"
             content = env_file.read_text() if env_file.exists() else ""
             if result.returncode == 0 and env_file.exists():
-                loaded = subprocess.run([BASH, "-c",
-                    '. "$1"; printf "%s" "${PLATFORM_WRITTEN_RECORD_TOKENS:-UNSET}"',
-                    "settings-check", str(env_file)], cwd=work, env=environment,
+                # Execute the real rendered consumer too: it exports literal
+                # KEY=value lines; sourcing the file would test a different contract.
+                loaded = subprocess.run([BASH, "-c", self.entrypoint.replace("/config", config.as_posix())],
+                    cwd=work, env=environment,
                     capture_output=True, text=True, check=True).stdout
                 self.assertFalse((work / "injected-by-token").exists())
             else:
@@ -95,10 +103,12 @@ esac
         self.assertIsNone(loaded)
 
     def test_shell_characters_remain_a_literal_credential(self):
-        token = "app-demo:" + "fixture-only-token-" * 2 + "'; touch injected-by-token; #"
-        result, content, loaded = self.execute("configured", token)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(loaded, token)
+        for suffix in ("'; touch injected-by-token; #", "; touch injected-by-token; #"):
+            with self.subTest(suffix=suffix):
+                token = "app-demo:" + "fixture-only-token-" * 2 + suffix
+                result, content, loaded = self.execute("configured", token)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(loaded, token)
 
     def test_gateway_and_postgres_do_not_fetch_the_append_credentials(self):
         for fetch in ("gateway", "postgres"):
