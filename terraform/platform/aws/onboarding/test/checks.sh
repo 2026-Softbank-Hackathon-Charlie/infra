@@ -181,6 +181,24 @@ expect "wal_keep_size back" test "$(docker exec "${project}-db-1" psql -XAtq -U 
 HC_DB_CONTAINER=${project}-db-1 HC_APP=hctest HC_STATE_DIR=/tmp/hcstate bash $s/disconnect.sh >disconnect2.out
 expect "disconnect again removes nothing" test "$(cat disconnect2.out)" = '{"result":"ok"}'
 
+# A source still fenced read-only (ALTER SYSTEM, as the cutover does): the
+# disconnect of a DELETE still undoes everything and leaves the fence.
+connect >/dev/null 2>&1 || fail "connect.sh before the fenced disconnect"
+sql 'alter system set default_transaction_read_only = on' && sql 'select pg_reload_conf()' >/dev/null
+HC_DB_CONTAINER=${project}-db-1 HC_APP=hctest HC_STATE_DIR=/tmp/hcstate bash $s/disconnect.sh >disconnect-fenced.out 2>disconnect-fenced.err || {
+	cat disconnect-fenced.err >&2
+	fail "disconnect.sh on a fenced source exits 0"
+}
+for k in wal_keep_size_added hba_line_added replication_role_created postgres_role_created; do
+	expect "fenced: undid $k" grep -q "\"kind\":\"$k\"" disconnect-fenced.out
+done
+expect "fenced: roles gone" test "$(sql "select count(*) from pg_roles where rolname in ('postgres', 'hopcharlie_replicator')")" -eq 0
+expect "fenced: hba line gone" bash -c "! docker exec ${project}-db-1 sh -c 'grep -q hopcharlie_replicator \"\$PGDATA/pg_hba.conf\"'"
+expect "fenced: wal_keep_size back" test "$(sql 'show wal_keep_size')" = 0
+expect "fenced: fence kept" test "$(sql 'show default_transaction_read_only')" = on
+sql 'alter system reset default_transaction_read_only' && sql 'select pg_reload_conf()' >/dev/null
+expect "fence reset" test "$(sql 'show default_transaction_read_only')" = off
+
 # remove_lines in a container whose directory is read-only: it fails and
 # the file stays as it was (the file is a writable bind mount from a
 # volume, in the read-only /etc).
