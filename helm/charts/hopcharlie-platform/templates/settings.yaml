@@ -25,6 +25,8 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
+    #                   residency-policy.yaml (when host/residency-policy.yaml
+    #                   exists, with its PLATFORM_RESIDENCY_POLICY_FILE line),
     #                   aiobs-clickhouse-password (with AIOBS_CLICKHOUSE),
     #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
@@ -83,6 +85,14 @@ data:
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
+        # The residency policy (platform ADR 0013, infra ADR 0080), read like
+        # app-secrets-key: without the parameter the API starts without the
+        # residency gate, as before. With it, a start that breaks the policy
+        # is refused. Parity is set from values instead (infra ADR 0076).
+        residency="$(aws ssm get-parameters --with-decryption --names "$PREFIX/host/residency-policy.yaml" \
+          --query 'Parameters[].Value' --output text | tr -d '\r')"
+        if [ "$residency" = "None" ]; then residency=""; fi
+        if [ -n "$residency" ]; then printf '%s\n' "$residency" > /config/residency-policy.yaml; fi
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"
@@ -128,6 +138,7 @@ data:
           if [ -n "$written_tokens" ]; then printf 'PLATFORM_WRITTEN_RECORD_TOKENS=%s\n' "$written_tokens"; fi
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
+          if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
         } > /config/api.env
         ;;
       *)

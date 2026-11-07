@@ -265,6 +265,7 @@ platform ADR 0016(앱마다 버킷과 그 버킷 전용 키)과 ADR 0019(앱 시
 | `/hopcharlie/app-secrets-key` | SecureString. 32바이트를 base64로. 파라미터가 있으면 API의 init 컨테이너가 `api.env`에 `PLATFORM_SECRETS_KEY`로 쓴다. 파라미터가 없으면 쓰지 않고, 그동안 시크릿 API는 503을 돌려준다 | Terraform(`random_bytes`). 값은 이 파라미터와 state에만 있다. `./tf.sh destroy`는 이 파라미터도 지운다 |
 | `/hopcharlie/written-record-tokens` | SecureString. 쉼표로 구분한 `stream:token`(토큰은 32자 이상). 파라미터가 있으면 API의 init 컨테이너가 `api.env`에 `PLATFORM_WRITTEN_RECORD_TOKENS`로 쓴다. 없으면 쓰지 않고, 그동안 `POST /v1/written-records`는 모두 거절된다([ADR 0079](../../../docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md)) | 사람이 `aws ssm put-parameter --type SecureString`으로 만든다. Terraform은 관리하지 않는다 |
 | `/hopcharlie/sealed-secrets/<환경>` | String. 그 환경 클러스터의 Sealed Secrets 공개 인증서. API의 init 컨테이너가 `/config/sealed-secrets/<환경>.pem`으로 복사한다 | `scripts/put-sealed-secrets-cert.sh`(지금은 `eks`만) |
+| `/hopcharlie/host/residency-policy.yaml` | SecureString. 플랫폼 레지던시 정책(platform `examples/residency-policy.yaml` 양식). 파라미터가 있으면 API의 init 컨테이너가 `/config/residency-policy.yaml`로 쓰고 `api.env`에 `PLATFORM_RESIDENCY_POLICY_FILE`을 넣는다. 없으면 레지던시 검사는 꺼져 있다([ADR 0080](../../../docs/adr/0080-fetch-optional-residency-policy-from-ssm.md)) | 사람이 `aws ssm put-parameter --type SecureString`으로 만든다. Terraform은 관리하지 않는다 |
 
 ### 적용 순서
 
