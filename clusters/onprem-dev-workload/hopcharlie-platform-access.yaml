@@ -1,0 +1,182 @@
+# Identity of the HopCharlie platform API in the on-prem k3s cluster (the
+# laptop's WSL2 k3s), which is the platform's environment onprem.
+# scripts/put-platform-kubeconfig.py --env onprem applies this file and stores
+# a kubeconfig with the token below in SSM /hopcharlie/kube/onprem; Argo CD
+# does not manage it. It is the same as
+# clusters/aws-dev-workload/hopcharlie-platform-access.yaml (ADR 0036).
+#
+# Based on deploy/k8s/hopcharlie-platform.yaml of the platform repository, cut
+# down to the calls the platform makes today. Every rule only reads (but the
+# migration role at the end, ADR 0063), and no
+# rule reads Secrets or ConfigMaps:
+#   services get                 deploy executor: the internal LB address of
+#                                <app>-<service> in namespace <instance>, which
+#                                it registers in the traffic gateway
+#   nodes list                   environment view: node count and architecture
+#   postgresql.cnpg.io clusters
+#   list                         environment view: the CNPG databases
+#   barmancloud.cnpg.io
+#   objectstores list            environment view: when each database was last
+#                                backed up (platform ADR 0025)
+#   pods, services,
+#   networkpolicies,
+#   clusterrolebindings list     security view
+# The server version (environment view) needs no rule. The platform's
+# hopcharlie-migrator role (changes in app namespaces for migrations) is not
+# granted here; see ADR 0036.
+#
+# The namespace is charlie-system because the app ApplicationSet denies it
+# (helm/charts/hopcharlie-apps deniedNamespaces): no app can be deployed into
+# it and mount the token. Delete the Secret to revoke the token. The cluster
+# role names differ from the platform repository's hopcharlie-observer, so
+# running its make-kubeconfig.sh here does not replace these subjects.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: charlie-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hopcharlie-platform
+  namespace: charlie-system
+automountServiceAccountToken: false
+---
+# A long-lived token: the API reads its kubeconfig only when it starts, and no
+# cloud credential plugin runs in the pod. The k3s API is reached over the
+# tailnet.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hopcharlie-platform-token
+  namespace: charlie-system
+  annotations:
+    kubernetes.io/service-account.name: hopcharlie-platform
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hopcharlie-platform-observer
+rules:
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [list]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [list]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterrolebindings]
+    verbs: [list]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [list]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hopcharlie-platform-observer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hopcharlie-platform-observer
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: charlie-system
+---
+# Migrations of apps registered in two environments (ADR 0063). The migration
+# engine reads the CNPG Cluster (precheck) and merge-patches its
+# spec.replica.primary and promotionToken (demote, promote). RBAC cannot name
+# the namespaces of apps registered later, so the role covers every Cluster
+# and the ValidatingAdmissionPolicy below narrows patch to those two fields,
+# and to a namespace the app chart labelled hopcharlie.dev/db-topology=true or
+# a Cluster on which the platform holds the custom verb migrate. Only
+# scripts/db-migration-access.py grants migrate, for one Cluster at a time
+# (ADR 0048, 0060), so production databases keep no standing write access.
+# RBAC cannot narrow get that way; a Cluster has no secret values, and the
+# token already lists every Cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hopcharlie-platform-migration
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hopcharlie-platform-migration
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hopcharlie-platform-migration
+subjects:
+  - kind: ServiceAccount
+    name: hopcharlie-platform
+    namespace: charlie-system
+---
+# Production databases (namespace moimroom) have no such label: there the
+# platform can patch only during a db-migration-access.py session.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hopcharlie-platform-migration
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: ["*"]
+        operations: [UPDATE]
+        resources: [clusters]
+  matchConditions:
+    - name: platform-service-account
+      expression: request.userInfo.username == 'system:serviceaccount:charlie-system:hopcharlie-platform'
+  validations:
+    - expression: >-
+        (has(namespaceObject.metadata.labels) &&
+        'hopcharlie.dev/db-topology' in namespaceObject.metadata.labels &&
+        namespaceObject.metadata.labels['hopcharlie.dev/db-topology'] == 'true') ||
+        authorizer.group('postgresql.cnpg.io').resource('clusters').namespace(request.namespace).name(request.name).check('migrate').allowed()
+      message: the platform may change a Cluster only in a namespace labelled hopcharlie.dev/db-topology=true or during a db-migration-access session (verb migrate)
+    - expression: >-
+        object.spec.all(k, k == 'replica' || k == 'postgresql' || (k in oldObject.spec && object.spec[k] == oldObject.spec[k])) &&
+        oldObject.spec.all(k, k == 'replica' || k == 'postgresql' || k in object.spec)
+      message: the platform may change only spec.replica
+    - expression: >-
+        has(object.spec.postgresql) == has(oldObject.spec.postgresql) &&
+        (!has(object.spec.postgresql) || (
+        object.spec.postgresql.all(k, k == 'parameters' || (k in oldObject.spec.postgresql && object.spec.postgresql[k] == oldObject.spec.postgresql[k])) &&
+        oldObject.spec.postgresql.all(k, k == 'parameters' || k in object.spec.postgresql) &&
+        has(object.spec.postgresql.parameters) == has(oldObject.spec.postgresql.parameters) &&
+        (!has(object.spec.postgresql.parameters) || (
+        object.spec.postgresql.parameters.all(k, k == 'archive_mode' || (k in oldObject.spec.postgresql.parameters && object.spec.postgresql.parameters[k] == oldObject.spec.postgresql.parameters[k])) &&
+        oldObject.spec.postgresql.parameters.all(k, k == 'archive_mode' || k in object.spec.postgresql.parameters) &&
+        (!('archive_mode' in object.spec.postgresql.parameters) || object.spec.postgresql.parameters['archive_mode'] in ['on', 'always'])))))
+      message: the platform may change in spec.postgresql only parameters.archive_mode (on or always), which CNPG switches when a cluster is demoted or promoted
+    - expression: >-
+        has(oldObject.spec.replica) && has(object.spec.replica) &&
+        object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+        oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)
+      message: the platform may change only spec.replica.primary and promotionToken
+    - expression: >-
+        (has(object.metadata.labels) ? object.metadata.labels : {}) == (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
+        (has(object.metadata.annotations) ? object.metadata.annotations : {}) == (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+      message: the platform may not change the Cluster's labels or annotations
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hopcharlie-platform-migration
+spec:
+  policyName: hopcharlie-platform-migration
+  validationActions: [Deny]
