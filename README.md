@@ -930,6 +930,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0068-record-three-node-gke-workload-capacity.md](docs/adr/0068-record-three-node-gke-workload-capacity.md) | 이미 적용된 GKE workload 3대 기준을 Terraform 기본값·예제·검사에 기록 |
 | [docs/adr/0070-declare-gke-control-plane-patch-target.md](docs/adr/0070-declare-gke-control-plane-patch-target.md) | GKE 제어 영역 최소 버전 목표와 노드 보존·실제 plan 검토·별도 적용 승인 범위 |
 | [docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md](docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md) | 지운 moimroom의 앱 목록 파일과 AWS·GCP 이미지 게시 자원 제거, 적용 순서 |
+| [docs/adr/0076-fetch-optional-preflight-policy-files.md](docs/adr/0076-fetch-optional-preflight-policy-files.md) | 레지던시 정책과 동등성 파일을 SSM에서 선택적으로 받아 플랫폼 검사를 켬 |
 | [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
 | [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
