@@ -47,6 +47,7 @@
     "docker.io/nginxinc/nginx-unprivileged:stable-alpine": "sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/apps/hyperdx-prometheus-auth:2.39.1-prom-auth-91eaba5cf7d5": "sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:67d9d57": "sha256:c09c600a488373a09caa545978dbcd5b2338fd55c0346307f10f802915de9190",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4feac3a": "sha256:eedf8a9b61c49af37cf761c321821cda66b811ea1dfba09eaa466544049dc111"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4feac3a": "sha256:eedf8a9b61c49af37cf761c321821cda66b811ea1dfba09eaa466544049dc111",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:01c64fc": "sha256:bc6ae7d6dbb99ff93639c500f68df62ccf3a8d8bd68f16b550b5b93bd6d6cb52"
   }
 }
