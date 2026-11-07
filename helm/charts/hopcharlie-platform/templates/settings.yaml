@@ -25,6 +25,7 @@ data:
     #   FETCH=postgres  db-password
     #   FETCH=gateway   gateway.env
     #   FETCH=api       api.env, db-passwords.env, rclone.env, envs.yaml,
+    #                   aiobs-clickhouse-password (with AIOBS_CLICKHOUSE),
     #                   kube/<cluster> (one kubeconfig per cluster),
     #                   sealed-secrets/<env>.pem (each cluster's Sealed Secrets
     #                   public certificate), and with GITHUB_APP_ID
@@ -32,8 +33,6 @@ data:
     #                   api.env also carries the console administrators
     #                   (platform-admins: name:bcrypt-hash,...) and, once it
     #                   exists, the app secrets key (app-secrets-key).
-    #                   Optional: residency-policy.yaml and parity.yaml from
-    #                   host/, each with its PLATFORM_*_FILE line in api.env.
     set -euo pipefail
     umask 077
 
@@ -63,21 +62,19 @@ data:
         secrets_key="$(aws ssm get-parameters --with-decryption --names "$PREFIX/app-secrets-key" \
           --query 'Parameters[].Value' --output text | tr -d '\r')"
         if [ "$secrets_key" = "None" ]; then secrets_key=""; fi
+        # The password of the read-only ClickHouse user GET /v1/ai-activity uses
+        # (scripts/put-clickhouse-read-password.sh, infra ADR 0077). A missing
+        # parameter gives an empty file, so the API starts and the endpoint
+        # answers 502 until the parameter exists.
+        if [ -n "${AIOBS_CLICKHOUSE:-}" ]; then
+          ch_pw="$(aws ssm get-parameters --with-decryption --names "$PREFIX/clickhouse-read-password" \
+            --query 'Parameters[].Value' --output text | tr -d '\r')"
+          if [ "$ch_pw" = "None" ]; then ch_pw=""; fi
+          printf '%s' "$ch_pw" > /config/aiobs-clickhouse-password
+        fi
         get db-passwords > /config/db-passwords.env
         get rclone-env > /config/rclone.env
         get host/envs.yaml > /config/envs.yaml
-        # The residency policy and the parity file (platform ADR 0013, 0022),
-        # read the same way as app-secrets-key: a missing parameter leaves the
-        # file out and the API starts without that check, as before. A file
-        # that is there turns its check on through api.env below.
-        residency="$(aws ssm get-parameters --with-decryption --names "$PREFIX/host/residency-policy.yaml" \
-          --query 'Parameters[].Value' --output text | tr -d '\r')"
-        if [ "$residency" = "None" ]; then residency=""; fi
-        if [ -n "$residency" ]; then printf '%s\n' "$residency" > /config/residency-policy.yaml; fi
-        parity="$(aws ssm get-parameters --with-decryption --names "$PREFIX/host/parity.yaml" \
-          --query 'Parameters[].Value' --output text | tr -d '\r')"
-        if [ "$parity" = "None" ]; then parity=""; fi
-        if [ -n "$parity" ]; then printf '%s\n' "$parity" > /config/parity.yaml; fi
         if [ -n "${GITHUB_APP_ID:-}" ]; then
           get github-app-private-key > /config/github-app.pem
           webhook="$(get github-webhook-secret)"
@@ -121,8 +118,6 @@ data:
           printf 'PLATFORM_ADMINS=%s\n' "$admins"
           if [ -n "$secrets_key" ]; then printf 'PLATFORM_SECRETS_KEY=%s\n' "$secrets_key"; fi
           if [ -n "$files" ]; then printf 'KUBECONFIG=%s\n' "${files#:}"; fi
-          if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
-          if [ -n "$parity" ]; then printf 'PLATFORM_PARITY_FILE=/config/parity.yaml\n'; fi
           if [ -n "${GITHUB_APP_ID:-}" ]; then printf 'PLATFORM_GITHUB_WEBHOOK_SECRET=%s\n' "$webhook"; fi
         } > /config/api.env
         ;;

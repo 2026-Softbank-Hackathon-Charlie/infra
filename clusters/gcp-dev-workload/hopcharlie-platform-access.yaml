@@ -92,9 +92,10 @@ subjects:
 ---
 # Migrations of apps registered in two environments (ADR 0063). The migration
 # engine reads the CNPG Cluster (precheck) and merge-patches its
-# spec.replica.primary and promotionToken (demote, promote). RBAC cannot name
+# spec.replica.primary and promotionToken (demote, promote), or only source
+# on an opted-in three-member primary (ADR 0078). RBAC cannot name
 # the namespaces of apps registered later, so the role covers every Cluster
-# and the ValidatingAdmissionPolicy below narrows patch to those two fields,
+# and the ValidatingAdmissionPolicy below narrows patch to those fields,
 # and to a namespace the app chart labelled hopcharlie.dev/db-topology=true or
 # a Cluster on which the platform holds the custom verb migrate. Only
 # scripts/db-migration-access.py grants migrate, for one Cluster at a time
@@ -164,9 +165,19 @@ spec:
       message: the platform may change in spec.postgresql only parameters.archive_mode (on or always), which CNPG switches when a cluster is demoted or promoted
     - expression: >-
         has(oldObject.spec.replica) && has(object.spec.replica) &&
-        object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
-        oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)
-      message: the platform may change only spec.replica.primary and promotionToken
+        ((object.spec.replica.all(k, k in ['primary', 'promotionToken'] || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+          oldObject.spec.replica.all(k, k in ['primary', 'promotionToken'] || k in object.spec.replica)) ||
+         (has(oldObject.metadata.labels) &&
+          'hopcharlie.dev/db-topology-members' in oldObject.metadata.labels &&
+          oldObject.metadata.labels['hopcharlie.dev/db-topology-members'] == '3' &&
+          has(oldObject.spec.replica.primary) && has(oldObject.spec.replica.self) &&
+          oldObject.spec.replica.primary == oldObject.spec.replica.self &&
+          has(oldObject.spec.replica.source) && has(object.spec.replica.source) &&
+          has(oldObject.spec.externalClusters) &&
+          oldObject.spec.externalClusters.exists(c, c.name == object.spec.replica.source && c.name != oldObject.spec.replica.self) &&
+          object.spec.replica.all(k, k == 'source' || (k in oldObject.spec.replica && object.spec.replica[k] == oldObject.spec.replica[k])) &&
+          oldObject.spec.replica.all(k, k == 'source' || k in object.spec.replica)))
+      message: the platform may change primary/promotionToken, or only source on a three-member primary to an existing other externalCluster
     - expression: >-
         (has(object.metadata.labels) ? object.metadata.labels : {}) == (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
         (has(object.metadata.annotations) ? object.metadata.annotations : {}) == (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})

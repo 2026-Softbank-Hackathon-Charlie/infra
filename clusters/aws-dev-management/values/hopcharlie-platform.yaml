@@ -1,8 +1,8 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:829d599@sha256:2239a6327772a3699f6356d7375aabb01ae78534d8134e9cacce07ed34d684dc",
-    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:cc0320b@sha256:04851ccb67b6c3d5937601e72f90a155013c1d05440bc2265463cb0be5fd5447",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:4feac3a@sha256:eedf8a9b61c49af37cf761c321821cda66b811ea1dfba09eaa466544049dc111",
+    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:7176328@sha256:6074756768707ec0067980301c9050ee1fe6aaa43425eb3d0d3944d98dcc1609",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   },
@@ -14,7 +14,7 @@
     "dsnHostSuffixes": ".ts.net,.hopcharlie-db-network.svc.cluster.local",
     "appDbTopology": {
       "enabled": true,
-      "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local",
+      "hostTemplates": "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local,onprem=db-onprem-{instance}.hopcharlie-db-network.svc.cluster.local",
       "route": {
         "tailnet": "tail567fe8.ts.net",
         "proxyClass": "hopcharlie-app-db-egress-management",
@@ -23,6 +23,142 @@
     },
     "appFiles": {
       "enabled": true
+    },
+    "parity": {
+      "enabled": true,
+      "config": {
+        "version": 1,
+        "mode": "audit",
+        "environments": {
+          "eks": {},
+          "gke": {},
+          "onprem": {}
+        },
+        "apps": [
+          {
+            "name": "moimroom-mig",
+            "namespace": "moimroom-mig",
+            "serviceAccount": "default",
+            "rbac": [
+              {
+                "id": "self-access-review",
+                "verb": "create",
+                "group": "authorization.k8s.io",
+                "resource": "selfsubjectaccessreviews",
+                "allowed": true
+              },
+              {
+                "id": "no-secret-list",
+                "verb": "list",
+                "resource": "secrets",
+                "allowed": false
+              }
+            ],
+            "environments": {
+              "eks": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              },
+              "gke": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              },
+              "onprem": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              }
+            }
+          },
+          {
+            "name": "docker-doom",
+            "namespace": "docker-doom",
+            "serviceAccount": "default",
+            "rbac": [
+              {
+                "id": "self-access-review",
+                "verb": "create",
+                "group": "authorization.k8s.io",
+                "resource": "selfsubjectaccessreviews",
+                "allowed": true
+              },
+              {
+                "id": "no-secret-list",
+                "verb": "list",
+                "resource": "secrets",
+                "allowed": false
+              }
+            ],
+            "environments": {
+              "eks": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              },
+              "gke": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              },
+              "onprem": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "aiobs": {
+      "enabled": true,
+      "url": "http://clickstack-clickhouse-clickhouse-headless.observability.svc:8123",
+      "user": "app",
+      "table": "default.otel_logs"
     }
   },
   "gcp": {
@@ -67,7 +203,7 @@
   },
   "hopai": {
     "enabled": true,
-    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:66d6365@sha256:b190125c2322d33fd7762bf60aef9fddeabdecdd7e731c3e4cffb195515401a5"
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:01c64fc@sha256:bc6ae7d6dbb99ff93639c500f68df62ccf3a8d8bd68f16b550b5b93bd6d6cb52"
   },
   "observability": {
     "automaticJobs": true

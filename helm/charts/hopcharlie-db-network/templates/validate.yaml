@@ -7,7 +7,9 @@
 {{- $hostnames = append $hostnames .hostname }}
 {{- end }}
 {{- if ne .Values.clusterId "management" }}
+{{- if ne .Values.clusterId "onprem" }}
 {{- $hostnames = append $hostnames .Values.ingress.hostname }}
+{{- end }}
 {{- if eq .Values.ingress.tag .Values.egress.tag }}
 {{- fail "ingress.tag and egress.tag must be distinct" }}
 {{- end }}
@@ -16,6 +18,6 @@
 {{- fail "all local ingress and egress hostnames must be unique" }}
 {{- end }}
 {{- if and (.Values.platformApps | default dict).enabled (eq .Values.clusterId "management") }}
-{{- fail "platformApps is for the workload clusters (eks, gke) only" }}
+{{- fail "platformApps is for the workload clusters (eks, gke, onprem) only" }}
 {{- end }}
 {{- end }}

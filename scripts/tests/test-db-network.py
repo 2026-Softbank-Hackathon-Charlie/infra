@@ -355,6 +355,87 @@ class DatabaseNetworkTests(unittest.TestCase):
         self.assertNotEqual(self.render(values).returncode, 0)
 
 
+ONPREM_VALUES = {
+    'enabled': True,
+    'clusterId': 'onprem',
+    'ingress': {'tag': 'tag:hop-db-onprem'},
+    'egress': {'tag': 'tag:hop-db-client-onprem', 'peers': {}},
+    'platformApps': {'enabled': True},
+    # k3s serves the Kubernetes API on 6443, not 443 as EKS and GKE do.
+    'kubeApiServerPort': 6443,
+}
+
+
+class OnpremPlatformAppsTests(unittest.TestCase):
+    """The laptop k3s has no static moimroom database: platform app proxies only."""
+
+    def test_onprem_renders_only_the_shared_platform_app_objects(self):
+        result = DatabaseNetworkTests.render(ONPREM_VALUES)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        docs = [d for d in yaml.safe_load_all(result.stdout) if d]
+        self.assertEqual(sorted((d['kind'], d['metadata']['name']) for d in docs), [
+            ('NetworkPolicy', 'db-network-default-deny'),
+            ('NetworkPolicy', 'db-network-operator'),
+            ('NetworkPolicy', 'platform-app-db-egress-proxy'),
+            ('NetworkPolicy', 'platform-app-db-ingress-proxy'),
+            ('ProxyClass', 'hopcharlie-app-db-egress-onprem'),
+            ('ProxyClass', 'hopcharlie-app-db-ingress-onprem'),
+        ])
+        for doc in docs:
+            if doc['kind'] == 'NetworkPolicy':
+                self.assertEqual(doc['metadata']['namespace'], NAMESPACE)
+        # The same shared policies as the cloud workload clusters.
+        gke = dict(values_for('gke'), platformApps={'enabled': True})
+        cloud = {(d['kind'], d['metadata']['name']): d for d in yaml.safe_load_all(DatabaseNetworkTests.render(gke).stdout) if d}
+        # The same shared policies as the cloud workload clusters, except that every
+        # rule that reaches the Kubernetes API also opens the k3s API port.
+        api_443 = {'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}], 'ports': [{'protocol': 'TCP', 'port': 443}]}
+        api_k3s = {'to': [{'ipBlock': {'cidr': '0.0.0.0/0'}}],
+                   'ports': [{'protocol': 'TCP', 'port': 443}, {'protocol': 'TCP', 'port': 6443}]}
+        for doc in docs:
+            if doc['kind'] == 'NetworkPolicy':
+                expected = cloud[('NetworkPolicy', doc['metadata']['name'])]
+                expected = json.loads(json.dumps(expected).replace(json.dumps(api_443), json.dumps(api_k3s)))
+                self.assertEqual(doc, expected)
+        operator = next(d for d in docs if d['metadata']['name'] == 'db-network-operator')
+        self.assertIn(api_k3s, operator['spec']['egress'])
+
+    def test_kube_api_server_port_must_be_a_port(self):
+        for port in (0, 65536, '6443', 443.5):
+            with self.subTest(port=port):
+                self.assertNotEqual(DatabaseNetworkTests.render(dict(ONPREM_VALUES, kubeApiServerPort=port)).returncode, 0)
+
+    def test_profile_file_is_disabled_and_matches_tested_values(self):
+        profile = yaml.safe_load((ROOT / 'helm/db-network/onprem.yaml').read_text(encoding='utf-8'))
+        self.assertIs(profile['enabled'], False)
+        disabled = DatabaseNetworkTests.render(profile)
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertEqual(list(filter(None, yaml.safe_load_all(disabled.stdout))), [])
+        profile['enabled'] = True
+        self.assertEqual(profile, ONPREM_VALUES)
+
+    def test_onprem_without_platform_apps_or_with_static_paths_fails(self):
+        static_peer = {'gke': {'hostname': 'hop-db-onprem-to-gke', 'tailnetFQDN': 'hop-db-gke-x.example-tailnet.ts.net'}}
+        cases = [
+            dict(ONPREM_VALUES, platformApps={'enabled': False}),
+            {k: v for k, v in ONPREM_VALUES.items() if k != 'platformApps'},
+            dict(ONPREM_VALUES, localDatabase={'namespace': 'db', 'cluster': 'postgres'}),
+            dict(ONPREM_VALUES, ingress={'hostname': 'hop-db-onprem', 'tag': 'tag:hop-db-onprem'}),
+            dict(ONPREM_VALUES, egress={'tag': 'tag:hop-db-client-onprem', 'peers': static_peer}),
+            dict(ONPREM_VALUES, ingress={'tag': 'tag:hop-db-client-onprem'}),
+            dict(ONPREM_VALUES, ingress={}),
+        ]
+        for values in cases:
+            with self.subTest(values=values):
+                result = DatabaseNetworkTests.render(values)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.strip(), '')
+        # The cloud workload profiles cannot name onprem as a static peer.
+        values = values_for('gke')
+        values['egress']['peers'] = {'onprem': static_peer['gke']}
+        self.assertNotEqual(DatabaseNetworkTests.render(values).returncode, 0)
+
+
 ROUTE_VALUES = {
     'enabled': False,
     'managementAppRoutes': {'enabled': True, 'tag': 'tag:hop-db-client-management',
@@ -462,7 +543,10 @@ class ManagementAppRoutesTests(unittest.TestCase):
                 self.assertNotIn('oldObject', text)
                 for needle in ("'tag:hop-db-client-management'", "'hopcharlie-app-db-egress-management'",
                                "'ExternalName'", "'placeholder'", '5432', "'hopcharlie-platform'",
-                               "'^hop-db-(eks|gke)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\\\.tail567fe8\\\\.ts\\\\.net$'",
+                               "object.metadata.name.matches('^db-(eks|gke|onprem)-[a-z0-9][a-z0-9-]{0,40}$')",
+                               "variables.route in ['eks', 'gke', 'onprem']",
+                               "'^hop-db-(eks|gke|onprem)-[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\\\.tail567fe8\\\\.ts\\\\.net$'",
+                               "'^hop-db-management-to-(eks|gke|onprem)-[a-z0-9-]+$'",
                                "'hop-' + object.metadata.name + '.tail567fe8.ts.net'"):
                     self.assertIn(needle, text)
             else:

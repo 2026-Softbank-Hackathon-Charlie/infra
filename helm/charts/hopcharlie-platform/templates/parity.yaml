@@ -1,0 +1,16 @@
+{{- with .Values.api.parity }}
+{{- if .enabled }}
+{{- $config := required "api.parity.config is required when parity is enabled" .config }}
+{{- if or (ne (toString $config.version) "1") (ne $config.mode "audit") (empty $config.apps) }}
+{{- fail "api.parity.config requires version 1, mode audit and nonempty apps" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopcharlie-parity
+  labels:
+    {{- include "hopcharlie.labels" "api" | nindent 4 }}
+data:
+  parity.json: {{ toJson $config | quote }}
+{{- end }}
+{{- end }}

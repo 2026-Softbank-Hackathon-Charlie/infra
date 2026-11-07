@@ -107,6 +107,29 @@ spec:
 {{- end }}
 {{- end }}
 
+{{- if .Values.api.aiobs.enabled }}
+---
+# GET /v1/ai-activity: only the API, only to the observability ClickHouse HTTP port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-aiobs-egress
+  labels:
+    {{- include "hopcharlie.labels" "platform" | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: api}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: clickhouse-server}
+      ports:
+        - {protocol: TCP, port: 8123}
+{{- end }}
+
 {{- if (.Values.observability | default dict).enabled }}
 ---
 apiVersion: networking.k8s.io/v1

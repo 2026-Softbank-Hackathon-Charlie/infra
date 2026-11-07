@@ -358,7 +358,7 @@ def main():
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
         # Born-paired app databases (ADR 0063) are on in the management values after
         # rollout steps 1-4; the chart renders the two settings only when set.
-        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local"
+        hosts = "eks=db-eks-{instance}.hopcharlie-db-network.svc.cluster.local,gke=db-gke-{instance}.hopcharlie-db-network.svc.cluster.local,onprem=db-onprem-{instance}.hopcharlie-db-network.svc.cluster.local"
         assert env.get("PLATFORM_APP_DB_TOPOLOGY") == "1" and env.get("PLATFORM_APP_DB_HOST_TEMPLATES") == hosts, env
         off_values = work / "platform-app-db-topology-off.json"
         off_values.write_text(json.dumps({"api": {"appDbTopology": {"enabled": False, "hostTemplates": "", "route": {"tailnet": "", "proxyClass": "", "tag": ""}}}}))
@@ -501,7 +501,7 @@ def main():
         # Migrations change the Cluster's topology fields (ADR 0050); the Tailscale operator
         # rewrites only a database egress Service's externalName (ADR 0063).
         assert appset["spec"]["template"]["spec"]["ignoreDifferences"] == [
-            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", ".spec.externalClusters", ".spec.certificates"]},
+            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", 'select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters', ".spec.certificates"]},
             {"group": "", "kind": "Service", "jqPathExpressions": [
                 'select(.spec.type == "ExternalName" and .metadata.annotations["tailscale.com/tailnet-fqdn"] != null) | .spec.externalName']}]
         check_project(docs, apps_project, "argocd")
@@ -695,6 +695,52 @@ def main():
             assert not [d for d in docs if d["metadata"]["name"].startswith("moimroom-db-")
                         and d["kind"] in ("Service", "NetworkPolicy")], "dbNetwork off draws no tailnet objects"
         assert len(sizes) == 1, f"both environments' databases must be the same size: {sizes}"
+        # ADR 0078: a third member gets both remote paths. New replicas always
+        # bootstrap from primary; primary keeps the legacy peer as its source.
+        members = ["gke", "eks", "onprem"]
+        for env in members:
+            values = json.loads(topo_files["gke"].read_text())
+            values["env"] = env
+            values["values"]["dbTopology"]["members"] = members
+            three = work / f"topology-three-{env}.json"
+            three.write_text(json.dumps(values))
+            docs = render(ROOT / "helm/charts/hopcharlie-app", three, "moimroom", "moimroom", ("-f", work / "topology-profile-gke.json"))
+            cluster = next(d for d in docs if d["kind"] == "Cluster")
+            namespace = next(d for d in docs if d["kind"] == "Namespace")
+            assert cluster["metadata"]["labels"]["hopcharlie.dev/db-topology-members"] == "3"
+            assert namespace["metadata"]["labels"]["hopcharlie.dev/db-topology-members"] == "3"
+            spec = cluster["spec"]
+            source = "eks" if env == "gke" else "gke"
+            assert spec["replica"] == {"self": f"moimroom-db-{env}", "primary": "moimroom-db-gke", "source": f"moimroom-db-{source}"}
+            if env == "gke":
+                assert "initdb" in spec["bootstrap"]
+            else:
+                assert spec["bootstrap"]["pg_basebackup"]["source"] == "moimroom-db-gke"
+            assert {c["name"] for c in spec["externalClusters"]} == {f"moimroom-db-{m}" for m in members}
+            services = {d["metadata"]["name"]: d for d in docs if d["kind"] == "Service"}
+            policy = next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "moimroom-db-replication")["spec"]
+            assert policy["egress"] == [{"to": [proxy(f"moimroom-db-to-{m}")], "ports": [{"protocol": "TCP", "port": 5432}]} for m in members if m != env]
+            for m in members:
+                if m == env:
+                    continue
+                egress = services[f"moimroom-db-to-{m}"]
+                assert egress["metadata"]["annotations"]["tailscale.com/tailnet-fqdn"] == f"hop-db-{m}-moimroom.{net['tailnetDomain']}"
+                external = next(c for c in spec["externalClusters"] if c["name"] == f"moimroom-db-{m}")
+                assert external["connectionParameters"]["host"] == f"moimroom-db-to-{m}.moimroom.svc.cluster.local"
+        # One env so far (ADR 0074): the primary's file with peerPresent false is the
+        # same output without the tailnet objects; peerPresent true is the same output.
+        on = work / "topology-profile-gke.json"
+        paired = render(ROOT / "helm/charts/hopcharlie-app", topo_files["gke"], "moimroom", "moimroom", ("-f", on))
+        tailnet = {("Service", "moimroom-db-ts"), ("Service", "moimroom-db-to-eks"), ("NetworkPolicy", "moimroom-db-replication")}
+        assert tailnet <= {(d["kind"], d["metadata"]["name"]) for d in paired}
+        for present in (True, False):
+            values = json.loads(topo_files["gke"].read_text())
+            values["values"]["dbTopology"]["peerPresent"] = present
+            alone = work / f"topology-gke-peer-{str(present).lower()}.json"
+            alone.write_text(json.dumps(values))
+            docs = render(ROOT / "helm/charts/hopcharlie-app", alone, "moimroom", "moimroom", ("-f", on))
+            want = paired if present else [d for d in paired if (d["kind"], d["metadata"]["name"]) not in tailnet]
+            assert docs == want, f"peerPresent {present} must draw the paired output{'' if present else ' without the tailnet objects'}"
         for name, change in (
             ("dbTopology without pgCA", lambda v: v["values"]["sealedSecrets"].pop("pgCA")),
             ("dbTopology without pgApp and pgCA", lambda v: (v["values"]["sealedSecrets"].pop("pgCA"), v["values"]["sealedSecrets"].pop("pgApp"))),
@@ -702,6 +748,17 @@ def main():
             ("dbTopology of other environments", lambda v: v["values"]["dbTopology"].update(primary="aws", peer="gcp")),
             ("dbTopology whose only environment is the file's", lambda v: v["values"]["dbTopology"].update(primary="eks", peer="eks")),
             ("unknown dbTopology key", lambda v: v["values"]["dbTopology"].update(role="primary")),
+            ("peerPresent false in the replica's file", lambda v: v["values"]["dbTopology"].update(peerPresent=False)),
+            ("peerPresent that is not a boolean", lambda v: v["values"]["dbTopology"].update(peerPresent="false")),
+            ("empty members", lambda v: v["values"]["dbTopology"].update(members=[])),
+            ("one member", lambda v: v["values"]["dbTopology"].update(members=["gke"])),
+            ("four members", lambda v: v["values"]["dbTopology"].update(members=["gke", "eks", "onprem", "fourth"])),
+            ("duplicate members", lambda v: v["values"]["dbTopology"].update(members=["gke", "eks", "eks"])),
+            ("members missing primary", lambda v: v["values"]["dbTopology"].update(members=["eks", "onprem"])),
+            ("members missing peer", lambda v: v["values"]["dbTopology"].update(members=["gke", "onprem"])),
+            ("members missing env", lambda v: v.update(env="onprem", values={**v["values"], "dbTopology": {"primary": "gke", "peer": "eks", "members": ["gke", "eks"]}})),
+            ("members with absent peer", lambda v: v["values"]["dbTopology"].update(members=["gke", "eks", "onprem"], peerPresent=False)),
+            ("service collides with second remote", lambda v: (v["values"]["dbTopology"].update(members=["gke", "eks", "onprem"]), v["values"]["services"][0].update(name="db-to-onprem"))),
             ("pgApp without uri", lambda v: v["values"]["sealedSecrets"]["pgApp"].pop("uri")),
             ("service whose Service is the tailnet ingress", lambda v: v["values"]["services"][0].update(name="db-ts")),
         ):
