@@ -76,13 +76,17 @@ spec:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
   template:
     metadata:
-      {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled }}
+        {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled .Values.hopai.enabled }}
       annotations:
         {{- if .Values.api.parity.enabled }}
         checksum/parity: {{ toJson .Values.api.parity.config | sha256sum }}
         {{- end }}
         {{- if (.Values.api.onpremRegistration | default dict).enabled }}
         checksum/onprem-registration: {{ toJson .Values.api.onpremRegistration | sha256sum }}
+        {{- end }}
+        {{- if .Values.hopai.enabled }}
+        # The API copies this Job template at boot; a ConfigMap update alone is not enough.
+        checksum/hopai: {{ include (print $.Template.BasePath "/hopai.yaml") . | sha256sum }}
         {{- end }}
       {{- end }}
       labels:

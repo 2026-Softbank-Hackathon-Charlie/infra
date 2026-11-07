@@ -20,6 +20,8 @@ Job 자체의 `metadata.annotations['hopcharlie.dev/recommendations']='v1'`을 �
 
 추천 init은 기존 SSM의 Anthropic key와 agent token을 읽으며 kube-eks/kube-gke를 조회하거나 파일로 만들지 않는다. main은 env 파일을 기존 방식으로 읽은 뒤 온보딩 분기보다 먼저 `exec hopai recommend`로 실행한다. KIND가 없거나 onboard이면 기존 kubeconfig 조회와 run/onboard 명령을 유지한다. token 조회가 실패하거나 agent가 없으면 main을 실행하지 않는다. 입력·nonce·키는 로그로 내보내지 않는다.
 
+API는 시작할 때 Job 템플릿을 복사하므로 ConfigMap만 바뀌면 기존 복사본이 남는다. API Pod의 `checksum/hopai`에 렌더한 hopai 템플릿의 해시를 넣어 runner 이미지·명령·설정이 바뀔 때 API가 새 템플릿을 읽도록 한다. hopai 템플릿은 API 템플릿을 include하지 않아 순환이 없다. 같은 값의 렌더에서는 해시가 같고 runner 이미지와 Job 명령 설정의 변경에서는 달라지는 것을 검사한다.
+
 ## 영향과 후속 작업
 
 - 실제 렌더된 fetch와 main shell을 fake AWS/hopai로 실행해 추천의 정확히 두 파라미터 조회·kube 파일 미생성·전용 명령, 기존 run/onboard 동작, 실패 차단과 값 로그 부재를 확인한다.

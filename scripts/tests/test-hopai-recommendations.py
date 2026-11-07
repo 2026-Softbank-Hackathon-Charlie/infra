@@ -15,18 +15,33 @@ BASH = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which(
 
 class RecommendationRunner(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def render(cls, *extra):
         rendered = subprocess.check_output([HELM, "template", "hopcharlie-platform",
             str(ROOT / "helm/charts/hopcharlie-platform"), "-f",
-            str(ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml")],
+            str(ROOT / "clusters/aws-dev-management/values/hopcharlie-platform.yaml"), *extra],
             text=True, encoding="utf-8")
-        docs = [d for d in yaml.safe_load_all(rendered) if d]
+        return [d for d in yaml.safe_load_all(rendered) if d]
+
+    @classmethod
+    def setUpClass(cls):
+        docs = cls.render()
         cls.fetch = next(d["data"]["fetch.sh"] for d in docs
             if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-hopai-fetch")
         cls.job = yaml.safe_load(next(d["data"]["job.yaml"] for d in docs
             if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "hopcharlie-hopai-job"))
         cls.pod = cls.job["spec"]["template"]["spec"]
         cls.entrypoint = cls.pod["containers"][0]["args"][0]
+
+    def test_runner_template_or_image_changes_roll_out_the_api_template_cache(self):
+        def checksum(docs):
+            api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+            return api["spec"]["template"]["metadata"].get("annotations", {}).get("checksum/hopai")
+        original = checksum(self.render())
+        self.assertRegex(original or "", r"^[a-f0-9]{64}$")
+        self.assertEqual(checksum(self.render()), original)
+        for setting in ("hopai.maxRuns=9", "hopai.image=fixture.invalid/hopai:changed"):
+            with self.subTest(setting=setting):
+                self.assertNotEqual(checksum(self.render("--set-string", setting)), original)
 
     def test_support_marker_belongs_to_job_metadata(self):
         self.assertEqual(self.job["metadata"].get("annotations", {}).get(
