@@ -28,6 +28,7 @@ override_data {
   } }
 }
 variables {
+  enable_langfuse_storage            = false
   aws_account_id                     = "123456789012"
   operator_principal_arn             = "arn:aws:iam::123456789012:role/operator"
   additional_operator_principal_arns = ["arn:aws:iam::123456789012:user/second-operator"]
