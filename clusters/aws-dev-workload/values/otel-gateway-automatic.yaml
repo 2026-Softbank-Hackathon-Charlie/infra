@@ -232,6 +232,11 @@
             "key": "deployment.environment.name",
             "value": "dev",
             "action": "upsert"
+          },
+          {
+            "key": "hopcharlie.environment.name",
+            "value": "eks",
+            "action": "upsert"
           }
         ]
       },

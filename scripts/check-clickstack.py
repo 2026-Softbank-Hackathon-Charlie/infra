@@ -34,6 +34,7 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-clickstack.py')], env=env, check=True)
         subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-automatic-observability.py')], env=env, check=True)
         subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-gke-observability.py')], env=env, check=True)
+        subprocess.run([sys.executable, str(ROOT / 'scripts/tests/test-onprem-observability.py')], env=env, check=True)
 
 
 if __name__ == '__main__':
