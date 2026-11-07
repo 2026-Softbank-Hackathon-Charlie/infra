@@ -23,6 +23,136 @@
     },
     "appFiles": {
       "enabled": true
+    },
+    "parity": {
+      "enabled": true,
+      "config": {
+        "version": 1,
+        "mode": "audit",
+        "environments": {
+          "eks": {},
+          "gke": {},
+          "onprem": {}
+        },
+        "apps": [
+          {
+            "name": "moimroom-mig",
+            "namespace": "moimroom-mig",
+            "serviceAccount": "default",
+            "rbac": [
+              {
+                "id": "self-access-review",
+                "verb": "create",
+                "group": "authorization.k8s.io",
+                "resource": "selfsubjectaccessreviews",
+                "allowed": true
+              },
+              {
+                "id": "no-secret-list",
+                "verb": "list",
+                "resource": "secrets",
+                "allowed": false
+              }
+            ],
+            "environments": {
+              "eks": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              },
+              "gke": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              },
+              "onprem": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  },
+                  {
+                    "id": "object-storage",
+                    "name": "app-s3"
+                  }
+                ],
+                "backup": {
+                  "cluster": "moimroom-mig-db",
+                  "maxAge": "26h"
+                }
+              }
+            }
+          },
+          {
+            "name": "docker-doom",
+            "namespace": "docker-doom",
+            "serviceAccount": "default",
+            "rbac": [
+              {
+                "id": "self-access-review",
+                "verb": "create",
+                "group": "authorization.k8s.io",
+                "resource": "selfsubjectaccessreviews",
+                "allowed": true
+              },
+              {
+                "id": "no-secret-list",
+                "verb": "list",
+                "resource": "secrets",
+                "allowed": false
+              }
+            ],
+            "environments": {
+              "eks": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              },
+              "gke": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              },
+              "onprem": {
+                "secrets": [
+                  {
+                    "id": "runtime",
+                    "name": "app-secrets"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     }
   },
   "gcp": {
