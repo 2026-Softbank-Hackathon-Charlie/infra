@@ -1085,3 +1085,16 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
 | [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
 | [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |
+
+### 기존 앱 가져오기 시험용 VM (moimroom-legacy)
+
+- [docs/adr/0093-add-legacy-moimroom-fixture-vm.md](docs/adr/0093-add-legacy-moimroom-fixture-vm.md) — 기본 VPC의 고객 앱 대역 VM과 S3 버킷 (제안)
+- [terraform/fixtures/aws/legacy-moimroom/README.md](terraform/fixtures/aws/legacy-moimroom/README.md) — 목적, 적용과 정리, Cloudflare 레코드, 앱 레포 secret
+- [terraform/fixtures/aws/legacy-moimroom/versions.tf](terraform/fixtures/aws/legacy-moimroom/versions.tf) — state key와 provider, fixture 태그
+- [terraform/fixtures/aws/legacy-moimroom/variables.tf](terraform/fixtures/aws/legacy-moimroom/variables.tf) — 배포 공개 키와 SSH 허용 러너 IP
+- [terraform/fixtures/aws/legacy-moimroom/main.tf](terraform/fixtures/aws/legacy-moimroom/main.tf) — EC2, EIP, SG, SSM 역할, 사진 버킷, 버킷 전용 IAM 사용자
+- [terraform/fixtures/aws/legacy-moimroom/outputs.tf](terraform/fixtures/aws/legacy-moimroom/outputs.tf) — 공인 IP, 만들 DNS 레코드, APP_ENV 시작 부분
+- [terraform/fixtures/aws/legacy-moimroom/user-data.sh.tftpl](terraform/fixtures/aws/legacy-moimroom/user-data.sh.tftpl) — Docker, Compose, swap, deploy 계정
+- [terraform/fixtures/aws/legacy-moimroom/terraform.tfvars.example](terraform/fixtures/aws/legacy-moimroom/terraform.tfvars.example) — 입력 예시
+- [terraform/fixtures/aws/legacy-moimroom/tf.sh](terraform/fixtures/aws/legacy-moimroom/tf.sh) — 공식 Terraform 이미지 실행
+- [terraform/fixtures/aws/legacy-moimroom/.terraform.lock.hcl](terraform/fixtures/aws/legacy-moimroom/.terraform.lock.hcl) — provider 버전 고정

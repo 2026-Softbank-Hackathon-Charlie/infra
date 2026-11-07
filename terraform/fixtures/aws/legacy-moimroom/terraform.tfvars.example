@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars (ignored by Git). No secrets belong here.
+deploy_ssh_public_key = "ssh-ed25519 AAAA... deploy@moimroom"
+# Runner egress IPs, one /32 each (README.md: "러너 공인 IP 찾기").
+ssh_allowed_cidrs = ["203.0.113.10/32"]
