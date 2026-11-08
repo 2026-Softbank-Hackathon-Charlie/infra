@@ -13,5 +13,5 @@ class GCEWebRoute(unittest.TestCase):
  def test_invalid_target_namespace_and_oversize_name_rejected(self):
   for values,ns in [({'namespace':'a'*49,'targetFQDN':'example.tail1234.ts.net'},'hopcharlie-db-network'),({'namespace':'demo','targetFQDN':'example.com'},'hopcharlie-db-network'),({'namespace':'demo','targetFQDN':'example.tail1234.ts.net'},'kube-system')]:self.assertNotEqual(self.render(values,ns).returncode,0)
  def test_profile_uses_ingress_without_other_onprem_annotations(self):
-  p=json.loads((ROOT/'clusters/onprem-dev-workload/values/apps.yaml').read_text())['environments']['onprem-gce']['profile'];self.assertEqual(p['publicService']['annotations'],{});self.assertEqual(p['ingress']['className'],'traefik');self.assertIn('{namespace}',p['ingress']['hostTemplate']);self.assertEqual(p['postgres']['storageClass'],'onprem-local-retain')
+  p=json.loads((ROOT/'clusters/onprem-dev-workload/values/apps.yaml').read_text())['environments']['onprem-gce']['profile'];self.assertEqual(p['imagePullPolicy'],'Always');self.assertEqual(p['publicService']['annotations'],{});self.assertEqual(p['ingress']['className'],'traefik');self.assertIn('{namespace}',p['ingress']['hostTemplate']);self.assertEqual(p['postgres']['storageClass'],'onprem-local-retain')
 if __name__=='__main__':unittest.main()

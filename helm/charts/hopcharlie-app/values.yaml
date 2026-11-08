@@ -130,6 +130,7 @@ profile:
 
   # Names of Secrets in the namespace for pulling the images.
   imagePullSecrets: []
+  imagePullPolicy: "" # empty preserves Kubernetes defaults
 
   # Requests and limits of every service's container. A service's memory
   # replaces both memory values, its cpu the CPU request.

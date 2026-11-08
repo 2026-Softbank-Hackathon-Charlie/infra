@@ -117,7 +117,8 @@
         },
         "namespaceLabels": {
           "charlie.dev/workload-target": "onprem-gce"
-        }
+        },
+        "imagePullPolicy": "Always"
       }
     }
   }
