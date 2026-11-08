@@ -1,0 +1,82 @@
+{
+  "recordedAt": "2026-11-08T01:54:41.932528+00:00",
+  "scope": "hopai real telemetry-check only; not moimroom-mig service inference",
+  "job": "hopai-langfuse-check-1794102725",
+  "project": "hopcharlie-llm-dev",
+  "modelHTTPCalls": 2,
+  "toolCalls": 1,
+  "network": {
+    "dnsExit": 0,
+    "serviceGETExit": 0,
+    "podGETExit": 0
+  },
+  "observationCount": 4,
+  "observations": [
+    {
+      "id": "854bed5da1bfad5d",
+      "traceId": "9ccf8e593ce76138092f35df40af4a13",
+      "parentObservationId": "c94e790e4dd3ee50",
+      "type": "GENERATION",
+      "model": "claude-sonnet-5-5",
+      "inputPresent": true,
+      "outputPresent": true,
+      "usageDetails": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "input": 798,
+        "output": 37,
+        "total": 835
+      },
+      "startTime": "2026-11-08T01:52:14.448Z",
+      "endTime": "2026-11-08T01:52:15.780Z",
+      "level": "DEFAULT"
+    },
+    {
+      "id": "bb58c7282ef02c20",
+      "traceId": "9ccf8e593ce76138092f35df40af4a13",
+      "parentObservationId": "c94e790e4dd3ee50",
+      "type": "TOOL",
+      "model": "",
+      "inputPresent": true,
+      "outputPresent": true,
+      "usageDetails": {},
+      "startTime": "2026-11-08T01:52:14.447Z",
+      "endTime": "2026-11-08T01:52:14.447Z",
+      "level": "DEFAULT"
+    },
+    {
+      "id": "c94e790e4dd3ee50",
+      "traceId": "9ccf8e593ce76138092f35df40af4a13",
+      "parentObservationId": null,
+      "type": "AGENT",
+      "model": "",
+      "inputPresent": true,
+      "outputPresent": true,
+      "usageDetails": {},
+      "startTime": "2026-11-08T01:52:12.814Z",
+      "endTime": "2026-11-08T01:52:15.781Z",
+      "level": "DEFAULT"
+    },
+    {
+      "id": "bc38e91a52073dbe",
+      "traceId": "9ccf8e593ce76138092f35df40af4a13",
+      "parentObservationId": "c94e790e4dd3ee50",
+      "type": "GENERATION",
+      "model": "claude-sonnet-5-5",
+      "inputPresent": true,
+      "outputPresent": true,
+      "usageDetails": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "input": 728,
+        "output": 30,
+        "total": 758
+      },
+      "startTime": "2026-11-08T01:52:12.814Z",
+      "endTime": "2026-11-08T01:52:14.446Z",
+      "level": "DEFAULT"
+    }
+  ],
+  "credentialsRecorded": false,
+  "rawIORecorded": false
+}

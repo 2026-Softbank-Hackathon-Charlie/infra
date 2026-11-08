@@ -178,3 +178,31 @@ spec:
         - {protocol: TCP, port: {{ .port | int }}}
 {{- end }}
 {{- end }}
+
+{{- if and .Values.hopai.enabled .Values.hopai.langfuse.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-langfuse-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: hopcharlie
+      app.kubernetes.io/component: hopai
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: langfuse
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: langfuse
+          app.kubernetes.io/instance: langfuse
+          app.kubernetes.io/component: web
+    ports:
+    - protocol: TCP
+      port: 3000
+{{- end }}
