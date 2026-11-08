@@ -1,0 +1,29 @@
+{
+  "name": "gce-readiness-9946e8712e",
+  "services": [
+    {
+      "name": "web",
+      "path": "test/gce-readiness",
+      "dockerfile": "Dockerfile",
+      "port": 8080,
+      "healthCheck": "/healthz",
+      "public": true,
+      "replicas": 1,
+      "cpu": "50m",
+      "memory": "64Mi",
+      "env": {
+        "READINESS_GUARD_BUCKET": "hop-gce-guard-9946e8712e"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "db",
+      "type": "postgres"
+    },
+    {
+      "name": "files",
+      "type": "s3"
+    }
+  ]
+}
