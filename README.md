@@ -1119,6 +1119,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/onprem-dev-workload/values/observability-transport.yaml](clusters/onprem-dev-workload/values/observability-transport.yaml)
 - [clusters/aws-dev-management/values/observability-onprem-query-transport.yaml](clusters/aws-dev-management/values/observability-onprem-query-transport.yaml)
 - [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
+- [docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md](docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md)
 
 - [docs/operations/onprem-observability-live-check.json](docs/operations/onprem-observability-live-check.json)
 

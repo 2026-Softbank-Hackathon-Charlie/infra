@@ -83,7 +83,7 @@ SealedSecret은 대상 클러스터의 Sealed Secrets 공개 인증서로 strict
 
 - 각 Cluster는 자기 자신과 다른 모든 멤버의 `externalClusters`를 갖는다. 다른 멤버마다 egress Service와 복제 NetworkPolicy egress 규칙을 만든다.
 - 태어날 때 모든 nonprimary의 bootstrap과 `replica.source`는 `primary`다. primary의 기본 `replica.source`는 기존 `peer`다. 실제 primary 변경은 계속 이전 엔진이 소유하며 Git의 bootstrap primary와 다를 수 있다.
-- 명시한 멤버 수를 Cluster와 Namespace의 `hopcharlie.dev/db-topology-members` 레이블에 쓴다. infra의 ApplicationSet은 값이 `"3"`인 Cluster의 `externalClusters`를 Git으로 관리해 세 번째 경로를 추가한다. `replica`와 인증서 무시는 유지해 승격·강등을 되돌리지 않는다. 차트와 infra ApplicationSet 변경을 함께 준비해야 한다.
+- 명시한 멤버 수를 Cluster와 Namespace의 `hopcharlie.dev/db-topology-members` 레이블에 쓴다. infra의 ApplicationSet은 이 레이블이 있는 Cluster(`"2"`나 `"3"`)의 `externalClusters`를 Git으로 관리해 세 번째 경로를 추가하고, 세 멤버에서 뺀 멤버의 항목을 지운다(infra ADR 0098, platform ADR 0064). `replica`와 인증서 무시는 유지해 승격·강등을 되돌리지 않는다. 차트와 infra ApplicationSet 변경을 함께 준비해야 한다.
 - 세 멤버는 임의의 spoke 간 이전을 보장하지 않는다. EKS→GKE 전환을 검증한 다음 GKE를 따라오는 onprem을 더하는 경로가 현재 범위다. 실제 복제·Tailscale ACL·인증서·승격·롤백은 운영 리허설에서 별도로 검증해야 한다.
 
 ## 앱을 지우면 네임스페이스째 지워진다
