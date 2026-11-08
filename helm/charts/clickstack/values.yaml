@@ -587,6 +587,8 @@
     "enabled": false,
     "namespace": "",
     "serviceName": "",
-    "existingSecret": ""
+    "existingSecret": "",
+    "serviceClusterIP": "",
+    "serviceUID": ""
   }
 }

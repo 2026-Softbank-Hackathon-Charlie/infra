@@ -19,6 +19,8 @@
     "enabled": true,
     "namespace": "moimroom-mig",
     "serviceName": "moimroom-mig-web",
-    "existingSecret": "moimroom-mig-langfuse-exporter-auth"
+    "existingSecret": "moimroom-mig-langfuse-exporter-auth",
+    "serviceClusterIP": "172.20.238.122",
+    "serviceUID": "89a4cb40-56b9-4ad3-858c-cdec8c20d494"
   }
 }

@@ -852,6 +852,10 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 
 ## ClickStack 관측 구성
 
+- [docs/runbooks/app-langfuse-collector-recovery.json](docs/runbooks/app-langfuse-collector-recovery.json)
+
+- [scripts/check-langfuse-service-binding.py](scripts/check-langfuse-service-binding.py)
+
 - [docs/adr/0096-forward-app-llm-traces-through-central-collector.md](docs/adr/0096-forward-app-llm-traces-through-central-collector.md)
 - [helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml](helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml)
 - [clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml)
