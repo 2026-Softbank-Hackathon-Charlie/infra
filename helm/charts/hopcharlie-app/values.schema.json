@@ -193,6 +193,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "imagePullPolicy": { "type": "string", "enum": ["", "Always", "IfNotPresent", "Never"] },
         "namespaceLabels": {"type": "object", "additionalProperties": {"type": "string"}, "propertyNames": {"enum": ["charlie.dev/workload-target"]}},
         "onpremRegistration": {
           "type": "object",

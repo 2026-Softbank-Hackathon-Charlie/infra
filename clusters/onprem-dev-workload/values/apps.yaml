@@ -12,19 +12,17 @@
         "publicService": {
           "type": "ClusterIP",
           "port": 80,
-          "annotations": {
-            "tailscale.com/expose": "true",
-            "tailscale.com/tags": "tag:hop-app-onprem",
-            "tailscale.com/proxy-class": "hopcharlie-app-web-ingress-onprem"
-          }
+          "annotations": {}
         },
         "ingress": {
-          "enabled": false
+          "enabled": true,
+          "className": "traefik",
+          "hostTemplate": "app-onprem-gce-{namespace}.hopcharlie-db-network.svc.cluster.local"
         },
         "progressDeadlineSeconds": 300,
         "postgres": {
           "storageClass": "onprem-local-retain",
-          "storageSize": "4Gi",
+          "storageSize": "1Gi",
           "resources": {
             "requests": {
               "memory": "256Mi"
@@ -36,7 +34,7 @@
           "backup": {
             "enabled": false
           },
-          "topologyStorageSize": "4Gi"
+          "topologyStorageSize": "1Gi"
         },
         "s3": {
           "endpoint": "http://minio.minio-gce.svc.cluster.local:9000",
@@ -73,12 +71,12 @@
             {
               "namespaceSelector": {
                 "matchLabels": {
-                  "kubernetes.io/metadata.name": "hopcharlie-db-network"
+                  "kubernetes.io/metadata.name": "kube-system"
                 }
               },
               "podSelector": {
                 "matchLabels": {
-                  "hopcharlie.dev/web-proxy": "ingress"
+                  "app.kubernetes.io/name": "traefik"
                 }
               }
             }
@@ -114,12 +112,13 @@
           "endpoint": "",
           "caBundle": "",
           "clusterName": "",
-          "cloudProvider": "aws",
-          "region": "ap-northeast-2"
+          "cloudProvider": "onprem",
+          "region": ""
         },
         "namespaceLabels": {
           "charlie.dev/workload-target": "onprem-gce"
-        }
+        },
+        "imagePullPolicy": "Always"
       }
     }
   }

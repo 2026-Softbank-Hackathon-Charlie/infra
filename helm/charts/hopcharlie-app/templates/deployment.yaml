@@ -82,6 +82,9 @@ spec:
       containers:
         - name: {{ $svc.name }}
           image: {{ $svc.image | quote }}
+          {{- with $profile.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
           {{- with $svc.port }}
           ports:
             - name: http
