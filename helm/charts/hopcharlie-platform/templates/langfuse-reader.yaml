@@ -1,0 +1,44 @@
+{{/* Only public binding metadata and deterministic mounted file paths. */}}
+{{- define "hopcharlie.langfuseConfig" -}}
+{{- $settings := .Values.api.langfuse -}}
+{{- $base := $settings.baseUrl | default "http://langfuse-web.langfuse.svc.cluster.local:3000" -}}
+{{- if ne $base "http://langfuse-web.langfuse.svc.cluster.local:3000" -}}
+{{- fail "api.langfuse.baseUrl must match the reviewed internal Langfuse service" -}}
+{{- end -}}
+{{- $apps := $settings.apps | default dict -}}
+{{- if or (empty $apps) (gt (len $apps) 8) -}}
+{{- fail "api.langfuse.enabled requires 1 to 8 exact app bindings" -}}
+{{- end -}}
+{{- $bindings := dict -}}
+{{- range $app, $binding := $apps -}}
+{{- if not (regexMatch `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$` $app) -}}
+{{- fail "api.langfuse app names must be DNS labels" -}}
+{{- end -}}
+{{- range $key := keys $binding -}}
+{{- if not (has $key (list "projectId" "metadataKey" "secretName")) -}}
+{{- fail "api.langfuse bindings accept projectId, metadataKey and secretName only; never key material or paths" -}}
+{{- end -}}
+{{- end -}}
+{{- if not (regexMatch `^[A-Za-z0-9_-]{1,128}$` ($binding.projectId | default "")) -}}
+{{- fail "api.langfuse projectId is required and must be a bounded identifier" -}}
+{{- end -}}
+{{- if not (regexMatch `^[A-Za-z0-9_.-]{1,80}$` ($binding.metadataKey | default "")) -}}
+{{- fail "api.langfuse metadataKey is required and must be a bounded identifier" -}}
+{{- end -}}
+{{- if ne ($binding.secretName | default "") (printf "%s-langfuse-reader" $app) -}}
+{{- fail "api.langfuse secretName must be the app-specific existing reader Secret" -}}
+{{- end -}}
+{{- $_ := set $bindings $app (dict "projectId" $binding.projectId "metadataKey" $binding.metadataKey "publicKeyFile" (printf "/var/run/langfuse/%s/public-key" $app) "secretKeyFile" (printf "/var/run/langfuse/%s/secret-key" $app)) -}}
+{{- end -}}
+{{- toJson (dict "baseUrl" $base "apps" $bindings) -}}
+{{- end -}}
+{{- if (.Values.api.langfuse | default dict).enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopcharlie-langfuse-reader
+  labels:
+    {{- include "hopcharlie.labels" "api" | nindent 4 }}
+data:
+  config.json: {{ include "hopcharlie.langfuseConfig" . | quote }}
+{{- end }}
