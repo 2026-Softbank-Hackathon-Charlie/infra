@@ -79,7 +79,7 @@ class AutomaticObservability(unittest.TestCase):
             with self.assertRaises(ValueError): render('hopcharlie-app',v)
         v=self.app();v['values']['services'][0].setdefault('env',{})['OTEL_EXPORTER_OTLP_HEADERS']='must-not-render'
         with self.assertRaises(ValueError): render('hopcharlie-app',v)
-    def test_only_eks_application_and_job_enrollment_enabled(self):
+    def test_eks_and_gke_application_enrollment_enabled(self):
         self.assertFalse(load('helm/gitops/values.yaml')['observability']['automatic']['enabled'])
         environments=load('clusters/aws-dev-management/values/hopcharlie-apps.yaml')['environments']
         eks=environments['eks']['profile']['observability']
@@ -88,7 +88,8 @@ class AutomaticObservability(unittest.TestCase):
         self.assertEqual(eks['clusterName'],'charlie-dev-workload')
         self.assertEqual(eks['endpoint'],'https://observability-gateway.observability.svc:443')
         self.assertIn('-----BEGIN CERTIFICATE-----',eks['caBundle'])
-        self.assertFalse(environments['gke']['profile']['observability']['enabled'])
+        self.assertTrue(environments['gke']['profile']['observability']['enabled'])
+        self.assertFalse(environments['onprem']['profile']['observability']['enabled'])
         self.assertTrue(load('clusters/aws-dev-management/values/hopcharlie-platform.yaml')['observability']['automaticJobs'])
         for purpose in ('management','workload'):
             self.assertFalse(load(f'clusters/aws-dev-{purpose}/values/baseline.yaml')['networkPolicy']['isolateObservabilityGateway'])
