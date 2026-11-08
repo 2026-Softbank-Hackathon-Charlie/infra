@@ -109,5 +109,31 @@
   "policyWriteCredentialAvailable": false,
   "nodeOOMAfterDisconnect": "unmeasured",
   "rawLogsStored": false,
-  "credentialsStoredInRecord": false
+  "credentialsStoredInRecord": false,
+  "tagScopeCheck": {
+    "observedAt": "2026-11-08T02:32:45.567424+00:00",
+    "credentialSource": "existing legacy onboard OAuth (not verified identical to offline onprem operator OAuth)",
+    "oauthScopes": "devices:core auth_keys",
+    "policyContentsReadable": false,
+    "probeKeysAttachedToDevices": 0,
+    "tokenValuesPersisted": false,
+    "results": [
+      {
+        "tag": "tag:hop-observability-onprem-export",
+        "created": false,
+        "revoked": false,
+        "attachedToDevice": false,
+        "createHTTP": 400,
+        "category": "tag_not_permitted"
+      },
+      {
+        "tag": "tag:hop-observability-onprem-query",
+        "created": false,
+        "revoked": false,
+        "attachedToDevice": false,
+        "createHTTP": 400,
+        "category": "tag_not_permitted"
+      }
+    ]
+  }
 }
