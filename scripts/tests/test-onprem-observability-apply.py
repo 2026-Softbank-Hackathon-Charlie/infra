@@ -73,6 +73,21 @@ class Boundary(unittest.TestCase):
             self.assertTrue(result['applied'])
             self.assertFalse(result['receivingVerified'])
 
+    def test_device_changed_after_dry_run_prevents_apply(self):
+        checks = 0
+        def changed(base, args, data=None):
+            nonlocal checks
+            if args[:3] == ['get', 'namespace', 'kube-system']:
+                checks += 1
+                return 'reviewed-uid' if checks == 1 else 'replacement-device-uid'
+            return self.replies(base, args, data)
+        with patch.object(M, 'run', side_effect=changed) as run:
+            with self.assertRaises(ValueError):
+                M.install(['kubectl'], bundle(), 'reviewed-uid', execute=True)
+            calls = [c.args[1] for c in run.call_args_list]
+            self.assertTrue(any(c[:2] == ['apply', '--dry-run=server'] for c in calls))
+            self.assertFalse(any(c[:2] == ['apply', '-n'] for c in calls))
+
 
 if __name__ == '__main__':
     unittest.main()
