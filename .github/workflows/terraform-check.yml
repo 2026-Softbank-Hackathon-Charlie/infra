@@ -203,6 +203,18 @@ jobs:
           role-duration-seconds: 7200
           aws-region: ${{ steps.settings.outputs.region }}
           allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+      # Each stack's init otherwise downloads the same AWS provider again.
+      - name: Create provider cache directory
+        id: provider-cache
+        run: |
+          cache_dir="$RUNNER_TEMP/terraform-providers"
+          mkdir -p "$cache_dir"
+          printf 'path=%s\n' "$cache_dir" >> "$GITHUB_OUTPUT"
+          printf 'TF_PLUGIN_CACHE_DIR=%s\n' "$cache_dir" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.provider-cache.outputs.path }}
+          key: tf-providers-${{ runner.os }}-${{ runner.arch }}-${{ steps.tf-version.outputs.version }}-deploy-${{ hashFiles('terraform/bootstrap/aws/.terraform.lock.hcl', 'terraform/environments/aws/dev/*/.terraform.lock.hcl') }}
       - name: Run selected Terraform stack
         env:
           TF_ACTION: ${{ github.event_name == 'push' && 'apply' || inputs.action }}
