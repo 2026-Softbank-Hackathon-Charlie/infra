@@ -111,6 +111,6 @@ GKE Alloy3개·gateway·Prometheus·node-exporter·query proxy 및 양쪽 Tailsc
 
 Argo root/관측 Git source는 `main`을 추적한다. 검증용 snapshot SHA는 기록에만 사용하며 운영 targetRevision을 SHA로 재고정하지 않는다. Helm chart semver와 image digest pin은 유지한다.
 
-앱 자동 활성화 전 [ADR0088](../adr/0088-authorize-gke-app-observability-resources.md)의 별도 앱 권한 guard를 적용한다. 기존 VAP의 빈 subResource는 필드 생략을 처리하며, bootstrap Role/RoleBinding은 Argo 읽기만 허용한다. 새 앱 guard+Binding → 거절 검증 → unbound role/권한binding → 소유namespace 최초CA/PodMonitor CREATE·변조거절 검증 순서를 따른다. 전체 chart sync로 단계를 합치지 않는다.
+앱 자동 활성화 전 [ADR0093](../adr/0093-authorize-gke-app-observability-resources.md)의 별도 앱 권한 guard를 적용한다. 기존 VAP의 빈 subResource는 필드 생략을 처리하며, bootstrap Role/RoleBinding은 Argo 읽기만 허용한다. 새 앱 guard+Binding → 거절 검증 → unbound role/권한binding → 소유namespace 최초CA/PodMonitor CREATE·변조거절 검증 순서를 따른다. 전체 chart sync로 단계를 합치지 않는다.
 
 공개 CA와 gke profile 활성화는 이 PR에 포함한다. 사용자 머지 후 hopcharlie-apps ApplicationSet의 GKE profile을 선택 반영하고 앱 한 개씩 확인한다. 기존 이미지·업무env·DB topology/credentials/storage를 바꾸지 않는다. 실제 SDK server→DB/storage trace와 로그 trace_id/span_id 확인은 후속 실제 검증 결과에 기록한다.

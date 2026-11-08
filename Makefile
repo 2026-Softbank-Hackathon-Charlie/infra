@@ -40,6 +40,7 @@ tf-apply:
 helm-check:
 	@PYTHON="$(PYTHON)" bash scripts/helm-check.sh
 ci-test:
+	@$(PYTHON) scripts/test-cnpg-migration-admission.py --check-only
 	@$(PYTHON) scripts/tests/test-project-config.py
 	@$(PYTHON) scripts/tests/test-terraform-verify.py
 	@$(PYTHON) scripts/tests/test-management-scaleout-plan.py
@@ -55,6 +56,8 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-argocd-gcp.py
 	@$(PYTHON) scripts/tests/test-app-routing.py
 	@$(PYTHON) scripts/tests/test-platform-written-tokens.py
+	@$(PYTHON) scripts/tests/test-platform-parity.py
+	@$(PYTHON) scripts/tests/test-hopai-recommendations.py
 	@$(PYTHON) scripts/tests/test-register-traefik.py
 	@$(PYTHON) scripts/tests/test-db-network.py
 	@$(PYTHON) scripts/tests/test-db-network-assets.py

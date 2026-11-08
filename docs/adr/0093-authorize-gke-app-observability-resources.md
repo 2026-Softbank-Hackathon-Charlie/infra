@@ -1,4 +1,4 @@
-# 0088. GKE 앱의 자동 관측 자원 쓰기를 제한적으로 허용한다
+# 0093. GKE 앱의 자동 관측 자원 쓰기를 제한적으로 허용한다
 
 - 날짜: 2026-11-08
 - 상태: 채택 — 사용자 코드·실제 권한 적용 승인. 문서 작성 시 앱 활성화 전.
@@ -16,7 +16,7 @@ GKE backend 설치 후 HyperDX Prometheus 조회는 성공했지만 기존 Argo 
 
 ## 결정과 이유
 
-기본 off인 `observability.appResourcesEnabled/appResourcesGranted/appCABundle`로 새 정책과 역할을 분리한다. Argo identity의 observability 밖 ConfigMap·PodMonitor 쓰기는 플랫폼 소유 이름 계약과 restricted PSA namespace에서만 허용한다. CA는 이름 `hopcharlie-observability-ca`, data `ca.crt` 하나이며 승인된 공개 bundle과 정확히 일치해야 한다. PodMonitor는 같은 앱 이름의 CNPG selector와 metrics/30s/10s endpoint만 허용하고 추가 spec 키·namespaceSelector·인증·TLS·proxy·relabel은 거부한다. DELETE는 oldObject, 나머지는 object를 검사한다.
+기본 off인 `observability.appResourcesEnabled/appResourcesGranted/appCABundle`로 새 정책과 역할을 분리한다. Argo identity의 observability 밖 ConfigMap·PodMonitor 쓰기는 플랫폼 소유 이름 계약과 restricted PSA namespace에서만 허용한다. CA는 이름 `hopcharlie-observability-ca`, data `ca.crt` 하나이며 승인된 공개 bundle과 정확히 일치해야 한다. PodMonitor는 같은 앱 이름의 CNPG selector와 metrics/30s/10s endpoint만 허용하고 환경 gke·클러스터 charlie-dev-gcp-workload의 고정 relabelings 두 개만 허용하며 추가 spec 키·namespaceSelector·인증·TLS·proxy·임의 relabel은 거부한다. DELETE는 oldObject, 나머지는 object를 검사한다.
 
 기존 ConfigMap 읽기는 재사용한다. PodMonitor 전체 namespace get/list/watch를 추가하며 Secret 권한은 늘리지 않는다. 새 guard와 Deny Binding 설치 → 금지 dry-run 검증 → 역할·권한 binding → 정상·금지 요청 검증 순서로 관리자 선택 적용한다. CA/PodMonitor 최초 CREATE는 같은 Argo identity로 검증한다. rollback은 권한 binding 제거 후 guard 제거다.
 

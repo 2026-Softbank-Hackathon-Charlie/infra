@@ -46,8 +46,8 @@
     "docker.io/grafana/alloy:v1.21.3": "sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
     "docker.io/nginxinc/nginx-unprivileged:stable-alpine": "sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03",
     "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/apps/hyperdx-prometheus-auth:2.39.1-prom-auth-91eaba5cf7d5": "sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:a5b38a5": "sha256:6e9ff644233e1ecdbeb132e0cdff880afdca2d307ee7fa33b20c515d725fec38",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:31540bb-minio": "sha256:f40019bfec4d5ffd2a8122da918995923290ffee9586bb92915f427e200be404",
-    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:e8925b9": "sha256:1636d1e96ccbcad503847168dc7ac534da80f2f68897473a8e3f5e5520bdc766"
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4": "sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:a89634a-minio": "sha256:480198186c6061d261a2e99acd8f0f19f711ecaa5d66568cf8921e90b2859b2b",
+    "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:8e5f8c3": "sha256:f9269c6798744da6d2e968d807657ea8275fb703d33b123d1a74f44491634b5b"
   }
 }
