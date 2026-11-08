@@ -54,6 +54,9 @@
       "agentImage": "",
       "tailscaleImage": "",
       "helloImage": ""
+    },
+    "gceStorage": {
+      "enabled": false
     }
   },
   "appDomain": "",
