@@ -257,11 +257,24 @@ def check_hopai_langfuse():
             spec = policies[0]["spec"]
             assert spec["podSelector"]["matchLabels"] == {"app.kubernetes.io/part-of": "hopcharlie", "app.kubernetes.io/component": "hopai"}
             assert spec["policyTypes"] == ["Egress"]
-            assert spec["egress"] == [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "langfuse"}}, "podSelector": {"matchLabels": {"app.kubernetes.io/component": "web", "app.kubernetes.io/instance": "langfuse", "app.kubernetes.io/name": "langfuse"}}}], "ports": [{"protocol": "TCP", "port": 3000}]}]
+            assert spec["egress"] == [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "langfuse"}}, "podSelector": {"matchLabels": {"app": "web", "app.kubernetes.io/instance": "langfuse", "app.kubernetes.io/name": "langfuse"}}}], "ports": [{"protocol": "TCP", "port": 3000}]}]
         for d in docs:
             if d["kind"] in ("Deployment", "StatefulSet"):
                 for c in d["spec"]["template"]["spec"]["containers"]:
                     assert not any(e["name"].startswith("LANGFUSE_") for e in c.get("env", [])), "Project keys belong only to hopai"
+
+    # The existing API checksum reloads its startup-cached Job YAML.
+    enabled = render(chart, values, "hopcharlie-platform", "charlie-platform")
+    def api(docs):
+        return next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+    original = api(enabled)
+    checksum = original["spec"]["template"]["metadata"]["annotations"]["checksum/hopai"]
+    assert original["spec"]["replicas"] == 1 and original["spec"]["strategy"]["type"] == "Recreate"
+    for option in ("hopai.langfuse.enabled=false", "hopai.langfuse.baseURL=http://changed.invalid:3000", "hopai.image=example.invalid/hopai@sha256:" + "a" * 64):
+        changed = api(render(chart, values, "hopcharlie-platform", "charlie-platform", ("--set", option)))
+        assert changed["spec"]["template"]["metadata"]["annotations"]["checksum/hopai"] != checksum
+        changed["spec"]["template"]["metadata"]["annotations"]["checksum/hopai"] = checksum
+        assert changed == original, "Runner configuration must not change API image/strategy/Pod spec"
 
 
 def main():

@@ -1,7 +1,7 @@
 # 0087. hopai의 실제 LLM·도구 실행을 전용 Langfuse 프로젝트로 전송한다
 
 - 날짜: 2026-11-08
-- 상태: 채택 — 계획·구체적 실행 승인을 받음. 정책을 먼저 적용하고 클라이언트 활성화·실제 검증 결과는 별도 기록
+- 상태: 채택 — 초기 및 추가 실행 승인을 받음. 실제 저장 검증 통과, 클라이언트 활성화 배포는 확인 후 기록
 - 관련 ADR: [0086 전용 cloud 소유권](0086-persist-langfuse-cloud-resource-ownership.md), [0082 Job 권한](0082-onboard-existing-compose-apps-infra.md)
 
 ## 배경과 제약
@@ -44,3 +44,13 @@ hopai→Langfuse3000 egress는 HopCharlie chart가 관리한다. Langfuse ingres
 Job image/env/egress 활성화안은 별도 브랜치에서 렌더 검증했으며 미병합이다. platform은 Job YAML을 시작할 때만 캐시하고 API는 replica1/Recreate이므로 ConfigMap 변경만으로 다음 Job이 갱신되지 않는다. API checksum 재로딩·상태 집계 조회·중단/잔여 경합 수용은 추가 계획으로 독립 리뷰를 통과했지만 사용자 추가 승인 전이며 구현/실행하지 않았다. 이 제안은 기존 승인의 일부라고 간주하지 않는다.
 
 추가 운영 검증·승인 범위와 증거는 [운영 기록](../runbooks/hopai-langfuse.md)에 남긴다. 실제 모델 응답의 model/usage/입출력/부모관계는 저장되지 않았으므로 확인했다고 기록하지 않는다.
+
+## 연결 실패 수정과 추가 승인 후 검증
+
+사용자가 추가 진단1/모델 검증1 Job, 기존 PG의 읽기 전용 상태 집계, 활성 작업이 없을 때 API 재로딩을 포함한 활성화 및 실패 시 GitOps revert를 승인했다. 짧은 API 중단과 마지막 상태 조회부터 Argo sync까지 새 업무가 시작돼 중단될 잔여 경합을 명시했다.
+
+최초 egress는 Web Pod 라벨 component=web을 사용했지만 Langfuse Service selector는 app=web이었다. EKS의 파생 PolicyEndpoint에 Pod IP만 있고 Service VIP가 없었다. 동일 namespace/Web/3000 범위에서 Service selector(app=web/name=langfuse/instance=langfuse)로 맞춘 뒤 Pod IP와 Service VIP가 함께 생성되는 것을 확인했다. cluster-wide 정책이나 IAM/RBAC는 바꾸지 않았다.
+
+추가 진단 Job은 정책 수정 전5초 timeout으로 실패했다. 허용된 실제 재검증 Job 하나에 동일 고정 ready HTTP 단일 요청을 선행시켜200일 때만 모델을 호출했다. 모델/SDK의 exporter timeout·retry는 바꾸지 않았다. Job hopai-langfuse-recheck-1794103272는 ready200·모델HTTP2·메모리TOOL1·exit0이었다. trace 4b2c0d539ef6cb9f65aa6f2f4fff40e2에서 API v2 AGENT1/GENERATION2/TOOL1과 부모/Job 연결·전체입출력·응답모델claude-sonnet-5-5·input1526/output67 토큰을 확인했다. ClickHouse events_core FINAL4건과 IO미리보기/부모/모델/usage를 대조했다. 전체IO는 API가 제공하며 ClickHousecore의200자 미리보기와 혼동하지 않는다.
+
+최신 main은 계측 커밋의 후속 추천 기능을 포함하는 aa8d4f4 이미지를 이미 사용한다. 이를 그대로 유지해 c7094f1 검증용 이미지로 되돌리지 않는다. telemetry 패키지와 검증 명령은 두 revision에서 동일하다. 또한 API chart에 checksum/hopai가 이미 있어 새 checksum은 추가하지 않는다. image/opt-in/baseURL 변경 시 기존 checksum이 바뀌고 API image/Pod spec·replicas1/Recreate·다른 annotation은 유지되는 계약을 검증한다. 기존 checksum이 설정 캐시를 재로딩하므로 승인된 활성화 시 API 재시작이 발생한다.

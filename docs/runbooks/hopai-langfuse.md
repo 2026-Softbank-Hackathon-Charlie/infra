@@ -1,23 +1,32 @@
 # hopai Langfuse 계측 활성화 기록
 
 - 날짜: 2026-11-08
-- 상태: 실제 모델/도구 실행 성공, 전송 실패. client 활성화 미병합.
+- 상태: 실제 저장 검증 통과. 활성화 배포 결과는 아래에 기록.
 - 결정: [ADR0087](../adr/0087-connect-hopai-langfuse-with-scoped-project-key.md)
 
-## 승인된 범위와 수행 결과
+## 적용 범위
 
-ai-sandbox#50 계측 구현·CI·main 병합과 Linux release artifact를 발행했다. infra#160의 한정 admission 정책을 먼저 배포했고, 플랫폼 SA server dry-run에서 양성1/음성4건을 확인했다. 신규 키·IAM·SSM 변경 없이 기존 프로젝트 키를 전용 Secret에 복사하고 selector 제한 3000 정책2개를 적용했다.
+ai-sandbox#50 계측, infra#160 한정 admission 정책, 전용 프로젝트 Secret 복사와 양쪽 selector/3000 정책은 승인 후 수행했다. VAP 양성1/음성4건을 확인했다. 새 API키·IAM·SSM정책·DB schema 변경은 없다. 최신 운영 aa8d4f4 이미지는 이미 계측 커밋 c7094f1과 후속 추천 기능을 포함하므로 유지한다. 별도 발행한 c7094f1 이미지는 검증에만 사용했다.
 
-새 이미지: `525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:langfuse-c7094f1a967c@sha256:d047328d955e61fa1cb43f42b8291858bfe0d0b172dd9269a6708763a3aeb73c`.
+API는 Job YAML을 시작 때 캐시하며 기존 checksum/hopai 변경이 replicas1/Recreate 재시작을 유발한다. 사용자는 추가 상태집계 조회·활성화/재시작·접속 중단·마지막 검사와 자동 Argo sync 사이 새 업무 중단 위험 및 실패 시 GitOps revert를 승인했다. 새 API checksum은 추가하지 않는다.
 
-Job `hopai-langfuse-check-1794093660`은 동일 llm.run/Anthropic SDK/loggedTool 경로에서 실제 모델 HTTP2회·도구1회 후 성공했다. 도구는 메모리 표식만 읽었으며 이전/온보딩/리허설/외부PR를 수행하지 않았다. exporter 오류가 있어 해당 Job의 API v2 observation0건/ClickHouse0건을 확인했다. 재실행하지 않았고 새 유료 호출은 승인 대기다. 기존 동일 합성 trace 재전송은 약0.2초/200이며, Pod 전송 경로가 정상이라는 증거는 아니다.
+## 검증 결과
 
-## 미완료와 다음 관문
+초기 Job hopai-langfuse-check-1794093660은 모델HTTP2/tool1이 성공했지만 export 실패로 span0건이었다. 추가 무자격 진단 Job hopai-langfuse-net-1794102356도 정책 수정 전5초 timeout이었다. EKS PolicyEndpoint에는 Web Pod IP만 있었으며 Service VIP가 없었다. egress를 실제 Service selector app=web/name=langfuse/instance=langfuse와 맞추자 같은 Web/3000 대상에 Service VIP가 추가됐다. namespace/포트·네트워크 권한 범위를 늘리지 않았다.
 
-1. 추가 읽기 전용 네트워크 진단 Job1개(모델/SSM/프로젝트 키 접근 없음)로 실제 hopai Pod→Langfuse ready 경로의 DNS/HTTP 상태를 확인한다. 필요시 동일 namespace/selector/port 범위 안에서만 원인을 고친다. 원격 Web 로그/정책 확장/새 인프라는 별도 승인 없이 하지 않는다.
-2. 진단 성공 후 동일 제한의 실제 모델 검증 Job1개(추가 HTTP최대4·각1024출력토큰·180초)로 재검증한다. 키는 기존 한정 SSM 및 전용 프로젝트 Secret만 사용한다. trace 전부의 타입/부모/IO/응답모델/usage가 API/CH에 저장되어야 성공이다. 현재 원인은 미확정이며 전송 timeout 조정을 임의 적용하지 않는다.
-3. API checksum 재로딩은 별도 추가 승인 후 구현한다. READ ONLY/statement_timeout5s 상태 집계에서 runs의 succeeded/failed/aborted/halted/interrupted/rolled_back, deployments의 healthy/failed/superseded, onboardings.state=done 외 상태는 차단한다. charlie-platform의 part-of=hopcharlie/component=hopai Job은 Complete/Failed 조건이 없는 Pending 포함 모두 차단한다. 오류/NULL/unknown도 차단한다.
-4. 병합 직전 다시 확인하고 차단되면 병합하지 않는다. 이후 자동 Argo sync까지 새 업무 발생을 막지는 못하며 API Recreate가 새 업무를 중단할 잔여 경합을 사용자에게 명시한다. 중단 시간은 PVC/스케줄링/init/startup에 따라 길어질 수 있다.
-5. 렌더에서 checksum 변화/기존 annotation 공존/API image·replicas·Recreate·PVC·PG·gateway 불변을 확인한다. 배포 후 Argo revision, ConfigMap image/env, API observed generation·새 Pod checksum·Ready·endpoint를 확인한다. 오류면 GitOps revert로 복구하며 재시작이 다시 발생한다. 실제 업무 Job을 검증 목적으로 실행하지 않는다.
+추가 허용된 실제 검증 Job hopai-langfuse-recheck-1794103272 안에 고정 ready 요청1회를 선행해 HTTP200일 때만 Claude를 호출했다. init는 기존 Claude SSM키 하나만 읽고 kubeconfig/platform token을 읽지 않았다. 출력은 marker/status와 호출 건수뿐이다. 운영 이전·온보딩·리허설·외부PR 도구는 없고 메모리 진단 도구만 실행했다.
 
-추가 진단/모델 Job과 DB 집계/API 재로딩은 현재 미승인·미실행이다. 임시 검증 Job은 TTL로 정리하고 기존 Secret/trace/실행 중 업무는 삭제하지 않는다. 로컬 DB·합성 컨테이너·노트북 전체 Go compile은 실행하지 않았다.
+- ready HTTP200, Job exit0, 모델HTTP2/도구1, exporter 오류 없음.
+- trace: `4b2c0d539ef6cb9f65aa6f2f4fff40e2`.
+- API v2: AGENT1/GENERATION2/TOOL1, 실제 부모·Job·전체input/output 확인.
+- 응답모델: claude-sonnet-5-5, input1526/output67 토큰.
+- ClickHouse events_core FINAL4건; parent/model/usage와 API IO의 core미리보기 일치.
+- Helm 계약: opt-out 시 env/정책 제거, 키는 hopai만 참조, 정확한 Web Service selector, 기존 API checksum이 image/opt-in/baseURL 변경에 반응하며 나머지 API spec은 불변.
+
+첫 실패 후 진단1+모델1 Job만 추가했다. 모델 cap은 추가4HTTP/각1024출력토큰이었고 실제2HTTP를 사용했다. 로컬 DB/합성 컨테이너/노트북 전체 Go compile은 실행하지 않았다.
+
+## 활성화·복구 관문
+
+PG charlie에서 BEGIN READ ONLY/statement_timeout5s로 상태별 count만 조회한다. runs는 succeeded/failed/aborted/halted/interrupted/rolled_back, deployments는 healthy/failed/superseded, onboardings.state는 done만 비활성으로 취급하고 다른 값/NULL/오류는 차단한다. charlie-platform의 part-of=hopcharlie/component=hopai Job 중 Complete=True/Failed=True가 없는 Pending 포함 전부 차단한다. 실제 payload·사용자·token은 조회하지 않는다.
+
+검증 후 병합 직전에 다시 집계한다. 활성/unknown/조회 실패가 있으면 병합하지 않는다. 이후 자동 sync까지 새 업무 발생은 차단하지 못한다. 배포 후 Argo revision, Job ConfigMap env/image, API observed generation·checksum·Ready·endpoint를 확인한다. 오류면 활성화 커밋을 GitOps revert하고 다시 Ready를 확인한다. 기존 실행 중 Job/Secret/trace는 삭제하지 않는다. 검증 Job은 TTL로 정리한다.
