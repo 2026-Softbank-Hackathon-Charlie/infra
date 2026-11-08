@@ -288,6 +288,16 @@ class ClickStackTests(unittest.TestCase):
         self.assertEqual({s['kind'] for s in sources}, {'log', 'trace', 'promql'})
         self.assertEqual(sources[0]['traceSourceId'], sources[1]['name'])
         self.assertEqual(sources[1]['logSourceId'], sources[0]['name'])
+        # HyperDX 2.39.1 requires a nonempty default table projection for both
+        # log and trace sources; a missing value triggers a UI validation warning.
+        defaults = {
+            'log': 'Timestamp,ServiceName,SeverityText,Body',
+            'trace': 'Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName',
+        }
+        for source in sources:
+            if source['kind'] in defaults:
+                self.assertEqual(source.get('defaultTableSelectExpression'), defaults[source['kind']])
+
 
     def test_smoke_payloads_are_correlated_and_sending_is_guarded(self):
         import importlib.util

@@ -16,7 +16,8 @@
     "resourceAttributesExpression": "ResourceAttributes",
     "traceIdExpression": "TraceId",
     "spanIdExpression": "SpanId",
-    "traceSourceId": "Traces"
+    "traceSourceId": "Traces",
+    "defaultTableSelectExpression": "Timestamp,ServiceName,SeverityText,Body"
   },
   {
     "name": "Traces",
@@ -42,7 +43,8 @@
     "statusMessageExpression": "StatusMessage",
     "spanEventsValueExpression": "Events",
     "spanLinksValueExpression": "Links",
-    "logSourceId": "Logs"
+    "logSourceId": "Logs",
+    "defaultTableSelectExpression": "Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName"
   },
   {
     "name": "Management Prometheus",
