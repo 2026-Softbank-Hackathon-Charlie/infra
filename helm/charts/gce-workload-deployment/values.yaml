@@ -1,0 +1,6 @@
+# Filled from the verified build record, never use a floating image tag.
+image: ""
+tailIP: ""
+owner: ""
+storageClass: onprem-local-retain
+storageSize: 4Gi

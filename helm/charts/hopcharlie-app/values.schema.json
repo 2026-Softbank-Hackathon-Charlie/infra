@@ -193,6 +193,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "namespaceLabels": {"type": "object", "additionalProperties": {"type": "string"}, "propertyNames": {"enum": ["charlie.dev/workload-target"]}},
         "onpremRegistration": {
           "type": "object",
           "additionalProperties": false,
@@ -275,6 +276,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "hostTemplate": {"type": "string", "pattern": "^([a-z0-9.{}-]*)$"},
             "enabled": { "type": "boolean" },
             "className": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)?$" },
             "hostSuffix": { "type": "string", "pattern": "^([a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)?$" }

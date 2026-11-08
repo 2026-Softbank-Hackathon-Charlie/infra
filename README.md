@@ -1103,3 +1103,11 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [scripts/tests/test-gpu-canary-activation.py](scripts/tests/test-gpu-canary-activation.py) | 정책·비밀·라우팅·영속 상태 경계 회귀 검사 |
 | [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
 | [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
+
+## Independent GCE workload storage
+
+- [helm/charts/gce-workload-deployment/Chart.yaml](helm/charts/gce-workload-deployment/Chart.yaml)
+- [helm/charts/gce-workload-deployment/values.yaml](helm/charts/gce-workload-deployment/values.yaml)
+- [helm/charts/gce-workload-deployment/templates/minio.yaml](helm/charts/gce-workload-deployment/templates/minio.yaml)
+- [clusters/onprem-dev-workload/values/apps.yaml](clusters/onprem-dev-workload/values/apps.yaml)
+- [scripts/tests/test-gce-storage-settings.py](scripts/tests/test-gce-storage-settings.py)

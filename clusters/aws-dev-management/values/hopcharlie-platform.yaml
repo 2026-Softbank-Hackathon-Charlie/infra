@@ -221,6 +221,9 @@
       "agentImage": "",
       "tailscaleImage": "",
       "helloImage": ""
+    },
+    "gceStorage": {
+      "enabled": true
     }
   },
   "gcp": {

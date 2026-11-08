@@ -3,6 +3,15 @@
 to the public Service. */}}
 {{- $ing := .Values.profile.ingress }}
 {{- if $ing.enabled }}
+{{- $host := "" }}
+{{- if $ing.hostTemplate }}
+{{- if $ing.hostSuffix }}{{ fail "ingress hostTemplate and hostSuffix are mutually exclusive" }}{{ end }}
+{{- if not (contains "{namespace}" $ing.hostTemplate) }}{{ fail "hostTemplate must contain {namespace}" }}{{ end }}
+{{- $host = replace "{namespace}" .Release.Namespace $ing.hostTemplate }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$" $host) }}{{ fail "hostTemplate must resolve to a DNS host" }}{{ end }}
+{{- else }}
+{{- $host = printf "%s.%s" .Release.Namespace (required "profile.ingress.hostSuffix is required with profile.ingress.enabled" $ing.hostSuffix) }}
+{{- end }}
 {{- range $svc := .Values.values.services }}
 {{- if $svc.public }}
 {{- $ctx := dict "root" $ "svc" $svc }}
@@ -16,7 +25,7 @@ metadata:
 spec:
   ingressClassName: {{ required "profile.ingress.className is required with profile.ingress.enabled" $ing.className }}
   rules:
-    - host: {{ printf "%s.%s" $.Release.Namespace (required "profile.ingress.hostSuffix is required with profile.ingress.enabled" $ing.hostSuffix) }}
+    - host: {{ $host }}
       http:
         paths:
           - path: /

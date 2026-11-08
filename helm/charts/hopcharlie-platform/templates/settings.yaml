@@ -163,6 +163,14 @@ data:
           if [ -n "$residency" ]; then printf 'PLATFORM_RESIDENCY_POLICY_FILE=/config/residency-policy.yaml\n'; fi
           if [ -n "$ts_id" ]; then printf 'PLATFORM_TAILSCALE_OAUTH_CLIENT_ID=%s\nPLATFORM_TAILSCALE_OAUTH_CLIENT_SECRET=%s\n' "$ts_id" "$ts_secret"; fi
         } > /config/api.env
+        {{- if (dig "gceStorage" "enabled" false .Values.api) }}
+        gce_access="$(get onprem-gce/minio-admin-access-key)"
+        gce_secret="$(get onprem-gce/minio-admin-secret-key)"
+        # New credentials are hex, so they cannot inject additional env lines.
+        [[ "$gce_access" =~ ^[a-f0-9]{32}$ ]] && [[ "$gce_secret" =~ ^[a-f0-9]{64}$ ]]
+        printf 'GCE_MINIO_ADMIN_ACCESS_KEY=%s\nGCE_MINIO_ADMIN_SECRET_KEY=%s\n' "$gce_access" "$gce_secret" >> /config/api.env
+        unset gce_access gce_secret
+        {{- end }}
         if [ "${ONPREM_REGISTRATION:-0}" = 1 ]; then
           # Dedicated OAuth credential; never fall back to compose onboarding.
           registration_id=""; registration_secret=""

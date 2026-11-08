@@ -1,0 +1,126 @@
+{
+  "name": "hopcharlie-apps-gce",
+  "platform": {
+    "serviceAccount": ""
+  },
+  "environments": {
+    "onprem-gce": {
+      "cluster": {
+        "name": "charlie-dev-onprem-gce-apps"
+      },
+      "profile": {
+        "publicService": {
+          "type": "ClusterIP",
+          "port": 80,
+          "annotations": {
+            "tailscale.com/expose": "true",
+            "tailscale.com/tags": "tag:hop-app-onprem",
+            "tailscale.com/proxy-class": "hopcharlie-app-web-ingress-onprem"
+          }
+        },
+        "ingress": {
+          "enabled": false
+        },
+        "progressDeadlineSeconds": 300,
+        "postgres": {
+          "storageClass": "onprem-local-retain",
+          "storageSize": "4Gi",
+          "resources": {
+            "requests": {
+              "memory": "256Mi"
+            },
+            "limits": {
+              "memory": "512Mi"
+            }
+          },
+          "backup": {
+            "enabled": false
+          },
+          "topologyStorageSize": "4Gi"
+        },
+        "s3": {
+          "endpoint": "http://minio.minio-gce.svc.cluster.local:9000",
+          "region": "us-east-1",
+          "pathStyle": true,
+          "bucketPrefix": "hop-gce-",
+          "credentialsSecret": "app-s3"
+        },
+        "quota": {
+          "enabled": true,
+          "hard": {
+            "requests.cpu": "2",
+            "requests.memory": "4Gi",
+            "limits.memory": "8Gi",
+            "pods": "20",
+            "persistentvolumeclaims": "4",
+            "requests.storage": "20Gi",
+            "services.loadbalancers": "0"
+          }
+        },
+        "limitRange": {
+          "enabled": true,
+          "default": {
+            "memory": "256Mi"
+          },
+          "defaultRequest": {
+            "cpu": "50m",
+            "memory": "64Mi"
+          }
+        },
+        "networkPolicy": {
+          "enabled": true,
+          "gatewayFrom": [
+            {
+              "namespaceSelector": {
+                "matchLabels": {
+                  "kubernetes.io/metadata.name": "hopcharlie-db-network"
+                }
+              },
+              "podSelector": {
+                "matchLabels": {
+                  "hopcharlie.dev/web-proxy": "ingress"
+                }
+              }
+            }
+          ],
+          "extraEgress": [
+            {
+              "to": [
+                {
+                  "namespaceSelector": {
+                    "matchLabels": {
+                      "kubernetes.io/metadata.name": "minio-gce"
+                    }
+                  },
+                  "podSelector": {
+                    "matchLabels": {
+                      "app": "minio"
+                    }
+                  }
+                }
+              ],
+              "ports": [
+                {
+                  "protocol": "TCP",
+                  "port": 9000
+                }
+              ]
+            }
+          ]
+        },
+        "observability": {
+          "enabled": false,
+          "metricsEnabled": false,
+          "endpoint": "",
+          "caBundle": "",
+          "clusterName": "",
+          "cloudProvider": "aws",
+          "region": "ap-northeast-2"
+        },
+        "namespaceLabels": {
+          "charlie.dev/workload-target": "onprem-gce"
+        }
+      }
+    }
+  }
+}
