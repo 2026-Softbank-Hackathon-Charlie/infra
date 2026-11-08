@@ -561,7 +561,7 @@ def main():
         # Migrations change the Cluster's topology fields (ADR 0050); the Tailscale operator
         # rewrites only a database egress Service's externalName (ADR 0063).
         assert appset["spec"]["template"]["spec"]["ignoreDifferences"] == [
-            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", 'select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters', ".spec.certificates", ".spec.bootstrap"]},
+            {"group": "postgresql.cnpg.io", "kind": "Cluster", "jqPathExpressions": [".spec.replica", 'select(.metadata.labels["hopcharlie.dev/db-topology-members"] == null) | .spec.externalClusters', ".spec.certificates", ".spec.bootstrap"]},
             {"group": "apps", "kind": "Deployment", "jqPathExpressions": ['select(.metadata.labels["hopcharlie.dev/onboarding-cold"] == "true") | .spec.replicas']},
             {"group": "", "kind": "Service", "jqPathExpressions": [
                 'select(.spec.type == "ExternalName" and .metadata.annotations["tailscale.com/tailnet-fqdn"] != null) | .spec.externalName']}]
@@ -837,6 +837,20 @@ def main():
             docs = render(ROOT / "helm/charts/hopcharlie-app", alone, "moimroom", "moimroom", ("-f", on))
             want = paired if present else [d for d in paired if (d["kind"], d["metadata"]["name"]) not in tailnet]
             assert docs == want, f"peerPresent {present} must draw the paired output{'' if present else ' without the tailnet objects'}"
+        # A pair left from a three-member group keeps explicit members (platform ADR
+        # 0064, infra ADR 0098): label "2", so Argo CD keeps owning externalClusters,
+        # also while its peer is absent.
+        two = {}
+        for present in (True, False):
+            values = json.loads(topo_files["gke"].read_text())
+            values["values"]["dbTopology"].update(members=["gke", "eks"], peerPresent=present)
+            path = work / f"topology-gke-two-members-{str(present).lower()}.json"
+            path.write_text(json.dumps(values))
+            two[present] = render(ROOT / "helm/charts/hopcharlie-app", path, "moimroom", "moimroom", ("-f", on))
+            cluster = next(d for d in two[present] if d["kind"] == "Cluster")
+            assert cluster["metadata"]["labels"]["hopcharlie.dev/db-topology-members"] == "2"
+            assert [c["name"] for c in cluster["spec"]["externalClusters"]] == ["moimroom-db-gke", "moimroom-db-eks"]
+        assert two[False] == [d for d in two[True] if (d["kind"], d["metadata"]["name"]) not in tailnet]
         # Onboarded apps (platform ADR 0042, infra ADR 0082): the primary's Cluster
         # is born a replica of the source outside the platform; the app stays cold.
         onb = json.loads(topo_files["gke"].read_text())

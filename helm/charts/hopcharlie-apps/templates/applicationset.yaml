@@ -69,15 +69,18 @@ spec:
         syncOptions:
           - RespectIgnoreDifferences=true
       # A migration owns replica and certificates (ADR 0050). Legacy clusters
-      # also keep operator-managed externalClusters. Three-member clusters
-      # declare every member in Git: ignoring that list would prevent adding
-      # the third member. replica stays ignored during demotion/promotion.
+      # also keep operator-managed externalClusters. Clusters with explicit
+      # members (label hopcharlie.dev/db-topology-members, "2" or "3") declare
+      # every member in Git: ignoring that list would prevent adding the third
+      # member, or dropping a removed one (platform ADR 0064). The label is
+      # read on both sides, so a "3" to "2" change applies the new list.
+      # replica stays ignored during demotion/promotion.
       ignoreDifferences:
         - group: postgresql.cnpg.io
           kind: Cluster
           jqPathExpressions:
             - .spec.replica
-            - select(.metadata.labels["hopcharlie.dev/db-topology-members"] != "3") | .spec.externalClusters
+            - select(.metadata.labels["hopcharlie.dev/db-topology-members"] == null) | .spec.externalClusters
             - .spec.certificates
             # Meaningful only at creation, like replica: an onboarded app's
             # database is born a replica of its source and the chart draws
