@@ -5,6 +5,7 @@
     "charlie-platform"
   ],
   "applicationNamespace": "charlie-platform",
+  "podReadinessGateNamespaces": ["charlie-platform"],
   "externalAlb": {
     "enabled": true,
     "groupName": "charlie-management-external",

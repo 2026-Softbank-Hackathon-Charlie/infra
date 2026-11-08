@@ -19,6 +19,14 @@
         "pattern": "^[a-z][a-z0-9-]+$"
       }
     },
+    "podReadinessGateNamespaces": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]+$"
+      }
+    },
     "applicationNamespace": {
       "type": "string",
       "enum": [

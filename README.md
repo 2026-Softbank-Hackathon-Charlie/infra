@@ -1134,3 +1134,7 @@ GCE HTTP routing:
 - [docs/adr/0098-expand-aws-workload-platform-metrics.md](docs/adr/0098-expand-aws-workload-platform-metrics.md)
 
 - [helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml](helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml)
+
+Platform API rolling update:
+
+- [docs/adr/0099-roll-platform-api-with-leadership-handoff.md](docs/adr/0099-roll-platform-api-with-leadership-handoff.md)

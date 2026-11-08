@@ -7,6 +7,11 @@ metadata:
     charlie.dev/managed-by: baseline
     pod-security.kubernetes.io/enforce: {{ if eq . "observability" }}privileged{{ else }}baseline{{ end }}
     pod-security.kubernetes.io/enforce-version: v1.35
+    {{- if has . ($.Values.podReadinessGateNamespaces | default list) }}
+    # New pods behind the ALB (target type ip) are Ready only once their target
+    # is healthy, so a rolling update never leaves the ALB without one (infra ADR 0099).
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled
+    {{- end }}
 ---
 {{- end }}
 apiVersion: storage.k8s.io/v1

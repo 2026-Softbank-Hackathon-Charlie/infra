@@ -66,11 +66,24 @@ metadata:
   name: hopcharlie-api
   labels:
     {{- include "hopcharlie.labels" "api" | nindent 4 }}
+{{- if not (kindIs "bool" .Values.api.rollingHandoff) }}
+{{- fail "api.rollingHandoff must be a boolean" }}
+{{- end }}
 spec:
   replicas: 1
+  {{- if .Values.api.rollingHandoff }}
+  # infra ADR 0099, platform ADR 0065: the new pod starts beside the old one and
+  # serves at once; the old one hands its runs and loops over through the
+  # leadership in the platform database, then stops. Turn on only once the
+  # running image has that leadership (one Recreate rollout of it first).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  {{- else }}
   # One writer of the run state on an EBS volume, so the old pod stops first.
   strategy:
     type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
@@ -92,6 +105,20 @@ spec:
       labels:
         {{- include "hopcharlie.labels" "api" | nindent 8 }}
     spec:
+      {{- if .Values.api.rollingHandoff }}
+      # Both pods mount the run state volume (ReadWriteOnce), so the new one
+      # starts on the old one's node. The handover waits for a migration inside
+      # its write hold (shutdown-wait 10m, then cancel and 3m), so the grace
+      # period covers that.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "hopcharlie.labels" "api" | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 900
+      {{- end }}
       serviceAccountName: {{ include "hopcharlie.apiServiceAccount" . }}
       # The deploy executor patches Argo CD Applications in this cluster, the AI
       # runner's Jobs are created here (hopai.yaml), and app DB routes too (ADR 0064).
@@ -113,8 +140,13 @@ spec:
                   case "$line" in ''|'#'*) ;; *=*) export "$line" ;; esac
                 done < "$f"
               done
-              exec hopcharlie-api -addr :8080 -state-dir /data/runs
+              exec hopcharlie-api -addr :8080 -state-dir /data/runs{{ if .Values.api.rollingHandoff }} -shutdown-wait 10m -shutdown-delay 20s{{ end }}
           env:
+            {{- if .Values.api.rollingHandoff }}
+            # Where the other API pod forwards the requests only the leader serves.
+            - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+            - {name: PLATFORM_LEADER_ADDR, value: "$(POD_IP):8080"}
+            {{- end }}
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
             {{- if (.Values.api.onpremRegistration | default dict).enabled }}
             - {name: PLATFORM_ONPREM_REGISTRATION, value: "1"}
