@@ -111,6 +111,9 @@
     },
     "gkePlatformMetrics": {
       "type": "boolean"
+    },
+    "awsPlatformMetrics": {
+      "type": "boolean"
     }
   }
 }

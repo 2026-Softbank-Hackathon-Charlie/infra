@@ -1129,3 +1129,7 @@ GCE HTTP routing:
 - [helm/charts/gce-app-web-route/values.yaml](helm/charts/gce-app-web-route/values.yaml)
 
 - [scripts/tests/test-gce-web-route.py](scripts/tests/test-gce-web-route.py)
+
+- [docs/adr/0098-expand-aws-workload-platform-metrics.md](docs/adr/0098-expand-aws-workload-platform-metrics.md)
+
+- [helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml](helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml)

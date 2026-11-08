@@ -140,16 +140,16 @@ class AutomaticObservability(unittest.TestCase):
             config=yaml.safe_load(of(gateways,'ConfigMap')[0]['data']['relay'])
             self.assertEqual(config['processors']['k8sattributes/app']['pod_association'],[{'sources':[{'from':'connection'}]}])
         prom=render(Path(os.environ['KPS_CHART']),load('clusters/aws-dev-workload/values/cnpg-prometheus.yaml'),'observability','monitoring')
-        self.assertFalse(of(prom,'Secret'));self.assertFalse(of(prom,'Job'));self.assertFalse(of(prom,'Alertmanager'))
+        self.assertEqual([d['metadata']['name'] for d in of(prom,'Secret')],['monitoring-prometheus-scrape-confg']);self.assertFalse(of(prom,'Job'));self.assertFalse(of(prom,'Alertmanager'))
         self.assertFalse(of(prom,'ClusterRole'))
-        self.assertEqual(len(of(prom,'Deployment')),1)
+        self.assertEqual({d['metadata']['name'] for d in of(prom,'Deployment')},{'monitoring-operator','monitoring-kube-state-metrics'})
         cr=of(prom,'Prometheus')[0];self.assertEqual(cr['spec']['podMonitorNamespaceSelector']['matchLabels']['observability.hopcharlie.dev/enabled'],'true')
-        args=of(prom,'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
+        operator=next(d for d in of(prom,'Deployment') if d['metadata']['name']=='monitoring-operator')['spec']['template']['spec']
+        args=operator['containers'][0]['args']
         self.assertIn('--watch-referenced-objects-in-all-namespaces=false',args)
         self.assertFalse(any(a.startswith('--kubelet-service=') for a in args))
         self.assertIn('--prometheus-instance-namespaces=observability',args)
         self.assertIn('--alertmanager-config-namespaces=observability',args)
-        operator=of(prom,'Deployment')[0]['spec']['template']['spec']
         self.assertFalse([v for v in (operator.get('volumes') or []) if v.get('secret',{}).get('secretName')=='monitoring-admission'])
         container=operator['containers'][0]
         self.assertEqual(container['ports'][0],{'containerPort':8080,'name':'http'})
@@ -160,6 +160,50 @@ class AutomaticObservability(unittest.TestCase):
         self.assertEqual(monitor['spec']['endpoints'][0].get('scheme','http'),'http')
         self.assertEqual(service['spec']['ports'][0]['port'],8080)
         self.assertNotIn('tlsConfig',monitor['spec']['endpoints'][0])
+    def test_aws_platform_metrics_permissions_and_scraping(self):
+        values=load('clusters/aws-dev-workload/values/observability-boundary.yaml')
+        boundary=render('observability-boundary',values,'observability')
+        roles={d['metadata']['name']:d for d in of(boundary,'ClusterRole')}
+        self.assertEqual(roles['monitoring-aws-platform-metrics']['rules'],[
+            {'apiGroups':[''],'resources':['nodes'],'verbs':['get','list','watch']},
+            {'apiGroups':[''],'resources':['nodes/proxy'],'verbs':['get']}])
+        ksm=roles['monitoring-aws-kube-state-metrics']
+        self.assertEqual({r for rule in ksm['rules'] for r in rule['resources']},
+            {'pods','nodes','namespaces','persistentvolumes','persistentvolumeclaims','services','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs'})
+        for rule in ksm['rules']:self.assertEqual(rule['verbs'],['list','watch'])
+        for binding in of(boundary,'ClusterRoleBinding'):
+            if binding['metadata']['name'].startswith('monitoring-aws-'):
+                self.assertEqual(binding['subjects'][0]['namespace'],'observability')
+        values['awsPlatformMetrics']=False
+        disabled=render('observability-boundary',values,'observability')
+        self.assertFalse([d for d in disabled if d['metadata']['name'].startswith('monitoring-aws-')])
+        for purpose in ('management',):
+            docs=render('observability-boundary',load(f'clusters/aws-dev-{purpose}/values/observability-boundary.yaml'),'observability')
+            self.assertFalse([d for d in docs if d['metadata']['name'].startswith('monitoring-aws-')])
+        prom=render(Path(os.environ['KPS_CHART']),load('clusters/aws-dev-workload/values/cnpg-prometheus.yaml'),'observability','monitoring')
+        spec=of(prom,'Prometheus')[0]['spec']
+        self.assertEqual(spec['serviceMonitorNamespaceSelector'],{'matchLabels':{'kubernetes.io/metadata.name':'observability'}})
+        selected={d['metadata']['name'] for d in of(prom,'ServiceMonitor') if all(d['metadata']['labels'].get(k)==v for k,v in spec['serviceMonitorSelector']['matchLabels'].items())}
+        self.assertEqual(selected,{'monitoring-operator','monitoring-prometheus','monitoring-node-exporter','monitoring-kube-state-metrics'})
+        import base64
+        scrape=yaml.safe_load(base64.b64decode(of(prom,'Secret')[0]['data']['additional-scrape-configs.yaml']))
+        self.assertEqual({j['job_name'] for j in scrape},{'aws-kubelet','aws-cadvisor'})
+        for job in scrape:
+            self.assertFalse(job['tls_config']['insecure_skip_verify'])
+            self.assertEqual(job['authorization']['credentials_file'],'/var/run/secrets/kubernetes.io/serviceaccount/token')
+            self.assertEqual(job['kubernetes_sd_configs'],[{'role':'node'}])
+        pod=of(prom,'DaemonSet')[0]['spec']['template']['spec'];c=pod['containers'][0]
+        self.assertTrue(pod['hostNetwork']);self.assertFalse(pod['hostPID']);self.assertFalse(pod['automountServiceAccountToken'])
+        self.assertEqual(pod['securityContext']['runAsUser'],65534)
+        self.assertEqual(c['securityContext'],{'allowPrivilegeEscalation':False,'capabilities':{'drop':['ALL']},'readOnlyRootFilesystem':True})
+        self.assertEqual({v['hostPath']['path'] for v in pod['volumes']},{'/proc','/sys','/'})
+        self.assertTrue(all(v['readOnly'] for v in c['volumeMounts']))
+        state=next(d for d in of(prom,'Deployment') if d['metadata']['name']=='monitoring-kube-state-metrics')
+        args=state['spec']['template']['spec']['containers'][0]['args']
+        self.assertIn('--resources=pods,nodes,namespaces,deployments,statefulsets,daemonsets,replicasets,jobs,cronjobs,persistentvolumes,persistentvolumeclaims,services',args)
+        for ref in images(prom):
+            name,digest=ref.rsplit('@',1);self.assertEqual(LOCK[name],digest)
+
     def test_activation_overrides_are_manual_and_narrow(self):
         import importlib.util
         spec=importlib.util.spec_from_file_location('activation',ROOT/'scripts/render-observability-activation.py')

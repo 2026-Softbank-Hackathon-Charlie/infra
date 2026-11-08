@@ -86,3 +86,13 @@ HELM=/path/to/helm NGINX_BINARY=/path/to/nginx-1.30.6 python3 scripts/tests/proo
 CRD/최소 Prometheus→Secret/CA·제한 정책→gateway/query/실제 사설 LB→agent 전환→공통 app/DB/Job→HyperDX connection 순으로 적용한다. 한 번도 등록하지 않은 SDK 앱, 새 service/replica/DB, 즉시 종료 Job을 실제 배포해 첫 로그/trace·CNPG target up·stale target 제거를 확인해야 완료다. metadata가 늦고 노드 로그가 남지 않은 경우까지 무손실을 보장하지 않는다.
 
 장애 시 선택한 앱/관측 revision과 gateway 정책만 이전 승인 입력으로 복구한다. 기존 DB/PVC/Secret을 삭제하지 않는다. 실제 생성된 LB/SG/Secret/PVC 폐기는 별도 승인 범위를 따른다.
+
+## AWS 플랫폼 메트릭 확장 (2026-11-08)
+
+[ADR0098](../adr/0098-expand-aws-workload-platform-metrics.md)에 따라 AWS workload의 기존 cnpg-prometheus.yaml을 확장한다. 기존 CNPG PodMonitor/PVC/보존 설정을 유지하며 KSM과 node-exporter, API server proxy 경유 kubelet/cAdvisor 수집을 추가한다. 선택되는 ServiceMonitor는 monitoring-operator, monitoring-prometheus, monitoring-kube-state-metrics, monitoring-node-exporter 네 개이며 namespace는 observability로 한정한다.
+
+boundary의 awsPlatformMetrics는 기본 false이며 AWS workload만 true다. 새 RBAC 네 개를 먼저 적용하고 exporter/Service/SA/Monitor·추가 scrape Secret·Prometheus CR만 기존 KPS 앱에서 선택 sync한다. scrape Secret에는 YAML과 회전 token 파일 경로만 있고 인증 값은 넣지 않는다. 현재 3노드의 추가 요청은 합계 125m CPU·224MiB다. 배포 직전 노드 요청량과 압박을 다시 확인한다.
+
+HyperDX 메트릭 탐색에서 AWS는 기존 Workload CNPG Metrics Source를 선택한다(이름은 보존). 노드는 `count(kube_node_info)`, CPU는 `sum(rate(container_cpu_usage_seconds_total{container!="",container!="POD"}[5m])) by (namespace,pod)`, 메모리는 `sum(container_memory_working_set_bytes{container!="",container!="POD"}) by (namespace,pod)`로 확인한다. 노드 메모리는 `node_memory_MemAvailable_bytes`, DB는 `cnpg_collector_up{namespace="moimroom-mig"}`다. GKE는 기존 GKE Prometheus connection에 연결한 동일 이름 Source를 사용한다.
+
+배포 결과와 실제 쿼리 검증은 완료 후 기록한다. HTTP200만으로 수집 성공으로 판단하지 않고, 예상 시계열 존재·최근 sample 시각·range point·기존 CNPG up을 확인한다. 보호된 HyperDX API는 기존 계정의 정상 비노출 로그인으로 검증하며 비밀번호·cookie·연결 credential을 결과 파일에 남기지 않는다.
