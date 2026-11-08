@@ -1111,3 +1111,9 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/charts/gce-workload-deployment/templates/minio.yaml](helm/charts/gce-workload-deployment/templates/minio.yaml)
 - [clusters/onprem-dev-workload/values/apps.yaml](clusters/onprem-dev-workload/values/apps.yaml)
 - [scripts/tests/test-gce-storage-settings.py](scripts/tests/test-gce-storage-settings.py)
+
+| [clusters/aws-dev-management/values/ai-quality-policy.json](clusters/aws-dev-management/values/ai-quality-policy.json) | 실제 source-only GPU 카나리 정책(평가 미완료·target0) |
+| [clusters/aws-dev-management/values/ai-quality-langfuse-service.json](clusters/aws-dev-management/values/ai-quality-langfuse-service.json) | 실측 Langfuse Service UID/IP 기반 한정 egress 입력 |
+| [fixtures/ai-quality/public-space20.json](fixtures/ai-quality/public-space20.json) | 실제 모델 비교용 공개 합성 입력20개; 고정 응답 아님 |
+| [docs/evidence/gpu-quality-controller-application-20261108.json](docs/evidence/gpu-quality-controller-application-20261108.json) | GPU controller 실제 적용·CAS·영속 상태 기록 |
+| [docs/evidence/gpu-quality-controller-verification-20261108.json](docs/evidence/gpu-quality-controller-verification-20261108.json) | 실제API200·우회409·품질412·target0 검증 |

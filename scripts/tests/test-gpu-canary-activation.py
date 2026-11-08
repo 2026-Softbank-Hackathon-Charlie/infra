@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Offline activation boundary contracts; no models, keys or cluster access."""
 import copy
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -80,6 +82,33 @@ class ActivationTest(unittest.TestCase):
         self.assertNotEqual(first[0]['metadata']['name'],second[0]['metadata']['name'])
         self.assertEqual(second[2]['spec']['template']['spec']['volumes'][-2]['configMap']['name'],
                          second[0]['metadata']['name'])
+
+    def test_reviewed_exact_service_vip_only_and_original_selector_preserved(self):
+        service={'namespace':'langfuse','name':'langfuse-web','uid':'89a4cb40-56b9-4ad3-858c-cdec8c20d494',
+                 'clusterIP':'172.20.238.122','port':3000}
+        docs=activation.render(policy(), service)
+        egress=docs[3]['spec']['egress']
+        self.assertEqual(egress[0]['to'][0]['podSelector']['matchLabels'],activation.WEB)
+        self.assertEqual(egress[1],{'to':[{'ipBlock':{'cidr':'172.20.238.122/32'}}],
+                                  'ports':[{'protocol':'TCP','port':3000}]})
+        for patch in ({'clusterIP':'0.0.0.0'},{'clusterIP':'172.20.0.0/16'},
+                      {'clusterIP':'8.8.8.8'},{'clusterIP':'127.0.0.1'}, {'clusterIP':'172.21.1.1'},
+                      {'uid':''},{'namespace':'default'},{'name':'other-service'},{'port':443},
+                      {'secret':'must-not-render'}):
+            bad={**service,**patch}
+            with self.subTest(patch=patch):
+                with self.assertRaises(ValueError): activation.render(policy(),bad)
+
+    def test_deployed_policy_matches_public_dataset_and_service_scope(self):
+        p=json.loads((ROOT/'clusters/aws-dev-management/values/ai-quality-policy.json').read_text(encoding='utf8'))
+        data=json.loads((ROOT/'fixtures/ai-quality/public-space20.json').read_text(encoding='utf8'))
+        service=json.loads((ROOT/'clusters/aws-dev-management/values/ai-quality-langfuse-service.json').read_text(encoding='utf8'))
+        digest=hashlib.sha256(json.dumps(data,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        self.assertEqual(len(data),20)
+        self.assertEqual(len({i['itemId'] for i in data}),20)
+        self.assertEqual({i['itemId'] for i in data},set(p['items']))
+        self.assertEqual(p['datasetRevision'],'public-space20-'+digest[:20])
+        activation.render(p,service)
 
 
 if __name__ == '__main__': unittest.main()

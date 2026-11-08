@@ -1,6 +1,6 @@
 # 0094. 전용 AI 카나리는 평가 프로젝트와 영속 상태를 연결한 원본 100%에서 활성화한다
 
-- 상태: 채택 — 활성화 요청을 받음. 노트북 단절과 평가 프로젝트 선행 조건으로 실제 적용은 아직 하지 않음
+- 상태: 채택 — 2026-11-08 source-only controller 실제 적용·영속 상태·차단 gate 검증 완료. 품질 평가와 로컬5% 전진은 아직 하지 않음
 - 날짜: 2026-11-08
 - 관련: platform ADR 0056, infra [0091](0091-opt-in-same-node-gateway-pod-failover.md)
 
@@ -34,3 +34,13 @@
 새 compute/GPU나 유료 judge 호출은 없다. 적용하면 gp3 저장소 1Gi 비용이 추가된다. [AWS 공식 gp3 단가 예시](https://aws.amazon.com/ebs/pricing/)를 참고해 월 USD0.1 수준의 예산을 두되 정확한 서울 리전 청구액은 미측정이다. 중단 시 먼저 카나리를 0%로 내리고 관측한다. PVC에 품질 stage가 생긴 뒤에는 예전 binary나 follower를 단순 복원하지 않는다. PVC 제거는 state 보존 여부를 확인한 별도 운영 작업이며 렌더러가 자동 삭제하지 않는다.
 
 관련 파일: [렌더러](../../scripts/render-gpu-canary-activation.py), [검증](../../scripts/tests/test-gpu-canary-activation.py), [운영 절차](../runbooks/gpu-quality-canary.md).
+
+## 실제 적용 기록 (2026-11-08)
+
+연결 복구 때 양쪽 Qwen artifact digest를 확인한 뒤 source `gcp`100%·active0·hold false를 재검사했다. 기존 state는 RAM으로 확인하고 원문 대신 checksum을 남겼다. ConfigMap/PVC/한정 정책을 먼저 만들고 Deployment resourceVersion CAS로 새 template을 적용했다. 기존 AI endpoint에만 Recreate 재시작이 있었으며 DB와 메인 트래픽 gateway는 바꾸지 않았다. 새 PVC는 Bound1Gi, gateway Ready1·restart0이다.
+
+실제 관리 API에서 0% 초기화를 저장하여 PVC의 정책 digest·version1·target0을 확인했다. legacy route 우회 HTTP409와,60초 관측 시간 뒤 평가 없는5% 전진 HTTP412를 확인했다. Langfuse Pod selector만으로는 score GET이 timeout이어서 실측 Service UID를 확인하고 정확한 ServiceVIP/32 TCP3000를 별도 허용했다. 이후 `incomplete_scores`가 관측되어 전송 실패와 평가 부재를 구분했다.
+
+평가 프로젝트와 두 별도 키가 존재하지만 OSS project key에는 읽기 전용 역할을 강제하지 못한다. gateway credential도 같은 평가 프로젝트 쓰기 권한을 가진다는 한계가 있다. 실행 코드의 GET 전용 동작과 네트워크 경계가 IAM 수준의 읽기 전용 권한을 대체한다고 주장하지 않는다.
+
+현재 정책과 합성 공개 입력20개를 고정했지만 실제 평가 점수는 없다. 노트북이 다시 offline이 되어 유료 judge·추론 호출을 시작하지 않았고 target/effective0%를 유지한다. 이 상태는 품질 통과나 로컬 모델로 트래픽을 옮긴 성공이 아니다.
