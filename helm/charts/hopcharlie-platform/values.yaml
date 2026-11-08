@@ -50,6 +50,7 @@
     "langfuse": {
       "enabled": false,
       "baseUrl": "http://langfuse-web.langfuse.svc.cluster.local:3000",
+      "serviceClusterIP": "",
       "apps": {}
     },
     "onpremRegistration": {

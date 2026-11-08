@@ -9,6 +9,8 @@
 
 ## 결정
 
+실제 중앙 수집 경로에서 Pod selector만으로는 EKS Service VIP 연결이 시간 초과하는 것을 확인했다. reader는 같은 문제를 피하도록 기존 정확한 Pod selector에 운영자가 확인한 `langfuse-web`의 Service IP 한 개 `/32`, TCP3000만 보완한다. 현재 관리 서비스 CIDR `172.20.0.0/16`의 유효한 host IPv4만 렌더링하며 public IP나 넓은 대역을 받지 않는다. Service UID·IP·selector·포트와 reader 값의 일치는 실제 적용 직전 확인한다. 이 수동 확인은 admission enforcement가 아니며 Service 재생성과 check-to-sync 경합을 완전히 막지 못한다. API는 이미 기존 egress 정책으로 격리되어 있어 이 추가 정책은 기존 DNS·DB 경로를 좁히지 않는다.
+
 기본 off인 `api.langfuse`를 추가하고 관리 환경의 `moimroom-mig`만 opt-in한다. 공개 ConfigMap에는 고정 내부 Langfuse 주소, 정확한 앱·프로젝트·metadata binding과 절대 파일 경로만 넣는다. 앱명과 프로젝트/metadata 식별자를 검증하고 key 원문·사용자 파일 경로·다른 프로젝트 Secret 참조는 렌더 단계에서 거부한다. Secret 이름은 `<app>-langfuse-reader`이며 API의 UID/GID10001만 읽도록 기존 fsGroup과 0440·readOnly mount를 사용한다.
 
 키는 API main container에만 제공한다. init container, gateway, console, hopai Job에는 이 앱 키나 reader 설정을 전달하지 않는다. 이 변경은 Secret·IAM·RBAC·모델 호출을 만들지 않는다. API의 egress는 Langfuse namespace의 정확한 web Pod selector와 TCP3000만 추가한다. 목적지 ingress는 별도 중앙 수집기 연결 변경에서 같은 두 source를 명시한다.

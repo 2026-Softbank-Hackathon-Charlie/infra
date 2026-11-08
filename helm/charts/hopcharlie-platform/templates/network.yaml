@@ -224,6 +224,9 @@ spec:
             matchLabels: {kubernetes.io/metadata.name: langfuse}
           podSelector:
             matchLabels: {app.kubernetes.io/name: langfuse, app.kubernetes.io/instance: langfuse, app.kubernetes.io/component: web}
+        # The EKS policy path can evaluate the Service VIP before DNAT.
+        - ipBlock:
+            cidr: {{ printf "%s/32" (include "hopcharlie.langfuseServiceIP" .) | quote }}
       ports:
         - {protocol: TCP, port: 3000}
 {{- end }}

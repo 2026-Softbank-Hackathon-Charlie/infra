@@ -6,6 +6,7 @@
 
 - `charlie-platform/moimroom-mig-langfuse-reader`에 `public-key`, `secret-key`가 있는지 값 출력 없이 확인한다. 실제 키의 `/api/public/projects` 결과가 앱 전용 프로젝트인지 RAM에서 검증한다.
 - API→Langfuse web TCP3000 egress와 목적지의 동일 source ingress를 모두 검토한다. 앱·Hopai·GPU 평가 키를 서로 바꾸지 않는다.
+- EKS에서 Service DNAT 전 정책 평가가 관측되어 Pod selector와 함께 현재 Service VIP `172.20.238.122/32`의 TCP3000만 허용한다. 공개 IP·서브넷·잘못된 IP는 렌더 단계에서 거부한다. 적용 직전 중앙 `check-langfuse-service-binding.py`로 `langfuse/langfuse-web`의 UID `89a4cb40-56b9-4ad3-858c-cdec8c20d494`, IP, selector, 포트를 확인하고 reader의 `api.langfuse.serviceClusterIP`가 그 IP와 같은지 다시 비교한다. Service 재생성 시 기존 허용값을 그대로 재사용하지 않는다. 확인과 적용 사이의 경합은 남는다.
 - 공개 binding과 env `PLATFORM_LANGFUSE_CONFIG=/etc/langfuse/config.json`, mounted key 경로, image 불변을 로컬 Helm 렌더로 확인한다. `scripts/tests/test-app-langfuse-reader.py`는 키나 API를 읽지 않는다.
 - 병합 직전 실행 중인 이전·배포·온보딩과 Pending/Running hopai Job이 없는지 확인한다. API replica1/Recreate 때문에 짧은 중단이 발생할 수 있다. 확인 후 Argo sync까지 새 업무가 시작될 수 있는 경합은 남는다.
 

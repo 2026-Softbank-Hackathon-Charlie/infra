@@ -13,10 +13,11 @@ HELM = os.environ.get('HELM', 'helm')
 APP = 'moimroom-mig'
 PROJECT = 'cmw76sgdx000bzk08z3ez9xsq'
 URL = 'http://langfuse-web.langfuse.svc.cluster.local:3000'
+SERVICE_IP = '172.20.238.122'
 
 
 def settings(**extra):
-    return dict(enabled=True, baseUrl=URL, apps={APP: dict(projectId=PROJECT, metadataKey='hopcharlie.app', secretName=APP+'-langfuse-reader')}, **extra)
+    return dict(enabled=True, baseUrl=URL, serviceClusterIP=SERVICE_IP, apps={APP: dict(projectId=PROJECT, metadataKey='hopcharlie.app', secretName=APP+'-langfuse-reader')}, **extra)
 
 
 def render(config):
@@ -85,7 +86,8 @@ class ReaderBoundary(unittest.TestCase):
         policy=named(render(settings()),'NetworkPolicy','hopcharlie-app-langfuse-egress')['spec']
         self.assertEqual(policy,{'podSelector':{'matchLabels':{'app.kubernetes.io/part-of':'hopcharlie','app.kubernetes.io/component':'api'}},
             'policyTypes':['Egress'],'egress':[{'to':[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':'langfuse'}},
-            'podSelector':{'matchLabels':{'app.kubernetes.io/name':'langfuse','app.kubernetes.io/instance':'langfuse','app.kubernetes.io/component':'web'}}}],
+            'podSelector':{'matchLabels':{'app.kubernetes.io/name':'langfuse','app.kubernetes.io/instance':'langfuse','app.kubernetes.io/component':'web'}}},
+            {'ipBlock':{'cidr':SERVICE_IP+'/32'}}],
             'ports':[{'protocol':'TCP','port':3000}]}]})
 
     def test_invalid_binding_urls_and_raw_keys_rejected(self):
@@ -97,6 +99,11 @@ class ReaderBoundary(unittest.TestCase):
                   dict(enabled=True,baseUrl='https://external.example',apps=settings()['apps'])]
         for config in cases:
             with self.subTest(config=config),self.assertRaises(ValueError): render(config)
+
+    def test_service_binding_cannot_allow_public_ips_or_wide_networks(self):
+        for address in ('', '8.8.8.8', '172.20.238.122/16', '172.20.999.1', '172.21.1.1'):
+            config=settings(); config['serviceClusterIP']=address
+            with self.subTest(address=address),self.assertRaises(ValueError): render(config)
 
 
 if __name__=='__main__': unittest.main()

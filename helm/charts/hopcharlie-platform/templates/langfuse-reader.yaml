@@ -1,6 +1,15 @@
+{{/* The reviewed EKS Service VIP is needed before DNAT as well as Pod selectors. */}}
+{{- define "hopcharlie.langfuseServiceIP" -}}
+{{- $ip := .Values.api.langfuse.serviceClusterIP | default "" -}}
+{{- if not (regexMatch `^172[.]20[.](25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])[.](25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$` $ip) -}}
+{{- fail "api.langfuse.serviceClusterIP must bind the reviewed Langfuse VIP in the management service CIDR" -}}
+{{- end -}}
+{{- $ip -}}
+{{- end -}}
 {{/* Only public binding metadata and deterministic mounted file paths. */}}
 {{- define "hopcharlie.langfuseConfig" -}}
 {{- $settings := .Values.api.langfuse -}}
+{{- $_ := include "hopcharlie.langfuseServiceIP" . -}}
 {{- $base := $settings.baseUrl | default "http://langfuse-web.langfuse.svc.cluster.local:3000" -}}
 {{- if ne $base "http://langfuse-web.langfuse.svc.cluster.local:3000" -}}
 {{- fail "api.langfuse.baseUrl must match the reviewed internal Langfuse service" -}}
