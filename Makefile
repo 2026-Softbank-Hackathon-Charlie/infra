@@ -63,6 +63,7 @@ ci-test:
 	@$(PYTHON) scripts/tests/test-db-network-assets.py
 	@$(PYTHON) scripts/tests/test-onprem-registration.py
 	@$(PYTHON) scripts/tests/test-onprem-settings.py
+	@$(PYTHON) scripts/tests/test-onprem-observability-apply.py
 	@$(PYTHON) scripts/tests/test-db-migration-access.py
 	@$(PYTHON) -m unittest terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
