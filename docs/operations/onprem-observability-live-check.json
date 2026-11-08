@@ -1,0 +1,113 @@
+{
+  "samples": [
+    {
+      "observedAt": "2026-11-08T02:30:32.645464+00:00",
+      "sample": 1,
+      "peers": [
+        {
+          "HostName": "hop-app-onprem-ai-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-minio-onprem",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-db-onprem-moimroom-mig",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-onprem-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-08T02:30:49.019320+00:00",
+      "sample": 2,
+      "peers": [
+        {
+          "HostName": "hop-app-onprem-ai-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-minio-onprem",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-db-onprem-moimroom-mig",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-onprem-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-08T02:31:06.134828+00:00",
+      "sample": 3,
+      "peers": [
+        {
+          "HostName": "hop-app-onprem-ai-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-minio-onprem",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-db-onprem-moimroom-mig",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        },
+        {
+          "HostName": "hop-onprem-laptop",
+          "Online": false,
+          "LastSeen": "2026-11-08T02:30:00.1Z",
+          "Expired": null
+        }
+      ]
+    }
+  ],
+  "collectorApplyReached": false,
+  "targetKubeSystemUID": "83e340b0-a206-4cba-95d5-750354dced64",
+  "nodeName": "desktop-c3itrvv",
+  "namespaceCreated": true,
+  "monitoringCRDsEstablished": 10,
+  "onpremTLSAuthSecretsCreated": 7,
+  "managementQueryClientSecretCreated": true,
+  "centralTokenKeyAddedPreservingExistingKeys": true,
+  "wholeBundleServerDryRunPassed": true,
+  "bundleResourceCount": 43,
+  "bundleSha256": "e8e298efa1d3b96b07a926b36525ca2d562961d9b5b6b0be936d3ade3206b3f4",
+  "collectorApplied": false,
+  "collectorReady": null,
+  "receivingVerified": false,
+  "tailnetPolicyCurrentContentsReadable": false,
+  "policyWriteCredentialAvailable": false,
+  "nodeOOMAfterDisconnect": "unmeasured",
+  "rawLogsStored": false,
+  "credentialsStoredInRecord": false
+}
