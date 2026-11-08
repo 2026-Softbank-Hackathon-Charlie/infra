@@ -72,8 +72,8 @@ spec:
            variables.target.spec.podMetricsEndpoints[0].interval == '30s' &&
            variables.target.spec.podMetricsEndpoints[0].scrapeTimeout == '10s' &&
            variables.target.spec.podMetricsEndpoints[0].relabelings == [
-             {'targetLabel': 'environment', 'replacement': 'gke'},
-             {'targetLabel': 'cluster', 'replacement': 'charlie-dev-gcp-workload'}])
+             {'action': 'replace', 'targetLabel': 'environment', 'replacement': 'gke'},
+             {'action': 'replace', 'targetLabel': 'cluster', 'replacement': 'charlie-dev-gcp-workload'}])
       message: Only the approved public CA or exact same-namespace CNPG PodMonitor shape is allowed
 ---
 apiVersion: admissionregistration.k8s.io/v1

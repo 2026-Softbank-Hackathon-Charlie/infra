@@ -195,7 +195,7 @@ class GKEObservability(unittest.TestCase):
         self.assertEqual(p['spec']['failurePolicy'], 'Fail')
         self.assertEqual({r for x in p['spec']['matchConstraints']['resourceRules'] for r in x['resources']}, {'configmaps', 'configmaps/*', 'podmonitors', 'podmonitors/*'})
         expressions = ' '.join(x['expression'] for x in p['spec']['validations'])
-        for guard in ["!has(request.subResource)", "namespaceObject.metadata.labels", "== 'restricted'", "variables.target.data['ca.crt'] == variables.ca", 'size(variables.target.data) == 1', 'size(variables.target.spec) == 2', ".port == 'metrics'", ".interval == '30s'", ".scrapeTimeout == '10s'", "size(variables.target.spec.podMetricsEndpoints[0]) == 4", "'targetLabel': 'environment', 'replacement': 'gke'", "variables.target.spec.selector == {'matchLabels': {'cnpg.io/cluster': variables.target.metadata.name}}"]:
+        for guard in ["!has(request.subResource)", "namespaceObject.metadata.labels", "== 'restricted'", "variables.target.data['ca.crt'] == variables.ca", 'size(variables.target.data) == 1', 'size(variables.target.spec) == 2', ".port == 'metrics'", ".interval == '30s'", ".scrapeTimeout == '10s'", "size(variables.target.spec.podMetricsEndpoints[0]) == 4", "'action': 'replace', 'targetLabel': 'environment', 'replacement': 'gke'", "variables.target.spec.selector == {'matchLabels': {'cnpg.io/cluster': variables.target.metadata.name}}"]:
             self.assertIn(guard, expressions)
         variables = {x['name']: x['expression'] for x in p['spec']['variables']}
         self.assertEqual(variables['target'], "request.operation == 'DELETE' ? oldObject : object")
