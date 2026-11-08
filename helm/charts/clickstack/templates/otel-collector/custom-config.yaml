@@ -1,4 +1,4 @@
-{{- if (index .Values "otel-collector" "enabled") }}
+{{- define "clickstack.collectorConfig" -}}
 {{- $config := fromYaml .Values.global.otelCollector.customConfig }}
 {{- $tokens := list "${env:OTLP_AUTH_TOKEN}" "Bearer ${env:OTLP_AUTH_TOKEN}" }}
 {{- range $i, $key := .Values.additionalIngestTokenKeys }}
@@ -8,6 +8,25 @@
 {{- $_ := set $config.extensions "bearertokenauth/hyperdx" (dict "scheme" "" "tokens" $tokens) }}
 {{- $receiver := index $config.receivers "otlp/hyperdx" }}
 {{- $_ := set $receiver.protocols.http "auth" (dict "authenticator" "bearertokenauth/hyperdx") }}
+{{- if .Values.langfuse.enabled }}
+{{- $namespace := required "langfuse.namespace is required" .Values.langfuse.namespace }}
+{{- $service := required "langfuse.serviceName is required" .Values.langfuse.serviceName }}
+{{- if or (not (regexMatch "^[a-z0-9][a-z0-9-]*$" $namespace)) (not (regexMatch "^[a-z0-9][a-z0-9-]*$" $service)) }}
+{{- fail "Langfuse source identity must be exact Kubernetes namespace/service names" }}
+{{- end }}
+{{- /* Keep the complete app trace, including its HTTP parent. The app reader
+      independently requires the exact app metadata on each generation. */}}
+{{- $_ := set $config.processors "filter/langfuse-app" (dict "error_mode" "propagate" "traces" (dict "span" (list (printf "resource.attributes[\"k8s.namespace.name\"] != %q or resource.attributes[\"service.name\"] != %q" $namespace $service)))) }}
+{{- $attributes := list "langfuse.observation.type" "langfuse.observation.metadata.hopcharlie.app" "langfuse.observation.metadata.backend" "langfuse.observation.model.name" "gen_ai.response.model" "gen_ai.usage.input_tokens" "gen_ai.usage.output_tokens" "gen_ai.system" "http.response.status_code" }}
+{{- $resources := list "service.name" "service.version" "k8s.namespace.name" "k8s.cluster.name" "cloud.provider" "cloud.region" "deployment.environment.name" "hopcharlie.environment.name" }}
+{{- $statements := list (printf "keep_keys(attributes, %s)" (toJson $attributes)) (printf "keep_keys(resource.attributes, %s)" (toJson $resources)) "set(status.message, \"\")" "set(trace_state, \"\")" "set(events, nil)" "set(links, nil)" "set(instrumentation_scope.name, \"hopcharlie.app.llm\")" "set(instrumentation_scope.version, \"\")" "keep_keys(instrumentation_scope.attributes, [])" "set(name, \"moimroom-request\")" "set(name, \"moimroom-generation\") where attributes[\"langfuse.observation.type\"] == \"generation\"" }}
+{{- $_ := set $config.processors "transform/langfuse-private" (dict "error_mode" "propagate" "trace_statements" (list (dict "context" "span" "statements" $statements))) }}
+{{- $_ := set $config.exporters "otlphttp/langfuse-app" (dict "traces_endpoint" "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel/v1/traces" "headers" (dict "Authorization" "${env:LANGFUSE_APP_AUTHORIZATION}" "x-langfuse-ingestion-version" "4") "timeout" "5s" "sending_queue" (dict "enabled" true "queue_size" 256 "storage" "file_storage/queue") "retry_on_failure" (dict "enabled" true "max_elapsed_time" "60s")) }}
+{{- $_ := set $config.service.pipelines "traces/langfuse-app" (dict "receivers" (list "otlp/hyperdx") "processors" (list "memory_limiter/central" "filter/langfuse-app" "transform/langfuse-private" "batch/central") "exporters" (list "otlphttp/langfuse-app")) }}
+{{- end }}
+{{- toYaml $config -}}
+{{- end -}}
+{{- if (index .Values "otel-collector" "enabled") }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,5 +35,5 @@ metadata:
     {{- include "clickstack.labels" . | nindent 4 }}
 data:
   custom.config.yaml: |
-    {{- toYaml $config | nindent 4 }}
+    {{- include "clickstack.collectorConfig" . | nindent 4 }}
 {{- end }}

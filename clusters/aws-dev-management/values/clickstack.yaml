@@ -14,5 +14,11 @@
         "tag": "2.39.1-prom-auth-91eaba5cf7d5@sha256:d97c85f1393e69f5b77e18a44369298c53a16208419d62382288bbec02eabf85"
       }
     }
+  },
+  "langfuse": {
+    "enabled": true,
+    "namespace": "moimroom-mig",
+    "serviceName": "moimroom-mig-web",
+    "existingSecret": "moimroom-mig-langfuse-exporter-auth"
   }
 }

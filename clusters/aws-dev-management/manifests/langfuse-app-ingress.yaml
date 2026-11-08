@@ -1,0 +1,27 @@
+# Applied directly: the app-observation boundary never grants the Argo project
+# permission in namespace langfuse. No public listener or additional port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: langfuse-app-observation-ingress
+  namespace: langfuse
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: langfuse
+      app.kubernetes.io/instance: langfuse
+      app.kubernetes.io/component: web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: clickstack-collector}
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: charlie-platform}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: hopcharlie
+              app.kubernetes.io/component: api
+      ports: [{protocol: TCP, port: 3000}]
