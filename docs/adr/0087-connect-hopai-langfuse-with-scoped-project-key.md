@@ -44,3 +44,7 @@ hopai→Langfuse3000 egress는 HopCharlie chart가 관리한다. Langfuse ingres
 Job image/env/egress 활성화안은 별도 브랜치에서 렌더 검증했으며 미병합이다. platform은 Job YAML을 시작할 때만 캐시하고 API는 replica1/Recreate이므로 ConfigMap 변경만으로 다음 Job이 갱신되지 않는다. API checksum 재로딩·상태 집계 조회·중단/잔여 경합 수용은 추가 계획으로 독립 리뷰를 통과했지만 사용자 추가 승인 전이며 구현/실행하지 않았다. 이 제안은 기존 승인의 일부라고 간주하지 않는다.
 
 추가 운영 검증·승인 범위와 증거는 [운영 기록](../runbooks/hopai-langfuse.md)에 남긴다. 실제 모델 응답의 model/usage/입출력/부모관계는 저장되지 않았으므로 확인했다고 기록하지 않는다.
+
+## 후속 검증과 활성화
+
+사용자의 명시적 활성화 요청 뒤 현재 운영 aa8d4f4 실행기로 후속 검증했다. DNS와 HTTP 경로는 정상이었고, 제한된 실제 검증 Job에서 모델2회·도구1회와 대응하는 AGENT1/GENERATION2/TOOL1을 Langfuse API에서 확인했다. 부모관계·실제 응답 모델·usage·입출력 존재가 확인됐으며 원문·비밀은 증거에 남기지 않았다. 최초 실패 원인은 미확정이며 timeout 증가나 재시도를 추가하지 않았다. 최신 추천 기능을 보존하도록 이전 이미지 pin 변경은 제외한다. 상세 범위와 미검증 앱 계측은 운영 기록을 따른다.

@@ -1,7 +1,7 @@
 # hopai Langfuse 계측 활성화 기록
 
 - 날짜: 2026-11-08
-- 상태: 실제 모델/도구 실행 성공, 전송 실패. client 활성화 미병합.
+- 상태: 최초 전송 실패 뒤 최신 실행기로 재검증 성공. client 활성화 배포 준비.
 - 결정: [ADR0087](../adr/0087-connect-hopai-langfuse-with-scoped-project-key.md)
 
 ## 승인된 범위와 수행 결과
@@ -21,3 +21,13 @@ Job `hopai-langfuse-check-1794093660`은 동일 llm.run/Anthropic SDK/loggedTool
 5. 렌더에서 checksum 변화/기존 annotation 공존/API image·replicas·Recreate·PVC·PG·gateway 불변을 확인한다. 배포 후 Argo revision, ConfigMap image/env, API observed generation·새 Pod checksum·Ready·endpoint를 확인한다. 오류면 GitOps revert로 복구하며 재시작이 다시 발생한다. 실제 업무 Job을 검증 목적으로 실행하지 않는다.
 
 추가 진단/모델 Job과 DB 집계/API 재로딩은 현재 미승인·미실행이다. 임시 검증 Job은 TTL로 정리하고 기존 Secret/trace/실행 중 업무는 삭제하지 않는다. 로컬 DB·합성 컨테이너·노트북 전체 Go compile은 실행하지 않았다.
+
+## 후속 활성화 요청과 실제 재검증
+
+2026-11-08 사용자가 Langfuse 관측 활성화를 명시적으로 요청했다. 앞 절은 최초 실패 시점의 기록이며 아래 결과가 후속 검증이다. 실행기 이미지는 추천 기능이 포함된 현재 운영 `aa8d4f4@sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b`을 유지한다. 이전 `c7094f1` 이미지로 되돌리지 않는다. API의 기존 `checksum/hopai`가 template 변경을 반영하며 API는 여전히 1개/Recreate이므로 배포 전 실행 중 업무를 확인한다.
+
+비밀·SSM·모델을 사용하지 않는 진단 Job `hopai-langfuse-net-1794102690`에서 DNS, Service HTTP GET, 직접 Pod IP HTTP GET이 모두 exit0이었다. 앞선 nc 기반 진단 실패만으로 네트워크 단절이나 exporter timeout 원인을 확정하지 않는다. 전송 timeout이나 네트워크 범위는 확대하지 않았다.
+
+최신 이미지의 `hopai-langfuse-check-1794102725`는 동일 실제 agent/SDK 경로에서 모델 HTTP2회, 메모리 도구1회를 수행했다. Langfuse API v2에서 이 Job의 정확한 session/metadata로 고른 4개 관측(AGENT1, GENERATION2, TOOL1)이 저장됐다. 같은 trace의 AGENT가 나머지 세 관측의 부모다. 네 관측의 input/output 존재와 두 GENERATION의 실제 `claude-sonnet-5-5` 모델·usage를 확인했다. API v2 기본 응답은 model/usage/IO를 생략하므로 검증 조회에서 해당 fields를 명시했다. 비밀·원문 입출력은 결과 기록에 저장하지 않았다.
+
+이는 hopai 관측 검증이다. `moimroom-mig` 앱의 실제 추론을 관측했다고 의미하지 않으며 해당 앱 generation을 위조하거나 hopai 관측에 앱 라벨을 붙이지 않는다. 앱의 Langfuse 연동은 정확한 앱 metadata를 발행하는 추론 계측과 별도 서버 설정이 필요하다. GPU 품질 평가는 관측 프로젝트와 분리된 전용 프로젝트·키를 사용한다.
