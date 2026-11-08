@@ -1,0 +1,115 @@
+{{- $o := .Values.observability }}
+{{- if and $o.appResourcesGranted (not $o.appResourcesEnabled) }}
+{{- fail "appResourcesGranted requires the verified app observability guard" }}
+{{- end }}
+{{- if $o.appResourcesEnabled }}
+{{- if not $o.enabled }}
+{{- fail "appResourcesEnabled requires observability.enabled" }}
+{{- end }}
+{{- $ca := required "appResourcesEnabled requires the approved appCABundle" $o.appCABundle }}
+{{- $name := printf "%s-app-observability" .Release.Name }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: {name: {{ $name }}}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        resources: [configmaps, "configmaps/*"]
+        operations: [CREATE, UPDATE, DELETE, CONNECT]
+        scope: Namespaced
+      - apiGroups: [monitoring.coreos.com]
+        apiVersions: ["*"]
+        resources: [podmonitors, "podmonitors/*"]
+        operations: [CREATE, UPDATE, DELETE, CONNECT]
+        scope: Namespaced
+  matchConditions:
+    - name: argocd-google-identity
+      expression: {{ printf "request.userInfo.username == '%s'" .Values.googleServiceAccountEmail | quote }}
+    - name: application-resources-only
+      expression: request.namespace != 'observability'
+  variables:
+    - name: target
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+    - name: protected
+      expression: {{ .Values.dynamicApps.protectedNamespaces | toJson | quote }}
+    - name: ca
+      expression: {{ $ca | toJson | quote }}
+  validations:
+    - expression: >-
+        (!has(request.subResource) || request.subResource == '') &&
+        request.operation in ['CREATE', 'UPDATE', 'DELETE'] &&
+        !(request.namespace in variables.protected) && !request.namespace.startsWith('kube-') &&
+        namespaceObject != null && has(namespaceObject.metadata.labels) &&
+        'hopcharlie.dev/app' in namespaceObject.metadata.labels &&
+        'hopcharlie.dev/instance' in namespaceObject.metadata.labels &&
+        namespaceObject.metadata.labels['hopcharlie.dev/instance'] == request.namespace &&
+        namespaceObject.metadata.labels['hopcharlie.dev/app'].matches('^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$') &&
+        size(request.namespace) <= 53 &&
+        (request.namespace == namespaceObject.metadata.labels['hopcharlie.dev/app'] ||
+         request.namespace.startsWith(namespaceObject.metadata.labels['hopcharlie.dev/app'] + '--')) &&
+        'pod-security.kubernetes.io/enforce' in namespaceObject.metadata.labels &&
+        namespaceObject.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted' &&
+        (!('pod-security.kubernetes.io/enforce-version' in namespaceObject.metadata.labels) ||
+         namespaceObject.metadata.labels['pod-security.kubernetes.io/enforce-version'] == 'latest')
+      message: App observability writes require an owned restricted namespace and no subresource
+    - expression: >-
+        request.resource.resource == 'configmaps' ?
+          (variables.target.metadata.name == 'hopcharlie-observability-ca' &&
+           has(variables.target.data) && size(variables.target.data) == 1 &&
+           'ca.crt' in variables.target.data && variables.target.data['ca.crt'] == variables.ca &&
+           (!has(variables.target.binaryData) || size(variables.target.binaryData) == 0)) :
+          (variables.target.metadata.name.startsWith(namespaceObject.metadata.labels['hopcharlie.dev/app'] + '-') &&
+           variables.target.metadata.name.substring(size(namespaceObject.metadata.labels['hopcharlie.dev/app']) + 1).matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$') &&
+           size(variables.target.spec) == 2 &&
+           'selector' in variables.target.spec && 'podMetricsEndpoints' in variables.target.spec &&
+           variables.target.spec.selector == {'matchLabels': {'cnpg.io/cluster': variables.target.metadata.name}} &&
+           size(variables.target.spec.podMetricsEndpoints) == 1 &&
+           size(variables.target.spec.podMetricsEndpoints[0]) == 4 &&
+           variables.target.spec.podMetricsEndpoints[0].port == 'metrics' &&
+           variables.target.spec.podMetricsEndpoints[0].interval == '30s' &&
+           variables.target.spec.podMetricsEndpoints[0].scrapeTimeout == '10s' &&
+           variables.target.spec.podMetricsEndpoints[0].relabelings == [
+             {'targetLabel': 'environment', 'replacement': 'gke'},
+             {'targetLabel': 'cluster', 'replacement': 'charlie-dev-gcp-workload'}])
+      message: Only the approved public CA or exact same-namespace CNPG PodMonitor shape is allowed
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: {name: {{ $name }}}
+spec:
+  policyName: {{ $name }}
+  validationActions: [Deny]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: {{ $name }}}
+rules:
+  # Existing view already provides ConfigMap reads. Admission constrains CREATE.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [hopcharlie-observability-ca]
+    verbs: [update, patch, delete]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [podmonitors]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- if $o.appResourcesGranted }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: {{ $name }}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ .Values.googleServiceAccountEmail | quote }}
+{{- end }}
+{{- end }}

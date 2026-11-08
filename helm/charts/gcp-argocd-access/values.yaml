@@ -31,3 +31,6 @@ observability:
   enabled: false
   openExistingPolicy: false
   grantAccess: false
+  appResourcesEnabled: false
+  appResourcesGranted: false
+  appCABundle: ""

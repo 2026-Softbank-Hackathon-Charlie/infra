@@ -1082,6 +1082,9 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
 | [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
 | [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+
+- [docs/adr/0093-authorize-gke-app-observability-resources.md](docs/adr/0093-authorize-gke-app-observability-resources.md) — GKE 새 앱의 공개 CA·CNPG PodMonitor 자동 등록 권한과 admission 제한
+- [helm/charts/gcp-argocd-access/templates/app-observability.yaml](helm/charts/gcp-argocd-access/templates/app-observability.yaml) — 기본 off인 앱 관측 자원 guard와 단계별 권한
 | [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
 | [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
 | [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |

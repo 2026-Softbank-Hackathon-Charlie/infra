@@ -73,6 +73,15 @@
         },
         "grantAccess": {
           "type": "boolean"
+        },
+        "appResourcesEnabled": {
+          "type": "boolean"
+        },
+        "appResourcesGranted": {
+          "type": "boolean"
+        },
+        "appCABundle": {
+          "type": "string"
         }
       }
     }

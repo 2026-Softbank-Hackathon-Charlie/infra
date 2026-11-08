@@ -3,10 +3,10 @@
     "gke": {
       "profile": {
         "observability": {
-          "enabled": false,
-          "metricsEnabled": false,
-          "endpoint": "",
-          "caBundle": "",
+          "enabled": true,
+          "metricsEnabled": true,
+          "endpoint": "https://observability-gateway.observability.svc:443",
+          "caBundle": "-----BEGIN CERTIFICATE-----\nMIIC9jCCAd6gAwIBAgIUP40BbMBxs9Fks2m/GdtrYZLCQwMwDQYJKoZIhvcNAQEL\nBQAwITEfMB0GA1UEAwwWQ2hhcmxpZSBna2UtZ2F0ZXdheSBDQTAeFw0yNjExMDcx\nNjI5MDJaFw0yNzExMDcxNjM0MDJaMCExHzAdBgNVBAMMFkNoYXJsaWUgZ2tlLWdh\ndGV3YXkgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCLk6WVbPQx\nebt/2QFtOiIj5q2iqyxm3QNTPhpwGEo98dXz1PxZ+45AEFOXNGFBpOpI0M1L+pSd\nx/diQS2y7eeMm+bvWeXXaRgIi1Pp25/ombw4IXsJCTgn+ZELSgjhsIvkMUih1TPi\nYAAeMdyMJ5MBm7qk7tsOUDK7Fj7X7ld+Ek3g+QGuIpmHOfvLjB14jxLNA8Cmaf15\nxEtSwaXEussyrgEWrIdeM4Khh00/MUlRYlA6++LS1vd7djovFEmbRJEc8hChNx+p\nQd6F7zv+8Vi5xfdjXM195XFIwjNeQ8Z4+XhH6/dcXCIC9/m92KKJr9E7Cn+/aWoV\nf47MJk0bpzOPAgMBAAGjJjAkMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/\nBAQDAgGGMA0GCSqGSIb3DQEBCwUAA4IBAQAKbkpBtrpsSz9jX/NzsKiq/ia8AAP+\nX7Q/LrtxHs+YGVzlV5tVcZi9yVE85tf64Rrilb3HlCjg0jbrkWBXp9m6xPmsRYlJ\n86aOIAiDej80PsFo0WUVFYre+YJoiF6rrBsAbHk5lYBXGhaY/lOB2UnTeMstaiyJ\nLfSuiTEQAgGL2jDVJu3e0bwGOVjqJYawmOzNiHG5IGrnGQRwFo0C/dTPljA0niMo\n6GM4XpWajjbStosEEQxbpgiRX+Q87T3/qLSm3fpKQZmkDjQbiNUjqgwRPGXTLk+d\nHUE0cNmO6jEhQaKgc/Jdo8wyycQNxJ+up5X5Mp03xZXRDlylbd9dW+v4\n-----END CERTIFICATE-----\n",
           "clusterName": "charlie-dev-gcp-workload",
           "cloudProvider": "gcp",
           "region": "asia-northeast3"

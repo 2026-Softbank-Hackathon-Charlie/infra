@@ -45,7 +45,7 @@ spec:
       expression: {{ $allowed | toJson | quote }}
   validations:
     - expression: >-
-        request.subResource == '' &&
+        (!has(request.subResource) || request.subResource == '') &&
         ((request.namespace == 'observability' && request.operation in ['CREATE', 'UPDATE', 'DELETE'] &&
           (request.resource.group + '/' + request.resource.resource + '/' + request.name) in variables.allowed) ||
          (request.namespace == 'hopcharlie-db-network' && request.operation in ['UPDATE', 'DELETE']))
@@ -77,6 +77,9 @@ rules:
   - apiGroups: [monitoring.coreos.com]
     resources: [prometheuses, servicemonitors, podmonitors]
     verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch]
   # Argo namespace cache receives these values. No Secret API read isolation is claimed.
   - apiGroups: [""]
     resources: [secrets]
