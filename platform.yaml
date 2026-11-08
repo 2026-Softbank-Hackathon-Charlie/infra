@@ -10,7 +10,7 @@
       "public": true,
       "replicas": 1,
       "cpu": "50m",
-      "memory": "64Mi",
+      "memory": "256Mi",
       "env": {
         "READINESS_GUARD_BUCKET": "hop-gce-guard-9946e8712e"
       }
