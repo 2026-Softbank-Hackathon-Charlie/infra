@@ -389,7 +389,7 @@ def main():
         docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform")
         api = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
-        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
+        assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local,onprem-gce=http://app-onprem-gce-{instance}.hopcharlie-db-network.svc.cluster.local", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
         # ai-gateway.<appDomain>: only the traffic gateway reaches only the AI gateway's inference port.
         ai = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-gateway-ai-egress"]

@@ -1121,3 +1121,11 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
 
 - [docs/operations/onprem-observability-live-check.json](docs/operations/onprem-observability-live-check.json)
+
+GCE HTTP routing:
+
+- [helm/charts/gce-app-web-route/Chart.yaml](helm/charts/gce-app-web-route/Chart.yaml)
+- [helm/charts/gce-app-web-route/templates/service.yaml](helm/charts/gce-app-web-route/templates/service.yaml)
+- [helm/charts/gce-app-web-route/values.yaml](helm/charts/gce-app-web-route/values.yaml)
+
+- [scripts/tests/test-gce-web-route.py](scripts/tests/test-gce-web-route.py)

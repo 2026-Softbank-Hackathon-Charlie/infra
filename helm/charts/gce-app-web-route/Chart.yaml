@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gce-app-web-route
+description: Management-only HTTP proxy to an independent GCE workload
+type: application
+version: 0.1.0
