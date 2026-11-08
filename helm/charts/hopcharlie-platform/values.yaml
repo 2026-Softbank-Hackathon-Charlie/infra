@@ -47,6 +47,11 @@
       "user": "",
       "table": ""
     },
+    "langfuse": {
+      "enabled": false,
+      "baseUrl": "http://langfuse-web.langfuse.svc.cluster.local:3000",
+      "apps": {}
+    },
     "onpremRegistration": {
       "enabled": false,
       "tailnetDomain": "tail567fe8.ts.net",
