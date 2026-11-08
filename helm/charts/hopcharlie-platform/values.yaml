@@ -19,6 +19,7 @@
     }
   },
   "api": {
+    "rollingHandoff": false,
     "corsOrigins": "",
     "dsnHostSuffixes": ".ts.net",
     "appDbTopology": {

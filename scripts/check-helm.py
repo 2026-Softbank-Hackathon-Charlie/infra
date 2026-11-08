@@ -322,6 +322,10 @@ def main():
             baseline_ns = "charlie-platform" if purpose == "management" else "charlie-apps"
             docs = render(ROOT / "helm/charts/cluster-baseline", values_root / "baseline.yaml", "baseline", baseline_ns)
             assert {"Namespace", "StorageClass", "ResourceQuota", "LimitRange", "NetworkPolicy"} <= {d["kind"] for d in docs}
+            # The platform namespace gets ALB pod readiness gates (infra ADR 0099); nothing else does.
+            gated = {d["metadata"]["name"] for d in docs if d["kind"] == "Namespace"
+                     and d["metadata"]["labels"].get("elbv2.k8s.aws/pod-readiness-gate-inject") == "enabled"}
+            assert gated == ({"charlie-platform"} if purpose == "management" else set()), gated
             assert not any(d["kind"] in {"ClusterRole", "ClusterRoleBinding"} for d in docs)
             # The only Ingress is the shared ALB anchor, and only where externalAlb is on.
             alb = json.loads((values_root / "baseline.yaml").read_text())["externalAlb"]
@@ -391,6 +395,29 @@ def main():
         env = {e["name"]: e.get("value") for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         assert env["PLATFORM_APP_BACKEND_TEMPLATES"] == "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local,onprem-gce=http://app-onprem-gce-{instance}.hopcharlie-db-network.svc.cluster.local", env.get("PLATFORM_APP_BACKEND_TEMPLATES")
         assert "PLATFORM_APP_BACKEND_TEMPLATE" not in env
+        # Rolling API updates with a leadership handover (infra ADR 0099) stay off
+        # until the running image has the leadership; then one value turns them on.
+        pod = api["spec"]["template"]["spec"]
+        assert api["spec"]["strategy"] == {"type": "Recreate"} and "affinity" not in pod and "POD_IP" not in env, api["spec"]["strategy"]
+        rolling_values = work / "platform-rolling-handoff.json"
+        rolling_values.write_text(json.dumps({"api": {"rollingHandoff": True}}))
+        docs = render(ROOT / "helm/charts/hopcharlie-platform", platform_values, "hopcharlie-platform", "charlie-platform", ("-f", str(rolling_values)))
+        rolling = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "hopcharlie-api")
+        rpod = rolling["spec"]["template"]["spec"]
+        assert rolling["spec"]["replicas"] == 1
+        assert rolling["spec"]["strategy"] == {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}}, rolling["spec"]["strategy"]
+        assert rpod["affinity"] == {"podAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": [{
+            "labelSelector": {"matchLabels": rolling["spec"]["selector"]["matchLabels"]}, "topologyKey": "kubernetes.io/hostname"}]}}, rpod["affinity"]
+        assert rpod["terminationGracePeriodSeconds"] == 900
+        renv = {e["name"]: e for e in rpod["containers"][0]["env"]}
+        assert renv["POD_IP"]["valueFrom"] == {"fieldRef": {"fieldPath": "status.podIP"}}
+        assert renv["PLATFORM_LEADER_ADDR"]["value"] == "$(POD_IP):8080"
+        assert list(renv).index("POD_IP") < list(renv).index("PLATFORM_LEADER_ADDR"), "POD_IP is defined before it is referenced"
+        assert "exec hopcharlie-api -addr :8080 -state-dir /data/runs -shutdown-wait 10m -shutdown-delay 20s\n" in rpod["containers"][0]["args"][0]
+        bad_rolling = work / "platform-rolling-handoff-bad.json"
+        bad_rolling.write_text(json.dumps({"api": {"rollingHandoff": "true"}}))
+        result = subprocess.run([HELM, "template", "hopcharlie-platform", str(ROOT / "helm/charts/hopcharlie-platform"), "-f", str(platform_values), "-f", str(bad_rolling)], capture_output=True, text=True, encoding="utf-8")
+        assert result.returncode != 0 and "api.rollingHandoff must be a boolean" in result.stderr, result.stderr
         # ai-gateway.<appDomain>: only the traffic gateway reaches only the AI gateway's inference port.
         ai = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "hopcharlie-gateway-ai-egress"]
         assert len(ai) == 1, "management values route ai-gateway to its namespace"
