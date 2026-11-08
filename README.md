@@ -1108,6 +1108,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
 | [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
 
+- [scripts/tests/test-onprem-app-profile.py](scripts/tests/test-onprem-app-profile.py) — 온프레 앱 TLS·identity·generation 계측 프로필과 데이터/secret/이미지 불변 렌더 검증
+
 ## Independent GCE workload storage
 
 - [helm/charts/gce-workload-deployment/Chart.yaml](helm/charts/gce-workload-deployment/Chart.yaml)

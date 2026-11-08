@@ -297,13 +297,13 @@
           "proxyNamespace": "hopcharlie-db-network"
         },
         "observability": {
-          "enabled": false,
-          "metricsEnabled": false,
-          "endpoint": "",
-          "caBundle": "",
-          "clusterName": "",
-          "cloudProvider": "aws",
-          "region": "ap-northeast-2"
+          "enabled": true,
+          "metricsEnabled": true,
+          "endpoint": "https://observability-gateway.observability.svc:443",
+          "caBundle": "-----BEGIN CERTIFICATE-----\nMIIC+DCCAeCgAwIBAgIUJ046qmc6rzBBjgipKPY1PG/r0SowDQYJKoZIhvcNAQEL\nBQAwKjEoMCYGA1UEAwwfaG9wY2hhcmxpZS1vbnByZW0tb2JzZXJ2YWJpbGl0eTAe\nFw0yNjExMDgwMjIwMTlaFw0yNzExMDgwMjI1MTlaMCoxKDAmBgNVBAMMH2hvcGNo\nYXJsaWUtb25wcmVtLW9ic2VydmFiaWxpdHkwggEiMA0GCSqGSIb3DQEBAQUAA4IB\nDwAwggEKAoIBAQCo+pebFn/JSxFOCVzpMcmijlC7R4qkd0Ffb1YDlOkSovl6cspB\nngVNlc1KTSVXi5HlXWDaOksg36ueYsmciP753xSRDms9uy90tYnVoZd9IVXwXC6u\nr6qdaUytN7b6N659ZjedZYo83AfPsqQLKrYuJiynayfahDcfcne89pcRkV24zDfM\nBoMFGxRDOHy8sqm2vk39OikDvK8JF6ZxXk3PItgwkjDn/h5onRVSEso1yGjno0tz\nmJVTmsp6EyyQUHXqIUkvC7PyaGxHOOibuO99y9oxYfrvd6Ytqsbtb+on8HoCADzY\n16ZiZdv3I9n7ZsHQLB3Rqee/vXxF34j1Zl4DAgMBAAGjFjAUMBIGA1UdEwEB/wQI\nMAYBAf8CAQAwDQYJKoZIhvcNAQELBQADggEBAB/snPD42ZoUivxXhW/R9ELVIqaZ\nNu+Ha8CkG7N2h2ZvtHXzSNDfe4Sh28djldUicOY0wfaMBfk8BJd5E4atGcjz0+Yx\nguxmck/IKIpAQUihrRgVQ53Ol03YR21QJEPQmPgu3cvW337LjGde6p4JKqU+mXa1\nBXGksG0aHo6ytmuDEARbHmKyEjIIyxxVWI7d898IeDDPM9snGr7YjEHaHn466qwi\neKNsRl+SeM8eI6tYCJNc+gAyIcYWrPgOnUctoitsbFP6tm0xH1scc8F2of6RgCHv\njydcM3SXktoVQJFqXvaOsr1JwEJ+PwlsMU1eeeIMWYiv1nG4+/n9zHp8x7Q=\n-----END CERTIFICATE-----\n",
+          "clusterName": "charlie-dev-onprem-workload",
+          "cloudProvider": "onprem",
+          "region": "onprem"
         }
       }
     }
