@@ -1115,3 +1115,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [helm/charts/gce-workload-deployment/templates/minio.yaml](helm/charts/gce-workload-deployment/templates/minio.yaml)
 - [clusters/onprem-dev-workload/values/apps.yaml](clusters/onprem-dev-workload/values/apps.yaml)
 - [scripts/tests/test-gce-storage-settings.py](scripts/tests/test-gce-storage-settings.py)
+- [clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json](clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json)
+- [clusters/onprem-dev-workload/values/observability-transport.yaml](clusters/onprem-dev-workload/values/observability-transport.yaml)
+- [clusters/aws-dev-management/values/observability-onprem-query-transport.yaml](clusters/aws-dev-management/values/observability-onprem-query-transport.yaml)
+- [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
