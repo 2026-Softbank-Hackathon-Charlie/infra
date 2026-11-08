@@ -1,0 +1,18 @@
+{
+  "tagOwners": {
+    "tag:hop-observability-onprem-export": ["tag:hop-db-operator-onprem"],
+    "tag:hop-observability-onprem-query": ["tag:hop-db-operator-onprem"]
+  },
+  "grants": [
+    {
+      "src": ["tag:hop-observability-onprem-export"],
+      "dst": ["tag:hop-observability-central"],
+      "ip": ["tcp:4318"]
+    },
+    {
+      "src": ["tag:hop-observability-management-query"],
+      "dst": ["tag:hop-observability-onprem-query"],
+      "ip": ["tcp:443"]
+    }
+  ]
+}

@@ -258,7 +258,7 @@ class GKEObservability(unittest.TestCase):
         self.assertEqual(contract['hyperdxPrometheusURL'], 'https://observability-gke-metrics.observability.svc.cluster.local:443')
         self.assertIn('observability-gke-metrics.observability.svc.cluster.local', contract['queryCertificateDNSNames'])
         tokens = load('clusters/aws-dev-management/values/clickstack-gke.yaml')['additionalIngestTokenKeys']
-        self.assertEqual(tokens, ['WORKLOAD_OTLP_AUTH_TOKEN', 'GKE_OTLP_AUTH_TOKEN'])
+        self.assertEqual(tokens, ['WORKLOAD_OTLP_AUTH_TOKEN', 'GKE_OTLP_AUTH_TOKEN', 'ONPREM_OTLP_AUTH_TOKEN'])
 
     def test_pinned_gke_collectors_identity_storage_and_discovery(self):
         all_docs = []

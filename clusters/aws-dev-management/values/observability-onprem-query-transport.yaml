@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "role": "management",
+  "peerEnvironment": "onprem",
+  "centralIngressEnabled": false,
+  "proxyNamespace": "hopcharlie-db-network",
+  "tailnetDomain": "tail567fe8.ts.net",
+  "centralHostname": "hop-observability-central",
+  "queryHostname": "hop-observability-onprem-query"
+}

@@ -16,7 +16,8 @@
     "role": {
       "enum": [
         "management",
-        "gke"
+        "gke",
+        "onprem"
       ]
     },
     "proxyNamespace": {
@@ -30,7 +31,13 @@
       "const": "hop-observability-central"
     },
     "queryHostname": {
-      "const": "hop-observability-gke-query"
+      "enum": ["hop-observability-gke-query", "hop-observability-onprem-query"]
+    },
+    "peerEnvironment": {
+      "enum": ["gke", "onprem"]
+    },
+    "centralIngressEnabled": {
+      "type": "boolean"
     }
   }
 }
