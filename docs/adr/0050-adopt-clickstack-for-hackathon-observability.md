@@ -61,3 +61,11 @@
 ## A 구현 결과
 
 사용자는 새 브랜치에서 A 구현·검증 진행을 승인했다. 실제 결과와 변경점은 [배포 전 검토](../clickstack-deployment-review.md)에 기록한다. 중앙은 공식 Collector standalone entrypoint를 직접 사용해 범용 subchart의 설정 덮어쓰기를 피했고, Secret 참조와 기존 수동 배포 경계를 유지했다. 최신 main의 GKE 앱·Tailscale TCP80 경로를 변경하거나 관측 연결 승인으로 해석하지 않았다.
+
+## 2026-11-08 HyperDX 기본 표시 컬럼 누락 수정
+
+사용자가 Logs/Traces의 defaultTableSelectExpression validation 경고를 보고했다. 고정 HyperDX2.39.1의 LogSourceSchema/TraceSourceSchema는 nonempty 기본 표시 SQL을 요구하지만 초기 fixture와 실제 저장된 기존 두 source에 이 필드가 없었다. 앱의 Source 모델 직렬화 후 설치된 SourceSchema 검사에서 동일 필드만 실패하는 것을 확인했다.
+
+계획 독립 리뷰 및 구체적 실행 승인 후 Logs에 Timestamp,ServiceName,SeverityText,Body, Traces에 Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName을 설정했다. 기존 app 컨테이너가 가진 Mongo 연결로 정확 두 source 문서만 전체BSON CAS 갱신했고 ID/team/connection/상호link 및 나머지 필드 digest가 유지됨을 확인했다. timestamps 계약에 따라 updatedAt만 함께 변경했다. Secret clickstack-ui-config의 sources.json도 resourceVersion/old-value 조건으로 두 필드를 보완했고 다른 Secret key는 유지했다. 신규 키·이미지·RBAC·DBschema·데이터삭제·재시작은 없었다.
+
+두 기존 source 모두 동일 HyperDX 모델·SourceSchema 검증을 통과했다. ClickHouse 관리 연결의 두 SELECT LIMIT0로 표시식의 열·구문 호환성을 확인했으며 event 본문은 조회하지 않았다. 브라우저 접근 host가 없고 Firefox 접근도 승인되지 않아 화면은 읽거나 조작하지 못했다. 따라서 실제 UI 경고 소멸/검색 화면 성공을 확인했다고 보고하지 않는다. 기존 toast는 남을 수 있으며 새로고침한 API 응답에 대한 스키마 검증 결과로 판단해야 한다. fixture에 두 필드와 회귀검사를 추가해 신규 초기화 누락을 방지한다. bootstrap 값 변경만으로 기존 팀이 갱신된다고 간주하지 않는다.
