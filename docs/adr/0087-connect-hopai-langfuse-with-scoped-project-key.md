@@ -48,3 +48,11 @@ Job image/env/egress 활성화안은 별도 브랜치에서 렌더 검증했으�
 ## 후속 검증과 활성화
 
 사용자의 명시적 활성화 요청 뒤 현재 운영 aa8d4f4 실행기로 후속 검증했다. DNS와 HTTP 경로는 정상이었고, 제한된 실제 검증 Job에서 모델2회·도구1회와 대응하는 AGENT1/GENERATION2/TOOL1을 Langfuse API에서 확인했다. 부모관계·실제 응답 모델·usage·입출력 존재가 확인됐으며 원문·비밀은 증거에 남기지 않았다. 최초 실패 원인은 미확정이며 timeout 증가나 재시도를 추가하지 않았다. 최신 추천 기능을 보존하도록 이전 이미지 pin 변경은 제외한다. 상세 범위와 미검증 앱 계측은 운영 기록을 따른다.
+
+## Service VIP 보완과 별도 실제 저장 대조
+
+2026-11-08 추가 승인 범위에서 PolicyEndpoint를 확인했을 때 hopai egress는 Web Pod IP만 포함했다. 동일 namespace/Web/3000 대상의 selector를 실제 Service의 app=web/name=langfuse/instance=langfuse와 맞추자 Pod IP와 Service VIP가 함께 생성됐다. DNS/Pod 직접 접속의 다른 성공 기록도 있으므로 VIP 누락만으로 최초 exporter 오류의 유일 원인이라고 단정하지 않는다. SDK timeout/retry·namespace 범위·IAM/RBAC는 바꾸지 않았다. 이 보정은 API checksum이나 Pod spec을 바꾸지 않는다.
+
+추가 승인된 재검증 Job hopai-langfuse-recheck-1794103272는 동일 고정 ready 요청1회가200일 때만 모델을 호출했다. 실제HTTP2/메모리도구1/exit0이고 exporter 오류는 없었다. trace 4b2c0d539ef6cb9f65aa6f2f4fff40e2는 API v2에서 AGENT1/GENERATION2/TOOL1, parent/Job연결·전체IO·실제claude-sonnet-5-5·input1526/output67 토큰을 확인했다. ClickHouse events_core FINAL4건과 parent/model/usage 및 IO미리보기를 대조했다. core의 IO는 미리보기이며 전체IO는 API로 확인했다. 이 추가 검증은 c7094f1 검증용 이미지이며 현재 운영 aa8d4f4 이미지의 별도 성공 기록을 대체하지 않는다.
+
+PR170이 이미 main에 병합·Argo배포되고 API observed generation100/Ready1·Job env·현재aa8d4f4image·기존checksum/hopai·Service endpoint가 정상임을 확인했다. 추가 API 재시작은 하지 않았다. 재점검에서 nonterminal hopai Job1개를 확인했으며 중단/삭제/재실행하지 않았다. 이번 후속 수정은 같은 Web Service 정책과 문서만 반영한다.

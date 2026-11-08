@@ -257,7 +257,7 @@ def check_hopai_langfuse():
             spec = policies[0]["spec"]
             assert spec["podSelector"]["matchLabels"] == {"app.kubernetes.io/part-of": "hopcharlie", "app.kubernetes.io/component": "hopai"}
             assert spec["policyTypes"] == ["Egress"]
-            assert spec["egress"] == [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "langfuse"}}, "podSelector": {"matchLabels": {"app.kubernetes.io/component": "web", "app.kubernetes.io/instance": "langfuse", "app.kubernetes.io/name": "langfuse"}}}], "ports": [{"protocol": "TCP", "port": 3000}]}]
+            assert spec["egress"] == [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "langfuse"}}, "podSelector": {"matchLabels": {"app": "web", "app.kubernetes.io/instance": "langfuse", "app.kubernetes.io/name": "langfuse"}}}], "ports": [{"protocol": "TCP", "port": 3000}]}]
         for d in docs:
             if d["kind"] in ("Deployment", "StatefulSet"):
                 for c in d["spec"]["template"]["spec"]["containers"]:

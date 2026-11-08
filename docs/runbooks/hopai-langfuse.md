@@ -31,3 +31,11 @@ Job `hopai-langfuse-check-1794093660`은 동일 llm.run/Anthropic SDK/loggedTool
 최신 이미지의 `hopai-langfuse-check-1794102725`는 동일 실제 agent/SDK 경로에서 모델 HTTP2회, 메모리 도구1회를 수행했다. Langfuse API v2에서 이 Job의 정확한 session/metadata로 고른 4개 관측(AGENT1, GENERATION2, TOOL1)이 저장됐다. 같은 trace의 AGENT가 나머지 세 관측의 부모다. 네 관측의 input/output 존재와 두 GENERATION의 실제 `claude-sonnet-5-5` 모델·usage를 확인했다. API v2 기본 응답은 model/usage/IO를 생략하므로 검증 조회에서 해당 fields를 명시했다. 비밀·원문 입출력은 결과 기록에 저장하지 않았다.
 
 이는 hopai 관측 검증이다. `moimroom-mig` 앱의 실제 추론을 관측했다고 의미하지 않으며 해당 앱 generation을 위조하거나 hopai 관측에 앱 라벨을 붙이지 않는다. 앱의 Langfuse 연동은 정확한 앱 metadata를 발행하는 추론 계측과 별도 서버 설정이 필요하다. GPU 품질 평가는 관측 프로젝트와 분리된 전용 프로젝트·키를 사용한다.
+
+## Service VIP 보완과 별도 실제 저장 대조
+
+2026-11-08 추가 승인 범위에서 PolicyEndpoint를 확인했을 때 hopai egress는 Web Pod IP만 포함했다. 동일 namespace/Web/3000 대상의 selector를 실제 Service의 app=web/name=langfuse/instance=langfuse와 맞추자 Pod IP와 Service VIP가 함께 생성됐다. DNS/Pod 직접 접속의 다른 성공 기록도 있으므로 VIP 누락만으로 최초 exporter 오류의 유일 원인이라고 단정하지 않는다. SDK timeout/retry·namespace 범위·IAM/RBAC는 바꾸지 않았다. 이 보정은 API checksum이나 Pod spec을 바꾸지 않는다.
+
+추가 승인된 재검증 Job hopai-langfuse-recheck-1794103272는 동일 고정 ready 요청1회가200일 때만 모델을 호출했다. 실제HTTP2/메모리도구1/exit0이고 exporter 오류는 없었다. trace 4b2c0d539ef6cb9f65aa6f2f4fff40e2는 API v2에서 AGENT1/GENERATION2/TOOL1, parent/Job연결·전체IO·실제claude-sonnet-5-5·input1526/output67 토큰을 확인했다. ClickHouse events_core FINAL4건과 parent/model/usage 및 IO미리보기를 대조했다. core의 IO는 미리보기이며 전체IO는 API로 확인했다. 이 추가 검증은 c7094f1 검증용 이미지이며 현재 운영 aa8d4f4 이미지의 별도 성공 기록을 대체하지 않는다.
+
+PR170이 이미 main에 병합·Argo배포되고 API observed generation100/Ready1·Job env·현재aa8d4f4image·기존checksum/hopai·Service endpoint가 정상임을 확인했다. 추가 API 재시작은 하지 않았다. 재점검에서 nonterminal hopai Job1개를 확인했으며 중단/삭제/재실행하지 않았다. 이번 후속 수정은 같은 Web Service 정책과 문서만 반영한다.
