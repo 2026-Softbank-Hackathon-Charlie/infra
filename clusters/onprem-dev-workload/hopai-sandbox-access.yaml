@@ -1,0 +1,38 @@
+# Identity of hopai (the AI planner's rehearsal runner) in the on-prem k3s
+# cluster (the laptop's WSL2 k3s), so a plan to onprem can be rehearsed there
+# (infra ADR 0099). hopai makes and deletes sandbox namespaces with their Role,
+# ServiceAccount, NetworkPolicy, quota and CNPG Cluster, issues one-hour tokens
+# and port-forwards to the sandbox database, so this account is cluster-admin,
+# like the sandbox-admin kubeconfigs of eks and gke (/hopcharlie/hopai/kube-*).
+#
+# An operator applies this file by hand on the laptop, then stores a kubeconfig
+# with the token below in SSM /hopcharlie/hopai/kube-onprem. The kubeconfig is
+# /hopcharlie/kube/onprem (same server, CA and tls-server-name) with the user
+# token replaced; see ADR 0099 for the commands. Argo CD does not manage it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hopai-sandbox-admin
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hopai-sandbox-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: hopai-sandbox-admin
+    namespace: kube-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hopai-sandbox-admin-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: hopai-sandbox-admin
+type: kubernetes.io/service-account-token

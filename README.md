@@ -629,6 +629,7 @@ GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `dep
 | [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
 | [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
 | [clusters/onprem-dev-workload/hopcharlie-platform-access.yaml](clusters/onprem-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 onprem(노트북 WSL k3s)에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(GKE와 같은 규칙) |
+| [clusters/onprem-dev-workload/hopai-sandbox-access.yaml](clusters/onprem-dev-workload/hopai-sandbox-access.yaml) | hopai가 onprem(노트북 WSL k3s)에서 리허설 샌드박스를 만들 때 쓰는 cluster-admin ServiceAccount와 토큰(ADR 0099, 손으로 적용) |
 | [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
 | [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
 | [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
@@ -1120,6 +1121,7 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [clusters/aws-dev-management/values/observability-onprem-query-transport.yaml](clusters/aws-dev-management/values/observability-onprem-query-transport.yaml)
 - [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
 - [docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md](docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md)
+- [docs/adr/0099-hopai-onprem-rehearsal-target.md](docs/adr/0099-hopai-onprem-rehearsal-target.md)
 
 - [docs/operations/onprem-observability-live-check.json](docs/operations/onprem-observability-live-check.json)
 
