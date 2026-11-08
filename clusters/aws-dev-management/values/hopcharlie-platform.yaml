@@ -28,6 +28,9 @@
     "appFiles": {
       "enabled": true
     },
+    "onboarding": {
+      "enabled": true
+    },
     "parity": {
       "enabled": true,
       "config": {
