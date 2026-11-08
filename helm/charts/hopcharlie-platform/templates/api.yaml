@@ -76,7 +76,7 @@ spec:
       {{- include "hopcharlie.labels" "api" | nindent 6 }}
   template:
     metadata:
-        {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled .Values.hopai.enabled }}
+        {{- if or .Values.api.parity.enabled (.Values.api.onpremRegistration | default dict).enabled .Values.hopai.enabled (.Values.api.langfuse | default dict).enabled }}
       annotations:
         {{- if .Values.api.parity.enabled }}
         checksum/parity: {{ toJson .Values.api.parity.config | sha256sum }}
@@ -87,6 +87,10 @@ spec:
         {{- if .Values.hopai.enabled }}
         # The API copies this Job template at boot; a ConfigMap update alone is not enough.
         checksum/hopai: {{ include (print $.Template.BasePath "/hopai.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if (.Values.api.langfuse | default dict).enabled }}
+        # App bindings and project key files are read once at API startup.
+        checksum/langfuse: {{ include "hopcharlie.langfuseConfig" . | sha256sum }}
         {{- end }}
       {{- end }}
       labels:
@@ -116,6 +120,9 @@ spec:
               exec hopcharlie-api -addr :8080 -state-dir /data/runs
           env:
             - {name: PLATFORM_ENVS_FILE, value: /config/envs.yaml}
+            {{- if (.Values.api.langfuse | default dict).enabled }}
+            - {name: PLATFORM_LANGFUSE_CONFIG, value: /etc/langfuse/config.json}
+            {{- end }}
             {{- if (.Values.api.onpremRegistration | default dict).enabled }}
             - {name: PLATFORM_ONPREM_REGISTRATION, value: "1"}
             - {name: PLATFORM_ONPREM_PROFILE_FILE, value: /etc/onprem/profile.json}
@@ -247,6 +254,12 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: settings, mountPath: /config, readOnly: true}
+            {{- if (.Values.api.langfuse | default dict).enabled }}
+            - {name: langfuse-config, mountPath: /etc/langfuse, readOnly: true}
+            {{- range $app, $binding := .Values.api.langfuse.apps }}
+            - {name: langfuse-auth-{{ $app | sha256sum | trunc 12 }}, mountPath: {{ printf "/var/run/langfuse/%s" $app | quote }}, readOnly: true}
+            {{- end }}
+            {{- end }}
             {{- if (.Values.api.onpremRegistration | default dict).enabled }}
             - {name: onprem-profile, mountPath: /etc/onprem, readOnly: true}
             {{- end }}
@@ -264,6 +277,19 @@ spec:
             {{- end }}
       volumes:
         {{- include "hopcharlie.settingsVolumes" . | nindent 8 }}
+        {{- if (.Values.api.langfuse | default dict).enabled }}
+        - name: langfuse-config
+          configMap: {name: hopcharlie-langfuse-reader}
+        {{- range $app, $binding := .Values.api.langfuse.apps }}
+        - name: langfuse-auth-{{ $app | sha256sum | trunc 12 }}
+          secret:
+            secretName: {{ $binding.secretName | quote }}
+            defaultMode: 0440
+            items:
+              - {key: public-key, path: public-key}
+              - {key: secret-key, path: secret-key}
+        {{- end }}
+        {{- end }}
         {{- if (.Values.api.onpremRegistration | default dict).enabled }}
         - name: onprem-profile
           configMap: {name: hopcharlie-onprem-profile}

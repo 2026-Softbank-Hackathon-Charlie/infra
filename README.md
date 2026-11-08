@@ -1099,3 +1099,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 | [scripts/tests/test-gpu-canary-activation.py](scripts/tests/test-gpu-canary-activation.py) | 정책·비밀·라우팅·영속 상태 경계 회귀 검사 |
 | [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
 | [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
+
+- [helm/charts/hopcharlie-platform/templates/langfuse-reader.yaml](helm/charts/hopcharlie-platform/templates/langfuse-reader.yaml) — 앱 전용 Langfuse 조회의 공개 binding과 Secret 파일 참조
+- [scripts/tests/test-app-langfuse-reader.py](scripts/tests/test-app-langfuse-reader.py) — API-only 키 mount·checksum·한정 egress·default off 렌더 검증
+- [docs/adr/0095-connect-app-langfuse-reader-with-mounted-project-keys.md](docs/adr/0095-connect-app-langfuse-reader-with-mounted-project-keys.md) — 앱 전용 프로젝트를 API의 mounted 키로 조회하는 결정
+- [docs/runbooks/app-langfuse-reader.md](docs/runbooks/app-langfuse-reader.md) — 실제 적용·수신 확인·복구·키 회전 절차

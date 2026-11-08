@@ -164,6 +164,17 @@
       "user": "app",
       "table": "default.otel_logs"
     },
+    "langfuse": {
+      "enabled": true,
+      "baseUrl": "http://langfuse-web.langfuse.svc.cluster.local:3000",
+      "apps": {
+        "moimroom-mig": {
+          "projectId": "cmw76sgdx000bzk08z3ez9xsq",
+          "metadataKey": "hopcharlie.app",
+          "secretName": "moimroom-mig-langfuse-reader"
+        }
+      }
+    },
     "onpremRegistration": {
       "enabled": false,
       "tailnetDomain": "tail567fe8.ts.net",
