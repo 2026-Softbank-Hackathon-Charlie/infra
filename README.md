@@ -852,6 +852,10 @@ state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 �
 
 ## ClickStack 관측 구성
 
+- [docs/adr/0096-forward-app-llm-traces-through-central-collector.md](docs/adr/0096-forward-app-llm-traces-through-central-collector.md)
+- [helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml](helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml)
+- [clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml)
+
 해커톤 구현 기준과 실제 배포 전 검토는 ADR0050과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
 
 | 파일 | 역할 |

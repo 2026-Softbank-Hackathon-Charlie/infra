@@ -21,6 +21,10 @@ spec:
       labels: {app.kubernetes.io/name: clickstack-collector}
       annotations:
         checksum/config: {{ .Values.global.otelCollector.customConfig | sha256sum }}
+        {{- if .Values.langfuse.enabled }}
+        checksum/langfuse: {{ toJson .Values.langfuse | sha256sum }}
+        checksum/langfuse-config: {{ include "clickstack.collectorConfig" . | sha256sum }}
+        {{- end }}
     spec:
       serviceAccountName: clickstack-collector
       automountServiceAccountToken: false
@@ -52,6 +56,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.existingSecrets.collector | quote }}
                   key: OTLP_AUTH_TOKEN
+            {{- if .Values.langfuse.enabled }}
+            - name: LANGFUSE_APP_AUTHORIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "langfuse.existingSecret is required" .Values.langfuse.existingSecret | quote }}
+                  key: authorization
+            {{- end }}
             {{- range $i, $key := .Values.additionalIngestTokenKeys }}
             - name: OTLP_EXTRA_TOKEN_{{ $i }}
               valueFrom:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline Helm contracts plus pinned operator/OTel integration when cached charts are supplied."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -98,6 +99,85 @@ class ClickStackTests(unittest.TestCase):
         enabled = copy.deepcopy(fixture)
         enabled['observability'] = {'enabled': True, 'agentTargets': ['management', 'workload'], 'gatewayTargets': ['management', 'workload']}
         cls.gitops = render(ROOT / 'helm/gitops', values=enabled)
+
+    def test_langfuse_default_off(self):
+        config = yaml.safe_load(next(d for d in self.docs if d['kind'] == 'ConfigMap' and d['metadata']['name'] == 'clickstack-otel-custom-config')['data']['custom.config.yaml'])
+        self.assertNotIn('traces/langfuse-app', config['service']['pipelines'])
+        self.assertNotIn('otlphttp/langfuse-app', config['exporters'])
+        self.assertNotIn('LANGFUSE_APP_AUTHORIZATION', yaml.safe_dump(self.docs))
+
+    def test_langfuse_exact_identity_and_private_attributes(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        docs = render(ROOT / 'helm/charts/clickstack', values=values)
+        config = yaml.safe_load(next(d for d in docs if d['kind'] == 'ConfigMap' and d['metadata']['name'] == 'clickstack-otel-custom-config')['data']['custom.config.yaml'])
+        original = yaml.safe_load(next(d for d in self.docs if d['kind'] == 'ConfigMap' and d['metadata']['name'] == 'clickstack-otel-custom-config')['data']['custom.config.yaml'])
+        for name in ('traces', 'logs'):
+            self.assertEqual(config['service']['pipelines'][name], original['service']['pipelines'][name])
+        pipeline = config['service']['pipelines']['traces/langfuse-app']
+        self.assertEqual(pipeline['receivers'], ['otlp/hyperdx'])
+        self.assertEqual(pipeline['exporters'], ['otlphttp/langfuse-app'])
+        self.assertEqual(config['processors']['filter/langfuse-app'], {'error_mode': 'propagate', 'traces': {'span': ['resource.attributes["k8s.namespace.name"] != "moimroom-mig" or resource.attributes["service.name"] != "moimroom-mig-web"']}})
+        privacy = config['processors']['transform/langfuse-private']
+        self.assertEqual(privacy['error_mode'], 'propagate')
+        statement = privacy['trace_statements'][0]['statements'][0]
+        allowed = json.loads(statement.removeprefix('keep_keys(attributes, ').removesuffix(')'))
+        self.assertIn('langfuse.observation.metadata.hopcharlie.app', allowed)
+        self.assertIn('gen_ai.usage.output_tokens', allowed)
+        for key in ('langfuse.observation.input', 'langfuse.observation.output', 'http.url', 'http.request.header.authorization', 'gen_ai.prompt', 'gen_ai.completion'):
+            self.assertNotIn(key, allowed)
+        self.assertIn('set(status.message, "")', privacy['trace_statements'][0]['statements'])
+        for statement in ('set(events, nil)', 'set(links, nil)', 'set(trace_state, "")', 'set(name, "moimroom-request")', 'set(instrumentation_scope.name, "hopcharlie.app.llm")', 'keep_keys(instrumentation_scope.attributes, [])'):
+            self.assertIn(statement, privacy['trace_statements'][0]['statements'])
+        exporter = config['exporters']['otlphttp/langfuse-app']
+        self.assertEqual(exporter['traces_endpoint'], 'http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel/v1/traces')
+        self.assertEqual(exporter['headers']['Authorization'], '${env:LANGFUSE_APP_AUTHORIZATION}')
+        self.assertEqual(exporter['sending_queue']['storage'], 'file_storage/queue')
+        self.assertEqual(exporter['retry_on_failure']['max_elapsed_time'], '60s')
+
+    def test_langfuse_secret_and_egress_scope(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        docs = render(ROOT / 'helm/charts/clickstack', values=values)
+        collector = next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == 'clickstack-otel-collector')
+        env = {e['name']: e for e in collector['spec']['template']['spec']['containers'][0]['env']}
+        self.assertEqual(env['LANGFUSE_APP_AUTHORIZATION']['valueFrom']['secretKeyRef'], {'name': 'moimroom-mig-langfuse-exporter-auth', 'key': 'authorization'})
+        self.assertIn('checksum/langfuse', collector['spec']['template']['metadata']['annotations'])
+        content = next(d for d in docs if d['kind'] == 'ConfigMap' and d['metadata']['name'] == 'clickstack-otel-custom-config')['data']['custom.config.yaml'].rstrip('\n')
+        self.assertEqual(collector['spec']['template']['metadata']['annotations']['checksum/langfuse-config'], hashlib.sha256(content.encode()).hexdigest())
+        for d in docs:
+            if d['kind'] == 'Deployment' and d['metadata']['name'] != 'clickstack-otel-collector':
+                self.assertNotIn('LANGFUSE_APP_AUTHORIZATION', yaml.safe_dump(d))
+        policy = next(d for d in docs if d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'clickstack-langfuse-egress')['spec']
+        self.assertEqual(policy['podSelector'], {'matchLabels': {'app.kubernetes.io/name': 'clickstack-collector'}})
+        self.assertEqual(policy['egress'][0]['ports'], [{'protocol': 'TCP', 'port': 3000}])
+        self.assertEqual(policy['egress'][0]['to'][0]['namespaceSelector']['matchLabels'], {'kubernetes.io/metadata.name': 'langfuse'})
+        self.assertEqual(policy['egress'][0]['to'][0]['podSelector']['matchLabels'], {'app.kubernetes.io/name': 'langfuse', 'app.kubernetes.io/instance': 'langfuse', 'app.kubernetes.io/component': 'web'})
+
+    def test_langfuse_invalid_identity_rejected(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        for field in ('namespace', 'serviceName'):
+            for invalid in ('', 'moimroom-mig" or true', 'other/app'):
+                with self.subTest(field=field, invalid=invalid):
+                    changed = copy.deepcopy(values)
+                    changed['langfuse'][field] = invalid
+                    with self.assertRaises(ValueError):
+                        render(ROOT / 'helm/charts/clickstack', values=changed)
+
+    def test_langfuse_config_content_changes_rollout_checksum(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        original = render(ROOT / 'helm/charts/clickstack', values=values)
+        # Keep all values identical while changing only the rendered transform template.
+        with tempfile.TemporaryDirectory() as tmp:
+            import shutil
+            chart = Path(tmp) / 'chart'
+            shutil.copytree(ROOT / 'helm/charts/clickstack', chart)
+            config = chart / 'templates/otel-collector/custom-config.yaml'
+            text = config.read_text()
+            self.assertIn('moimroom-generation', text)
+            config.write_text(text.replace('moimroom-generation', 'moimroom-generation-revision'))
+            changed = render(chart, values=values)
+        def checksum(docs):
+            return next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == 'clickstack-otel-collector')['spec']['template']['metadata']['annotations']['checksum/langfuse-config']
+        self.assertNotEqual(checksum(original), checksum(changed))
 
     def test_no_secret_material_in_render(self):
         self.assertNotIn('Secret', self.by_kind)

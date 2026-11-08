@@ -582,5 +582,11 @@
     "enabled": false,
     "privateSubnets": [],
     "sourceRanges": []
+  },
+  "langfuse": {
+    "enabled": false,
+    "namespace": "",
+    "serviceName": "",
+    "existingSecret": ""
   }
 }
