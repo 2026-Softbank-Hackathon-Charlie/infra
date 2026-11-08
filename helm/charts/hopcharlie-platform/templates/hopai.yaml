@@ -52,6 +52,9 @@ data:
     if [ "${KIND:-}" != recommend ]; then
       get hopai/kube-eks > /config/eks.yaml
       get hopai/kube-gke > /config/gke.yaml
+      # The laptop k3s (onprem) is optional: without its parameter hopai has
+      # no onprem environment and a run to onprem stops (infra ADR 0099).
+      if v="$(get hopai/kube-onprem 2>/dev/null)"; then printf '%s\n' "$v" > /config/onprem.yaml; fi
     fi
     key="$(get hopai/anthropic-api-key)"
     # the first agent entry of name:role:token,... (the token may contain ':')
@@ -123,8 +126,9 @@ data:
                   # The contract PR of an onboarding: hopai reads ONBOARDING, REPO,
                   # BRANCH, FACTS_FILE and CHECK_LOG_FILE (/onboarding) itself.
                   if [ "${KIND:-}" = onboard ]; then exec hopai onboard; fi
-                  exec hopai run -app "$APP" -from "$FROM" -to "$TO" \
-                    -env gke=/config/gke.yaml -env eks=/config/eks.yaml \
+                  envs="-env gke=/config/gke.yaml -env eks=/config/eks.yaml"
+                  if [ -s /config/onprem.yaml ]; then envs="$envs -env onprem=/config/onprem.yaml"; fi
+                  exec hopai run -app "$APP" -from "$FROM" -to "$TO" $envs \
                     -sandbox-kubeconfig "/config/$TO.yaml" \
                     -max-runs {{ .Values.hopai.maxRuns }} -out /work/report.json
               env:
@@ -204,4 +208,25 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "hopcharlie.apiServiceAccount" . }}
     namespace: {{ .Release.Namespace }}
+---
+# hopai reaches the laptop k3s API only through its Tailscale egress proxy
+# k3s-onprem-api (port 6443); application-boundary allows only 443 out
+# (infra ADR 0099).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hopcharlie-hopai-onprem-api
+  labels:
+    {{- include "hopcharlie.labels" "hopai" | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: hopcharlie
+      app.kubernetes.io/component: hopai
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: hopcharlie-db-network}}
+          podSelector: {matchLabels: {tailscale.com/parent-resource: k3s-onprem-api}}
+      ports: [{protocol: TCP, port: 6443}]
 {{- end }}

@@ -130,7 +130,7 @@ printf '%s\\n' "$@" > "$COMMAND_LOG"
             with self.subTest(kind=kind):
                 code, calls, files, command = self.execute(kind)
                 self.assertEqual(code, 0)
-                self.assertEqual(calls, ["/fixture/hopai/kube-eks", "/fixture/hopai/kube-gke",
+                self.assertEqual(calls, ["/fixture/hopai/kube-eks", "/fixture/hopai/kube-gke", "/fixture/hopai/kube-onprem",
                     "/fixture/hopai/anthropic-api-key", "/fixture/platform-tokens"])
                 self.assertEqual(files, {"eks.yaml", "gke.yaml", "hopai.env"})
                 self.assertEqual(command if kind else command[:1], ["onboard"] if kind else ["run"])
