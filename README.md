@@ -1094,4 +1094,8 @@ DB network and temporary-access code; disabled examples require separate deploym
 - [docs/adr/0093-explicit-onprem-collector-installation.md](docs/adr/0093-explicit-onprem-collector-installation.md)
 - [docs/runbooks/hopai-langfuse.md](docs/runbooks/hopai-langfuse.md) — 실제 hopai 자동 계측 검증 결과, 활성화 관문과 미완료 사항
 
-- [hopai Langfuse ??? ?????](docs/runbooks/hopai-langfuse-live-check.json)
+- [hopai Langfuse 실제 수신 검증 기록](docs/runbooks/hopai-langfuse-live-check.json)
+| [scripts/render-gpu-canary-activation.py](scripts/render-gpu-canary-activation.py) | 전용 GPU 품질 카나리의 source-only 활성화 렌더러 |
+| [scripts/tests/test-gpu-canary-activation.py](scripts/tests/test-gpu-canary-activation.py) | 정책·비밀·라우팅·영속 상태 경계 회귀 검사 |
+| [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
+| [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
