@@ -201,7 +201,7 @@ spec:
         matchLabels:
           app.kubernetes.io/name: langfuse
           app.kubernetes.io/instance: langfuse
-          app.kubernetes.io/component: web
+          app: web
     ports:
     - protocol: TCP
       port: 3000
