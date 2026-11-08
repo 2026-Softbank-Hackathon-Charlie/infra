@@ -1,7 +1,7 @@
 # 0098. AWS workload 플랫폼 메트릭 수집 확장
 
 - 날짜: 2026-11-08
-- 상태: 채택 — 독립 계획 리뷰 후 사용자 구현·병합·실제 배포·검증·해당 변경 복구 승인. 배포 결과는 운영 안내에 별도 기록한다.
+- 상태: 채택 — 독립 리뷰 및 사용자 실행 승인 후 PR188 배포 완료. 인증된 실제 HyperDX 조회까지 검증했으며 결과는 운영 안내에 기록한다.
 - 관련 ADR: [0062 자동 관측](0062-automatically-observe-platform-workloads.md), [0050 ClickStack](0050-adopt-clickstack-for-hackathon-observability.md)
 
 ## 배경과 제약
@@ -42,3 +42,5 @@ GKE Source 누락은 기존 team/connection에 promql Source 한 개만 조건�
 - [AWS metrics RBAC](../../helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml)
 - [운영 안내](../operations/automatic-workload-observability.md)
 - [Kubelet 인증·인가](https://kubernetes.io/docs/reference/access-authn-authz/kubelet-authn-authz/)
+
+2026-11-08 적용 결과: AWS 15/15 대상 up·노드 3개·컨테이너 CPU/메모리·기존 CNPG up=1, GKE Source 등록과 보호 API 조회를 확인했다. 기존 두 Argo 앱은 Synced/Healthy이며 수집기·Prometheus 재시작은 0이다. 승인 범위 밖 변경이나 복구 실행은 없었다.

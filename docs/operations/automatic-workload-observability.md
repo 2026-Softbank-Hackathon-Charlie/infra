@@ -95,4 +95,26 @@ boundary의 awsPlatformMetrics는 기본 false이며 AWS workload만 true다. �
 
 HyperDX 메트릭 탐색에서 AWS는 기존 Workload CNPG Metrics Source를 선택한다(이름은 보존). 노드는 `count(kube_node_info)`, CPU는 `sum(rate(container_cpu_usage_seconds_total{container!="",container!="POD"}[5m])) by (namespace,pod)`, 메모리는 `sum(container_memory_working_set_bytes{container!="",container!="POD"}) by (namespace,pod)`로 확인한다. 노드 메모리는 `node_memory_MemAvailable_bytes`, DB는 `cnpg_collector_up{namespace="moimroom-mig"}`다. GKE는 기존 GKE Prometheus connection에 연결한 동일 이름 Source를 사용한다.
 
-배포 결과와 실제 쿼리 검증은 완료 후 기록한다. HTTP200만으로 수집 성공으로 판단하지 않고, 예상 시계열 존재·최근 sample 시각·range point·기존 CNPG up을 확인한다. 보호된 HyperDX API는 기존 계정의 정상 비노출 로그인으로 검증하며 비밀번호·cookie·연결 credential을 결과 파일에 남기지 않는다.
+배포 결과와 실제 쿼리 검증은 아래 적용 기록을 따른다. HTTP200만으로 수집 성공으로 판단하지 않고, 예상 시계열 존재·최근 sample 시각·range point·기존 CNPG up을 확인한다. 보호된 HyperDX API는 기존 계정의 정상 비노출 로그인으로 검증하며 비밀번호·cookie·연결 credential을 결과 파일에 남기지 않는다.
+
+### 적용·검증 결과
+
+사용자가 최종 계획과 구현·PR 병합·실제 배포·검증·해당 변경 복구 범위를 승인했다. [PR188](https://github.com/2026-Softbank-Hackathon-Charlie/infra/pull/188), 병합 커밋 `124c754e187e2c938aa5b5714121c30cf05fb58a`를 기존 두 Argo 앱에 적용했다. RBAC 4개를 먼저, KPS의 정확한 변경 자원 10개를 뒤에 선택 sync했으며 전체 sync/prune은 수행하지 않았다. 두 앱 모두 Synced/Healthy이고 각 선택 operation은 Succeeded다.
+
+| 확인 대상 | 실제 결과 |
+| --- | --- |
+| 관리 Prometheus | 27/27 대상 up, 노드 4개, CPU·메모리 집계 및 range 정상 |
+| AWS workload | 15/15 대상 up, 노드 3개, CPU·메모리 집계 및 range 정상 |
+| GKE | 14/14 대상 up, 노드 3개, CPU·메모리 집계 및 range 정상 |
+| 기존 CNPG | AWS/GKE 모두 min(cnpg_collector_up)=1 |
+| AWS namespace/pod 메모리 집계 | 50개 Pod 반환 |
+| AWS sample freshness | 인증된 HyperDX 조회 시 kube_node_info 약 3.5초 |
+| 새 수집기 | KSM 1개, node-exporter 3개 Ready, 재시작 0 |
+| 기존 관측 Pod | operator/Prometheus Ready, 재시작 0 |
+| Prometheus 저장·자원 | PVC Bound/10Gi 유지, 사용률 약 0.26%, RSS 약 164MiB/제한 1Gi |
+
+동일 HyperDX Pod 네트워크·기존 인증·검증된 CA로 실행한 curl 45건이 통과했다. 사용자 터미널에서 기존 계정으로 정상 로그인한 HyperDX 보호 API의 PromQL instant/range 30건도 모두 HTTP200/status=success였으며 예상 시계열·노드 수·최신 sample·CNPG·range point를 검사했다. 빈 결과가 정상인 관리 클러스터의 moimroom CNPG는 workload/GKE 성공과 구별했다. 실제 보호 GET /sources에서 Logs/Traces 필드와 GKE Source 존재·정확한 connection 연결도 확인했다. UI 화면을 확인했다는 의미는 아니다.
+
+GKE Source는 기존 team/connection에 한 개만 생성했으며 기존 Source 문서 digest가 유지됐다. 비밀번호·cookie·연결 credential은 결과 파일에 저장하지 않았고 정상 로그인 검증 종료 시 로그아웃했다. 기존 DB/앱/IAM/네트워크 정책/인증/스토리지 용량 변경은 없었다. 새 권한의 양성·음성 검사 14개와 실제 자원 14개의 UID/Argo 소유권 기록도 완료했다.
+
+계획 대비 범위·설계 변경은 없다. 독립적인 GKE Source 등록은 AWS CI 대기 중 먼저 처리했다. 일회성 검증 기록은 실행 호스트 `/private/tmp/hyperdx-metrics-check/`의 `authenticated-hyperdx-curl-proof.json`, `backend-curl-proof.json`, `storage-curl-proof.json`, `health-proof.json`, `rbac-proof.json`, `created-resources.json`에 있으며 영구 보존 저장소로 간주하지 않는다. 이후 메트릭은 신규 수집 시작 이후 구간만 존재한다.
