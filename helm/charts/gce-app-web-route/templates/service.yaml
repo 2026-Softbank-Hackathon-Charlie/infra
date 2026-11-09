@@ -1,0 +1,18 @@
+{{- if ne .Release.Namespace "hopcharlie-db-network" }}{{ fail "web routes belong in hopcharlie-db-network" }}{{ end }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$" .Values.namespace) }}{{ fail "namespace must be a DNS label of at most 48 characters" }}{{ end }}
+{{- if not (regexMatch "^[a-z0-9-]+\\.tail[a-z0-9]+\\.ts\\.net$" .Values.targetFQDN) }}{{ fail "an explicit tailnet FQDN is required" }}{{ end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "app-onprem-gce-%s" .Values.namespace }}
+  labels:
+    charlie.dev/workload-target: onprem-gce
+    charlie.dev/gce-app-namespace: {{ .Values.namespace | quote }}
+  annotations:
+    tailscale.com/tailnet-fqdn: {{ .Values.targetFQDN | quote }}
+    tailscale.com/proxy-class: hopcharlie-gce-web-egress
+spec:
+  type: ExternalName
+  externalName: placeholder
+  ports:
+    - {name: http, protocol: TCP, port: 80}

@@ -40,6 +40,7 @@ tf-apply:
 helm-check:
 	@PYTHON="$(PYTHON)" bash scripts/helm-check.sh
 ci-test:
+	@$(PYTHON) scripts/tests/test-gce-web-route.py
 	@$(PYTHON) scripts/tests/test-gce-storage-settings.py
 	@$(PYTHON) scripts/test-cnpg-migration-admission.py --check-only
 	@$(PYTHON) scripts/tests/test-project-config.py

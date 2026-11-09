@@ -1,8 +1,8 @@
 {
   "vpcCidr": "10.40.0.0/16",
   "images": {
-    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:6e205cf-minio@sha256:1436ea75d1e178097ab06615c98ec9f40f9fdf950467a460d670acb12146a5d0",
-    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:37dd14c@sha256:b96c36f659930b0ce6fd076174e2c41af701558e30bbf2f3a7d516c6c50b21f2",
+    "platform": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:1294382-minio@sha256:060544768d7db8c20162a859a27b2357ee46be75598809d5237adc39a650fd39",
+    "console": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/console:1e61460@sha256:d96d66823633fcbd5f1ca6ae3fce11d73d506212bca290a5ae4d5e3619ae7bfe",
     "postgres": "docker.io/library/postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "awsCli": "public.ecr.aws/aws-cli/aws-cli:2.31.0@sha256:cd2b1ed9b2181b2b8341f6584ec019b117cc13d3ec142a244d8908e1bb8ea487"
   },
@@ -250,7 +250,7 @@
   },
   "deploy": {
     "builder": "codebuild",
-    "backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local",
+    "backendTemplates": "eks=http://{instance}.eks.hopcharlie.internal,onprem=http://app-onprem-{instance}.hopcharlie-db-network.svc.cluster.local,onprem-gce=http://app-onprem-gce-{instance}.hopcharlie-db-network.svc.cluster.local",
     "codebuildProject": "hopcharlie-app-build",
     "imageRegistry": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com",
     "gkeImageRegistry": "asia-northeast3-docker.pkg.dev/project-b47cdba3-db5b-42a2-9a6/hopcharlie-apps",
@@ -268,7 +268,7 @@
   },
   "hopai": {
     "enabled": true,
-    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4@sha256:db870c26b9564a231634bdea5f6b7ced7f860900f85b6b947239be0a9b19b87b",
+    "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/hopai:aa8d4f4-git@sha256:e0f5ee3a48802195b1d2ac2f3266d71bdfea031de743d91696c058afb8bb14e0",
     "langfuse": {
       "enabled": true
     }

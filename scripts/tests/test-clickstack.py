@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import tempfile
 import unittest
@@ -148,9 +149,11 @@ class ClickStackTests(unittest.TestCase):
                 self.assertNotIn('LANGFUSE_APP_AUTHORIZATION', yaml.safe_dump(d))
         policy = next(d for d in docs if d['kind'] == 'NetworkPolicy' and d['metadata']['name'] == 'clickstack-langfuse-egress')['spec']
         self.assertEqual(policy['podSelector'], {'matchLabels': {'app.kubernetes.io/name': 'clickstack-collector'}})
-        self.assertEqual(policy['egress'][0]['ports'], [{'protocol': 'TCP', 'port': 3000}])
-        self.assertEqual(policy['egress'][0]['to'][0]['namespaceSelector']['matchLabels'], {'kubernetes.io/metadata.name': 'langfuse'})
-        self.assertEqual(policy['egress'][0]['to'][0]['podSelector']['matchLabels'], {'app.kubernetes.io/name': 'langfuse', 'app.kubernetes.io/instance': 'langfuse', 'app.kubernetes.io/component': 'web'})
+        self.assertEqual(policy['egress'], [
+            {'to': [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'kube-system'}}, 'podSelector': {'matchLabels': {'k8s-app': 'kube-dns'}}}], 'ports': [{'protocol': 'UDP', 'port': 53}, {'protocol': 'TCP', 'port': 53}]},
+            {'to': [{'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'clickhouse-server'}}}], 'ports': [{'protocol': 'TCP', 'port': 9000}]},
+            {'to': [{'ipBlock': {'cidr': '172.20.238.122/32'}}, {'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'langfuse'}}, 'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'langfuse', 'app.kubernetes.io/instance': 'langfuse', 'app.kubernetes.io/component': 'web'}}}], 'ports': [{'protocol': 'TCP', 'port': 3000}]},
+        ])
 
     def test_langfuse_invalid_identity_rejected(self):
         values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
@@ -178,6 +181,38 @@ class ClickStackTests(unittest.TestCase):
         def checksum(docs):
             return next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == 'clickstack-otel-collector')['spec']['template']['metadata']['annotations']['checksum/langfuse-config']
         self.assertNotEqual(checksum(original), checksum(changed))
+
+    def test_langfuse_service_ip_rejects_subnets_and_invalid_values(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        for invalid in ('0.0.0.0/0', '172.20.0.0/16', '256.20.1.1', 'localhost', '172.20.1.1"', '8.8.8.8', '127.0.0.1'):
+            with self.subTest(ip=invalid):
+                changed = copy.deepcopy(values)
+                changed['langfuse']['serviceClusterIP'] = invalid
+                with self.assertRaises(ValueError):
+                    render(ROOT / 'helm/charts/clickstack', values=changed)
+
+    def test_langfuse_service_binding_fails_closed(self):
+        check = runpy.run_path(str(ROOT / 'scripts/check-langfuse-service-binding.py'))['check_binding']
+        config = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())['langfuse']
+        service = {'metadata': {'name': 'langfuse-web', 'namespace': 'langfuse', 'uid': config['serviceUID']}, 'spec': {'clusterIP': config['serviceClusterIP'], 'selector': {'app.kubernetes.io/name': 'langfuse', 'app.kubernetes.io/instance': 'langfuse', 'app': 'web'}, 'ports': [{'port': 3000, 'protocol': 'TCP'}]}}
+        self.assertTrue(check(config, service)['matched'])
+        for target, field, value in [('metadata', 'uid', 'different'), ('metadata', 'namespace', 'other'), ('spec', 'clusterIP', '172.20.1.1'), ('spec', 'selector', {}), ('spec', 'ports', [{'port': 443}])]:
+            changed = copy.deepcopy(service)
+            changed[target][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                check(config, changed)
+
+    def test_langfuse_policy_binding_does_not_restart_collector(self):
+        values = json.loads((ROOT / 'clusters/aws-dev-management/values/clickstack.yaml').read_text())
+        original = render(ROOT / 'helm/charts/clickstack', values=values)
+        changed = copy.deepcopy(values)
+        changed['langfuse']['serviceClusterIP'] = '172.20.1.1'
+        changed['langfuse']['serviceUID'] = '00000000-0000-0000-0000-000000000001'
+        updated = render(ROOT / 'helm/charts/clickstack', values=changed)
+        for kind, name in [('Deployment', 'clickstack-otel-collector'), ('ConfigMap', 'clickstack-otel-custom-config')]:
+            before = next(d for d in original if d['kind'] == kind and d['metadata']['name'] == name)
+            after = next(d for d in updated if d['kind'] == kind and d['metadata']['name'] == name)
+            self.assertEqual(before, after)
 
     def test_no_secret_material_in_render(self):
         self.assertNotIn('Secret', self.by_kind)
@@ -288,6 +323,16 @@ class ClickStackTests(unittest.TestCase):
         self.assertEqual({s['kind'] for s in sources}, {'log', 'trace', 'promql'})
         self.assertEqual(sources[0]['traceSourceId'], sources[1]['name'])
         self.assertEqual(sources[1]['logSourceId'], sources[0]['name'])
+        # HyperDX 2.39.1 requires a nonempty default table projection for both
+        # log and trace sources; a missing value triggers a UI validation warning.
+        defaults = {
+            'log': 'Timestamp,ServiceName,SeverityText,Body',
+            'trace': 'Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName',
+        }
+        for source in sources:
+            if source['kind'] in defaults:
+                self.assertEqual(source.get('defaultTableSelectExpression'), defaults[source['kind']])
+
 
     def test_smoke_payloads_are_correlated_and_sending_is_guarded(self):
         import importlib.util

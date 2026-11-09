@@ -31,6 +31,16 @@ collector는 Langfuse 분기에서 span/resource 속성을 허용 목록으로 �
 
 실제 운영 collector 바이너리로 렌더된 새 설정의 `validate`를 실행해 exit0을 확인했다. 이는 설정 수용의 증거이며 실제 앱 요청의 수신·전달 성공은 별도 확인한다. 로컬 단위 테스트는 기본 OFF, 기존 로그/trace 파이프라인 보존, 정확한 identity 필터·egress, Secret 분리, 원문 차단과 위험한 설정 거부를 검증한다. 온프레 장치가 offline이면 실제 앱 추론 관측은 확인할 수 없으며 빈 값을 0 토큰·0 비용·AI 미사용으로 바꾸지 않는다.
 
+### 최초 적용에서 드러난 회귀와 복구
+
+첫 적용의 egress 정책은 이전에 egress가 격리되지 않았던 collector를 처음 격리하면서 기존 DNS·ClickHouse9000 의존성을 누락했다. 실제 수신 시험은 HTTP200이었지만 양쪽 exporter가 전송하지 못했고, 정적 config validation만으로 이 문제를 검증할 수 없었다. DNS와 같은 namespace의 정확한 ClickHouse Pod selector/9000을 복원하자 기존 ClickHouse 큐가 재전송됐다.
+
+추가 실제 시험에서 Langfuse Pod IP HTTP GET은 성공하지만 동일 Service ClusterIP HTTP GET은 timeout이었다. 이 환경에서는 Pod selector만으로 Service 경로가 허용되지 않아 기존 Langfuse Service `172.20.238.122/32`·TCP3000을 별도로 허용한다. subnet·공용 IP는 허용하지 않는다. Pod selector도 유지한다. 이 값은 운영자 소유 `serviceClusterIP`/`serviceUID`로 기존 `langfuse/langfuse-web`의 UID `89a4cb40-56b9-4ad3-858c-cdec8c20d494`에 바인딩하며, 동기화 전에 `scripts/check-langfuse-service-binding.py --kubeconfig <management kubeconfig>`로 실제 UID/IP/selector/port를 비교한다. Service 재생성·IP 변경·조회 실패는 동기화를 막는다. 새 headless Service를 추가하는 대안 대신 기존 서비스 한 개를 정확히 바인딩했다. 이 검사는 Argo admission이 아니므로 수동 동기화 시 절차를 생략하거나 검사 후 Service가 변경되는 경합까지 막지는 못한다.
+
+정책 전용 IP/UID 변경은 collector의 설정·Pod checksum에서 제외하여 불필요한 재시작을 하지 않는다. 필터·변환·토큰·전송 설정의 실제 내용 checksum은 계속 적용한다. 복구 후 합성 4span 시험에서 정확한 앱 namespace/service의 부모+generation2개만 Langfuse에 저장됐고, 다른 namespace·service는 0개였다. 고정된 이름과 부모관계는 유지됐고 민감 표식·IO는 없었다. 원래 ClickHouse 경로에는 네 span의 원래 합성 이름이 모두 남았다. 합성 app metadata는 `langfuse-pipeline-check`이므로 실제 앱 generation 조회 대상이 아니며 모델 호출은 0회다.
+
+최초 합성 시험의 두 Langfuse 관측은 재시도 기간 뒤에도 0개였고 ClickHouse 네 span은 복구됐다. 복구 시 누적 exporter 실패 144, enqueue 실패 32를 관측했으며 02:25:30 UTC에 두 exporter 큐가 모두 0인 것을 확인했다. 지속적인 실제 수신으로 큐는 변동하며 이후 표본은 Langfuse 큐 1이었다. 이 수치는 재시도를 포함한 component counter이고 고유 유실 건수로 합산할 수 없다. 실제 로그·trace 전체가 무손실이었다고 주장하지 않는다. 실패·복구 증거는 [운영 검증 기록](../runbooks/app-langfuse-collector-recovery.json)에 보존한다.
+
 ## 관련 파일
 
 - [중앙 collector 설정](../../helm/charts/clickstack/templates/otel-collector/custom-config.yaml)

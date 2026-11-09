@@ -1,0 +1,492 @@
+{
+  "recordedAt": "2026-11-08T02:28:11.020011+00:00",
+  "scope": "actual collector transport boundary using synthetic spans, no model calls; not actual app inference or migration",
+  "sourcePR": "infra#178",
+  "initialProbeAfterCHRecovery": {
+    "checkedAt": "2026-11-08T02:24:22.838321+00:00",
+    "synthetic": true,
+    "modelCalls": 0,
+    "appMetadata": "langfuse-pipeline-check",
+    "positiveObservationCount": 0,
+    "negativeObservationCount": 0,
+    "fixedNames": [],
+    "privateMarkerPresentInLangfuseAPI": false,
+    "IOPresent": false,
+    "parentChildPreserved": false,
+    "clickHouseRows": 4,
+    "clickHouseOriginalNames": 4,
+    "rawObservationsRecorded": false,
+    "credentialValuesRecorded": false,
+    "pass": false
+  },
+  "recoveredProbe": {
+    "checkedAt": "2026-11-08T02:25:04.948977+00:00",
+    "synthetic": true,
+    "modelCalls": 0,
+    "appMetadata": "langfuse-pipeline-check",
+    "positiveObservationCount": 2,
+    "negativeObservationCount": 0,
+    "fixedNames": [
+      "moimroom-generation",
+      "moimroom-request"
+    ],
+    "privateMarkerPresentInLangfuseAPI": false,
+    "IOPresent": false,
+    "parentChildPreserved": true,
+    "clickHouseRows": 4,
+    "clickHouseOriginalNames": 4,
+    "rawObservationsRecorded": false,
+    "credentialValuesRecorded": false,
+    "pass": true
+  },
+  "runtime": {
+    "checkedAt": "2026-11-08T02:18:42.306164+00:00",
+    "argoRevision": "f83f520a1eca669e3ca3e1dd76dd8ba941727ec1",
+    "argoSync": "Synced",
+    "argoHealth": "Healthy",
+    "generation": 5,
+    "observedGeneration": 5,
+    "readyReplicas": 1,
+    "replicas": 1,
+    "strategy": "Recreate",
+    "langfusePipeline": {
+      "exporters": [
+        "otlphttp/langfuse-app"
+      ],
+      "processors": [
+        "memory_limiter/central",
+        "filter/langfuse-app",
+        "transform/langfuse-private",
+        "batch/central"
+      ],
+      "receivers": [
+        "otlp/hyperdx"
+      ]
+    },
+    "collectorImage": "docker.clickhouse.com/clickhouse/clickstack-otel-collector:2.39.1@sha256:fb71cb46bfc11413e9b96b056118f66293262579cec42927d7f1ca38d3732146",
+    "credentialRef": {
+      "secretKeyRef": {
+        "key": "authorization",
+        "name": "moimroom-mig-langfuse-exporter-auth"
+      }
+    },
+    "checksum": "7bca10bcb92f657c79fc157ef28b4da64dc2ff9a0dda7de72d7fde4423626b36",
+    "checksumMatchesConfig": true,
+    "rawConfigRecorded": false,
+    "credentialValuesRecorded": false,
+    "pods": [
+      {
+        "name": "clickstack-otel-collector-6c4c897bbc-7b2tl",
+        "checksum": "7bca10bcb92f657c79fc157ef28b4da64dc2ff9a0dda7de72d7fde4423626b36",
+        "phase": "Running",
+        "containers": [
+          {
+            "name": "collector",
+            "ready": true,
+            "restarts": 0,
+            "imageID": "docker.clickhouse.com/clickhouse/clickstack-otel-collector@sha256:fb71cb46bfc11413e9b96b056118f66293262579cec42927d7f1ca38d3732146"
+          }
+        ]
+      }
+    ],
+    "active": true
+  },
+  "validation": {
+    "checkedAt": "2026-11-08T02:16:02.496127+00:00",
+    "collectorValidationExit": 0,
+    "configSha256": "385d8e1ceebca5a212e229b8f37e704403dd73f9089af6cae6e061ea55194235",
+    "diagnosticLineCount": 0,
+    "rawDiagnosticsRecorded": false,
+    "modelCalls": 0,
+    "liveConfigChanged": false
+  },
+  "counterSnapshots": [
+    {
+      "checkedAt": "2026-11-08T02:21:30.787676+00:00",
+      "phase": "after-policy-fix",
+      "counters": [
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 256.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 158.0
+        },
+        {
+          "metric": "otelcol_exporter_send_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 78.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 410.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_receiver_accepted_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 412.0
+        },
+        {
+          "metric": "otelcol_receiver_refused_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 0.0
+        }
+      ],
+      "workloadLabelsRecorded": false
+    },
+    {
+      "checkedAt": "2026-11-08T02:24:03.314189+00:00",
+      "phase": "after-service-ip-fix",
+      "counters": [
+        {
+          "metric": "otelcol_exporter_enqueue_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 32.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 256.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 2.0
+        },
+        {
+          "metric": "otelcol_exporter_send_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 144.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 724.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 542.0
+        },
+        {
+          "metric": "otelcol_receiver_accepted_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 726.0
+        },
+        {
+          "metric": "otelcol_receiver_refused_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 0.0
+        }
+      ],
+      "workloadLabelsRecorded": false
+    },
+    {
+      "checkedAt": "2026-11-08T02:25:30.108727+00:00",
+      "phase": "recovered",
+      "counters": [
+        {
+          "metric": "otelcol_exporter_enqueue_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 32.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 256.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_send_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 144.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1051.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 871.0
+        },
+        {
+          "metric": "otelcol_receiver_accepted_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 1053.0
+        },
+        {
+          "metric": "otelcol_receiver_refused_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 0.0
+        }
+      ],
+      "workloadLabelsRecorded": false
+    },
+    {
+      "checkedAt": "2026-11-08T02:27:51.859481+00:00",
+      "phase": "final",
+      "counters": [
+        {
+          "metric": "otelcol_exporter_enqueue_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 32.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "data_type": "logs",
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "data_type": "traces",
+            "exporter": "clickhouse"
+          },
+          "value": 1000.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_capacity",
+          "component": {
+            "data_type": "traces",
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 256.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "data_type": "logs",
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "data_type": "traces",
+            "exporter": "clickhouse"
+          },
+          "value": 0.0
+        },
+        {
+          "metric": "otelcol_exporter_queue_size",
+          "component": {
+            "data_type": "traces",
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 1.0
+        },
+        {
+          "metric": "otelcol_exporter_send_failed_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 144.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "clickhouse"
+          },
+          "value": 1354.0
+        },
+        {
+          "metric": "otelcol_exporter_sent_spans",
+          "component": {
+            "exporter": "otlphttp/langfuse-app"
+          },
+          "value": 1172.0
+        },
+        {
+          "metric": "otelcol_receiver_accepted_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 1354.0
+        },
+        {
+          "metric": "otelcol_receiver_refused_spans",
+          "component": {
+            "receiver": "otlp/hyperdx"
+          },
+          "value": 0.0
+        }
+      ],
+      "workloadLabelsRecorded": false
+    }
+  ],
+  "serviceBinding": {
+    "namespace": "langfuse",
+    "name": "langfuse-web",
+    "uid": "89a4cb40-56b9-4ad3-858c-cdec8c20d494",
+    "clusterIP": "172.20.238.122",
+    "liveCheckMatched": true
+  },
+  "limits": [
+    "Initial positive synthetic observations absent from Langfuse after retry expiration; ClickHouse original four recovered",
+    "Component failed/enqueue counters include retries and cannot be summed into unique losses",
+    "No full-production no-loss claim",
+    "No raw workload traces, prompts, outputs or credentials retained",
+    "Operator Service binding checker is a pre-sync procedure, not admission; check-to-sync race remains"
+  ],
+  "initialIngressAcknowledgedButNotExported": {
+    "checkedAt": "2026-11-08T02:19:21.245088+00:00",
+    "recordedFrom": "scoped live probe tool output",
+    "http": 200,
+    "positiveObservationCount": 0,
+    "negativeObservationCount": 0,
+    "clickHouseRows": 0,
+    "modelCalls": 0,
+    "pass": false
+  }
+}

@@ -22,7 +22,7 @@ spec:
       annotations:
         checksum/config: {{ .Values.global.otelCollector.customConfig | sha256sum }}
         {{- if .Values.langfuse.enabled }}
-        checksum/langfuse: {{ toJson .Values.langfuse | sha256sum }}
+        checksum/langfuse: {{ toJson (omit .Values.langfuse "serviceClusterIP" "serviceUID") | sha256sum }}
         checksum/langfuse-config: {{ include "clickstack.collectorConfig" . | sha256sum }}
         {{- end }}
     spec:

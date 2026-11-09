@@ -40,3 +40,11 @@ python3 scripts/apply-onprem-observability.py \
 기본은 전체 server dry-run이다. 확인된 동일 명령에 `--execute`를 추가하면 직전 UID를 재검사하고 적용한다. 인증 Secret 값·API 응답·오류 본문은 출력하지 않으며 토큰 발급/복사, IAM, CRD 설치, tailnet 변경은 하지 않는다. Secret·transport가 없으면 적용 전에 실패한다. 적용 중 실패하면 일부 자원이 남을 수 있다. 무조건 재시도하거나 전체 namespace를 삭제하지 않고 정확한 자원 상태부터 확인한다.
 
 설치 뒤에는 Prometheus Ready/target up, gateway/Alloy 큐·export 실패, 합성 nonce 요청의 중앙 ClickHouse 수신을 확인한다. 앱 SDK trace와 stdout 로그, CNPG metrics를 각각 정확한 onprem identity와 최신 시간으로 조회한다. `receivingVerified=false`는 이 후속 검증을 설치 도구가 대신하지 않음을 뜻한다. 업무 원문·Secret·헤더를 증거로 저장하지 않는다. 전체 동등성 enforce는 원본·대상에서 같은 필수 신호를 확인한 다음 선택한다.
+
+## 온프레 전용 전송 경로
+
+[`observability-tailnet-policy-fragment.json`](../../clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json)을 기존 tailnet 정책에 **보존 병합**한다. 이 파일로 전체 정책을 교체하면 안 된다. tagOwners 2개와 grant 2개만 필요하다. 기존 onprem operator identity가 두 전용 태그의 소유자이며 management query는 기존 전용 query 태그를 사용한다. OAuth의 auth_keys 권한은 정책 수정 권한을 뜻하지 않는다. 실제 태그 발급이 거절되면 기존 operator OAuth의 태그 범위를 관리자가 확인한다. 정책 읽기 실패만으로 현재 규칙이 없다고 단정하지 않는다.
+
+온프레 transport는 `clusters/onprem-dev-workload/values/observability-transport.yaml`, 중앙의 query-only transport는 `clusters/aws-dev-management/values/observability-onprem-query-transport.yaml`로 렌더한다. 현재 root GitOps 자동 Application에는 넣지 않으며 승인된 관리자 명령으로 exact 자원만 dry-run/apply한다. 중앙 기존 ingress/GKE query를 생성하지 않는 회귀 테스트를 유지한다. 중앙 collector의 `clickstack-gke.yaml` 추가 키 목록은 기존 WORKLOAD/GKE와 ONPREM을 함께 보존한다. 실제 Secret 키가 먼저 준비된 상태에서 해당 ConfigMap/Deployment만 선택 sync한다.
+
+2026-11-08 재연결 후 bootstrap과 43자원 server dry-run은 완료했으나 실행 직전 재검사 중 노트북이 다시 offline이 됐다(LastSeen02:30:00.1 UTC). 현재 실제 collector 설치·중앙 수신은 미완료다. 관측 namespace·CRD·TLS Secret 준비를 실제 수신 성공으로 해석하지 않는다. 자세한 변경 범위와 증거는 ADR0097을 따른다.
