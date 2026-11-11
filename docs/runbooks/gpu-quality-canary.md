@@ -12,10 +12,12 @@
 ## 렌더·적용
 
 ```powershell
-python scripts/render-gpu-canary-activation.py --policy-file <검토한-정책.json> --output <새-활성화.yaml>
+python scripts/render-gpu-canary-activation.py --policy-file <검토한-정책.json> --langfuse-service-file <실측-Service-메타데이터.json> --output <새-활성화.yaml>
 ```
 
-이 명령은 API에 접근하지 않는다. ConfigMap1·1Gi PVC1·Deployment1·NetworkPolicy2만 출력한다. Secret·Service·IAM·RBAC는 만들지 않는다. 현재 management values의 검증된 immutable platform image를 사용한다.
+이 명령은 API에 접근하지 않는다. ConfigMap1·1Gi PVC1·Deployment1·NetworkPolicy2만 출력한다. Secret·Service·IAM·RBAC는 만들지 않는다. 현재 management values의 검증된 immutable platform image를 사용한다. Service 입력은 `namespace`, `name`, `uid`, `clusterIP`, `port`만 받는다. management의 정확한 `langfuse/langfuse-web` TCP3000와 service CIDR172.20.0.0/16 안의 한 IPv4만 허용하며 `/32`로 추가한다. 적용 전에 Service의 UID/IP/port가 입력과 같은지 다시 확인한다. 범위 전체나 임의 endpoint를 열지 않는다.
+
+현재 공개 운영 입력은 [정책](../../clusters/aws-dev-management/values/ai-quality-policy.json), [Service 메타데이터](../../clusters/aws-dev-management/values/ai-quality-langfuse-service.json), [공개 합성 평가 입력20개](../../fixtures/ai-quality/public-space20.json)다. 합성 입력은 모델에 실제 질의하기 위한 테스트 데이터이며 고정 모델 응답이나 운영 품질 점수가 아니다. 실제 응답·평가가 없으면 통과하지 않는다.
 
 운영 적용 전 확인한다:
 
@@ -34,4 +36,8 @@ python scripts/render-gpu-canary-activation.py --policy-file <검토한-정책.j
 
 ## 현재 검증 범위
 
-2026-11-08 최초 조사에서 source GCP는 건강했으나 원래 노트북 Tailscale peer가 offline이었다. 따라서 target artifact, 실제 paired 평가, 5% 트래픽은 아직 검증하지 않았다. 렌더러와 회귀 테스트 통과를 운영 활성화로 표현하지 않는다. 실제 적용 결과는 별도 실행 기록에 남긴다.
+2026-11-08 연결 복구 시 GCP·노트북 양쪽의 같은 Qwen artifact digest를 실측했다. 11:25 KST에 follower를 제거한 controller를 실제 적용했고 Ready1/PVC Bound1Gi를 확인했다. `/v1/ai/canary`는 HTTP200, target/effective0%다. source-only stage를 실제 PVC에 저장했다. legacy route 우회는 HTTP409, 관측 시간60초 뒤 평가 없는5% 전진은 HTTP412로 거부됐고 version1/0%가 유지됐다.
+
+Pod selector만 있는 Langfuse egress에서는 실제 score 조회가 timeout이었다. 실측 Service UID/IP를 확인하여 해당 VIP/32 TCP3000를 추가한 뒤 verdict가 `upstream_timeout`에서 `incomplete_scores`로 바뀌었다. 기존 Pod selector는 유지했다. 이는 Service 주소 변환·정책 집행 시점 차이와 관련된 것으로 추정하며 CNI 내부 packet trace는 수집하지 않았다.
+
+노트북 연결이 다시 끊겨 실제20개 paired 평가와5% 트래픽 전환은 수행하지 않았다. 모델/유료 judge 호출은0건이다. controller 활성화와 품질 통과·로컬 트래픽 활성화를 구분한다. 실제 적용과 gate 검증은 [적용 기록](../evidence/gpu-quality-controller-application-20261108.json), [검증 기록](../evidence/gpu-quality-controller-verification-20261108.json)에 남겼다. 전체 애플리케이션의 의미적 응답 동등성을 보장하지 않는다.

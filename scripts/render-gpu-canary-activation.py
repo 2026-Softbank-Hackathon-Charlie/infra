@@ -3,6 +3,7 @@
 import argparse
 import copy
 import hashlib
+import ipaddress
 import json
 import math
 from pathlib import Path
@@ -70,8 +71,22 @@ def validate(p):
         raise ValueError('a strict safety gate and business metric are required')
 
 
-def render(policy):
+def render(policy, service=None):
     validate(policy)
+    if service is not None:
+        if (not isinstance(service,dict) or set(service)!={'namespace','name','uid','clusterIP','port'}
+                or service['namespace']!='langfuse' or service['name']!='langfuse-web'
+                or type(service['port']) is not int or service['port']!=3000
+                or not isinstance(service['uid'],str)
+                or not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',service['uid'])):
+            raise ValueError('only reviewed Langfuse web Service metadata is accepted')
+        try:
+            vip=ipaddress.ip_address(service['clusterIP'])
+        except (ValueError,TypeError):
+            raise ValueError('invalid exact Langfuse Service IP') from None
+        network=ipaddress.ip_network('172.20.0.0/16')
+        if vip.version!=4 or vip not in network or vip in (network.network_address,network.broadcast_address):
+            raise ValueError('Service IP must be one host in the management service CIDR')
     # The caller supplies only non-secret provenance; endpoint, key paths,
     # target namespace and image are bound to reviewed repository configuration.
     policy=copy.deepcopy(policy)
@@ -111,6 +126,10 @@ def render(policy):
             'spec':{'podSelector':{'matchLabels':LABEL},'policyTypes':['Egress'],
                     'egress':[{'to':[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':'langfuse'}},
                                      'podSelector':{'matchLabels':WEB}}],'ports':ports}]}}
+    if service is not None:
+        # Some EKS NetworkPolicy enforcement paths see the pre-DNAT ClusterIP.
+        # Keep the identity selector and add only this reviewed web VIP/port.
+        egress['spec']['egress'].append({'to':[{'ipBlock':{'cidr':str(vip)+'/32'}}],'ports':copy.deepcopy(ports)})
     ingress={'apiVersion':'networking.k8s.io/v1','kind':'NetworkPolicy',
              'metadata':{'name':'langfuse-ai-gateway-ingress','namespace':'langfuse'},
              'spec':{'podSelector':{'matchLabels':WEB},'policyTypes':['Ingress'],
@@ -122,10 +141,13 @@ def render(policy):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--policy-file',type=Path,required=True,help='complete, reviewed policy; never include credentials')
+    parser.add_argument('--langfuse-service-file',type=Path,required=True,
+                        help='live-verified public Service metadata only: namespace/name/uid/clusterIP/port')
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
     try:
-        docs=render(json.loads(args.policy_file.read_text(encoding='utf8')))
+        docs=render(json.loads(args.policy_file.read_text(encoding='utf8')),
+                    json.loads(args.langfuse_service_file.read_text(encoding='utf8')))
         with args.output.open('x',encoding='utf8') as f: yaml.safe_dump_all(docs,f,sort_keys=False)
     except (ValueError,OSError,StopIteration,KeyError):
         parser.error('activation rejected: invalid policy, immutable image, source manifest, or output already exists')

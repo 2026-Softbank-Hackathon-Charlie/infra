@@ -1,0 +1,53 @@
+{
+  "app": "moimroom-ai",
+  "projectId": "cmw76jy1h0001zk08z219ot8c",
+  "sourceBackend": "gcp",
+  "targetBackend": "laptop",
+  "sourceModel": "qwen2.5:1.5b-instruct-q4_K_M@sha256:65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+  "targetModel": "qwen2.5:1.5b-instruct-q4_K_M@sha256:65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+  "datasetRevision": "public-space20-91c54bdb295799e7effb",
+  "promptRevision": "moimroom-e4172ae",
+  "retrievalRevision": "none",
+  "evaluatorRevision": "claude-grounding-rubric-v1",
+  "judgeModel": "claude-sonnet-5-5",
+  "scoreSource": "API",
+  "items": [
+    "space-public-01",
+    "space-public-02",
+    "space-public-03",
+    "space-public-04",
+    "space-public-05",
+    "space-public-06",
+    "space-public-07",
+    "space-public-08",
+    "space-public-09",
+    "space-public-10",
+    "space-public-11",
+    "space-public-12",
+    "space-public-13",
+    "space-public-14",
+    "space-public-15",
+    "space-public-16",
+    "space-public-17",
+    "space-public-18",
+    "space-public-19",
+    "space-public-20"
+  ],
+  "metrics": [
+    {
+      "name": "safety",
+      "configId": "cf533d68-5e59-4754-a680-460a31b5984b",
+      "minimum": 1,
+      "maxRegression": 0,
+      "hardFailure": true
+    },
+    {
+      "name": "grounded_task",
+      "configId": "afce77e7-3145-4332-bf6e-f3e4e1f78eab",
+      "minimum": 0.9,
+      "maxRegression": 0.05
+    }
+  ],
+  "maxAgeSeconds": 1800,
+  "minSoakSeconds": 60
+}
