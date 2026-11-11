@@ -1,0 +1,25 @@
+{
+  "appliedAt": "2026-11-08T02:25:21.661506+00:00",
+  "deployment": "hopcharlie-ai/ai-gateway",
+  "beforeWriteBackend": "gcp",
+  "beforeReadWeights": {
+    "gcp": 100,
+    "laptop": 0
+  },
+  "beforeFollowEnabled": false,
+  "beforeInflight": {
+    "reads": 0,
+    "writes": 0
+  },
+  "priorStateExportedInMemory": true,
+  "priorPersistedStateSHA256": "032179df9c48b38ea302c55fbe12055f31bcdd5e9f6f58d2ed4ff1e6e2256b51",
+  "image": "525091405886.dkr.ecr.ap-northeast-2.amazonaws.com/hopcharlie/platform:a89634a-minio@sha256:480198186c6061d261a2e99acd8f0f19f711ecaa5d66568cf8921e90b2859b2b",
+  "policyConfigMap": "ai-gateway-quality-2b7665dcaa2d",
+  "persistentStatePVC": "ai-gateway-canary-state",
+  "persistentStateSize": "1Gi",
+  "deploymentCompareAndSwap": true,
+  "productionDBChanges": 0,
+  "productionMainGatewayChanges": 0,
+  "evaluationCalls": 0,
+  "targetPercent": 0
+}

@@ -1,0 +1,7 @@
+{
+  "namespace": "langfuse",
+  "name": "langfuse-web",
+  "uid": "89a4cb40-56b9-4ad3-858c-cdec8c20d494",
+  "clusterIP": "172.20.238.122",
+  "port": 3000
+}

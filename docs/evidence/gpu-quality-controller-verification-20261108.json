@@ -1,0 +1,33 @@
+{
+  "verifiedAt": "2026-11-08T02:32:08.300634+00:00",
+  "pod": "ai-gateway-6757447758-bq4zp",
+  "ready": true,
+  "apiStatus": 200,
+  "controllerEnabled": true,
+  "sourceBackend": "gcp",
+  "targetBackend": "laptop",
+  "targetPercent": 0,
+  "effectiveTargetPercent": 0,
+  "version": 1,
+  "policyDigest": "8a3ba53513f36d302948100b5c2476c6bf6d8d301058a5dc6f3c093620ba4bac",
+  "verdict": {
+    "status": "unknown",
+    "reason": "incomplete_scores",
+    "checkedAt": "2026-11-08T02:32:03.925232068Z",
+    "validUntil": "0001-01-01T00:00:00Z",
+    "pairs": 0,
+    "metrics": []
+  },
+  "zeroStagePersisted": true,
+  "persistedStateSHA256": "7c5f6dd90f659c9a1cd756330c5e9a7b9912d37fd8a96f1142e7dd563824430c",
+  "legacyRouteBypassHTTP": 409,
+  "modelCalls": 0,
+  "productionDBChanges": 0,
+  "productionMainGatewayChanges": 0,
+  "rawStateRetained": false,
+  "rawCredentialsRetained": false,
+  "earlyAdvanceHTTP": 409,
+  "earlyAdvanceNote": "Fresh 0% initialization is inside the 60s soak interval; separate quality-evidence gate verification follows.",
+  "missingEvidenceAdvanceHTTP": 412,
+  "missingEvidenceAfterSoakVerified": true
+}
