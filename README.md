@@ -1,93 +1,60 @@
-# Charlie Infra
+# HopCharlie Infra
 
-온프레미스 관측 준비:
+SoftBank Hackathon 2026 본선에서 HopCharlie를 운영하기 위해 사용한 인프라 저장소입니다. Terraform으로 클라우드 기반을 구성하고, Helm과 Argo CD로 관리 플랫폼과 클러스터 공통 설정을 배포합니다.
 
-- [계약](clusters/onprem-dev-workload/observability-contract.json)
-- [로컬 renderer](scripts/render-onprem-observability.py)
-- [실제 차트 회귀](scripts/tests/test-onprem-observability.py)
-- [운영 준비 절차](docs/operations/onprem-observability.md)
-- [ADR 0092](docs/adr/0092-onprem-observability-preparation.md)
+> **본선 환경 상태** · 시연에 사용한 AWS·GCP 환경은 2026-11-09에 정리했습니다. 아래는 저장소에 남은 구성과 재현 절차입니다. [HopCharlie 본선 기록](https://github.com/2026-Softbank-Hackathon-Charlie/.github/blob/79ec3561891d9e965bdee7bbd0ae28f903d04b91/profile/README.md)
 
-## 팀 공용 Headlamp
+[환경별 구성](#환경별-구성) · [저장소 탐색](#저장소-탐색) · [로컬 검증](#로컬-검증) · [배포와 운영](#배포와-운영) · [상세 절차와 인벤토리](#상세-절차와-인벤토리)
 
-`https://headlamp.hopcharlie.dev`의 한 화면에서 관리 EKS·워크로드 EKS·GKE를 전환합니다. EKS는 기존 개인 Cognito 로그인을 사용하며 GKE는 Google 로그인과 자동 토큰 갱신을 사용합니다. GKE 권한은 개인 IAM/RBAC를 따릅니다.
-통합 Google 로그인은 opt-in이며 [운영 절차](docs/headlamp-gke-google.md)에 따라 적용합니다. 실제 배포·검증 상태는 실행 기록과 구분하며 GitOps의 `headlamp.enabled`는 기본 false입니다.
+## 환경별 구성
 
-| 파일 | 설명 |
+| 환경 | 역할 | 주요 문서 |
+| --- | --- | --- |
+| **AWS 관리 EKS** | 플랫폼 API, 트래픽 게이트웨이, 콘솔, 상태 DB, Argo CD | [플랫폼 배치 ADR](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md) · [플랫폼 Terraform](terraform/platform/aws/README.md) |
+| **AWS 워크로드 EKS** | 관리 EKS와 분리된 앱 실행 환경. 두 private EKS는 공유 VPC 기반을 참조 | [AWS 구성](terraform/environments/aws/dev) · [CNPG 접속](docs/runbooks/cnpg-access.md) |
+| **GCP GKE** | 별도 state와 GitHub WIF를 쓰는 앱 실행 환경. Argo CD는 별도 WIF와 권한으로 접근 | [GCP 구축](docs/gcp-deployment.md) · [GKE 운영 접근](docs/gcp-operational-access.md) |
+| **온프레미스 k3s** | 시연 앱 실행 환경. CNPG와 MinIO를 사용하고 Tailscale을 통해 연결 | [온프레미스 DB](docs/adr/0072-add-onprem-as-paired-database-environment.md) · [MinIO와 이미지 프로필](docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md) |
+
+플랫폼과 세 워크로드 환경의 연결은 [Archify 구성도](https://github.com/2026-Softbank-Hackathon-Charlie/.github/blob/79ec3561891d9e965bdee7bbd0ae28f903d04b91/profile/assets/hopcharlie-architecture.svg)에서 확인할 수 있습니다. [탐색용 HTML](https://github.com/2026-Softbank-Hackathon-Charlie/.github/blob/79ec3561891d9e965bdee7bbd0ae28f903d04b91/profile/assets/hopcharlie-architecture.html)은 내려받아 브라우저에서 엽니다.
+
+## 저장소 탐색
+
+| 경로 | 관리하는 내용 |
 | --- | --- |
-| [docs/headlamp-team.md](docs/headlamp-team.md) | 배포·검증·팀원 등록·비용·정리 절차 |
-| [docs/adr/0017-team-headlamp-with-cognito.md](docs/adr/0017-team-headlamp-with-cognito.md) | 인증·권한·배포 구성 제안 |
-| [helm/charts/headlamp-team/Chart.yaml](helm/charts/headlamp-team/Chart.yaml) | Headlamp 팀 차트 |
-| [helm/charts/headlamp-team/values.yaml](helm/charts/headlamp-team/values.yaml) | 고정 이미지와 기본값 |
-| [helm/charts/headlamp-team/templates/web.yaml](helm/charts/headlamp-team/templates/web.yaml) | OIDC 웹 앱·클러스터 설정·HTTPS Ingress |
-| [helm/charts/headlamp-team/templates/rbac.yaml](helm/charts/headlamp-team/templates/rbac.yaml) | Secret을 제외한 조회 권한 |
-| [helm/charts/headlamp-team/templates/network.yaml](helm/charts/headlamp-team/templates/network.yaml) | Headlamp 네트워크 정책 |
-| [clusters/aws-dev-management/values/headlamp-team.yaml](clusters/aws-dev-management/values/headlamp-team.yaml) | 관리 EKS 설정 초안 |
-| [clusters/aws-dev-workload/values/headlamp-team.yaml](clusters/aws-dev-workload/values/headlamp-team.yaml) | 워크로드 EKS 조회 권한 설정 |
-| [terraform/platform/aws/headlamp/main.tf](terraform/platform/aws/headlamp/main.tf) | Cognito·EKS OIDC·DNS·API 네트워크 |
-| [terraform/platform/aws/headlamp/.terraform.lock.hcl](terraform/platform/aws/headlamp/.terraform.lock.hcl) | provider 버전 고정 |
-| [terraform/platform/aws/headlamp/tests/main.tftest.hcl](terraform/platform/aws/headlamp/tests/main.tftest.hcl) | 클라우드 연결 없는 Terraform mock 검사 |
-| [scripts/prepare-headlamp.py](scripts/prepare-headlamp.py) | 공개 values 생성 및 승인 후 Secret 등록 |
-| [scripts/tests/test-headlamp.py](scripts/tests/test-headlamp.py) | 인증 경계·RBAC·GitOps 로컬 렌더링 검사 |
-| [docs/headlamp-gke.md](docs/headlamp-gke.md) | 기존 AWS 로그인을 유지하는 GKE 개인 인증 연결 절차와 승인 경계 |
-| [docs/adr/0020-add-gke-to-team-headlamp.md](docs/adr/0020-add-gke-to-team-headlamp.md) | GKE 개인 Google 인증 분리 제안 |
-| [scripts/register-headlamp-gke.py](scripts/register-headlamp-gke.py) | 오프라인 GKE 연결 미리보기와 승인 후 기존 Secret 갱신 |
-| [scripts/tests/test-headlamp-gke.py](scripts/tests/test-headlamp-gke.py) | AWS 설정 보존·무자격 GKE context·적용 경계 회귀 검사 |
-| [docs/headlamp-gke-google.md](docs/headlamp-gke-google.md) | GKE 개인 Google 로그인·자동 갱신 준비와 운영 검증 절차 |
-| [docs/adr/0027-headlamp-google-auto-refresh.md](docs/adr/0027-headlamp-google-auto-refresh.md) | GKE 인증 프록시와 자동 갱신 제안 |
-| [docs/plans/2026-11-03-headlamp-google-refresh.md](docs/plans/2026-11-03-headlamp-google-refresh.md) | Google 자동 갱신 구현·검증 계획 |
-| [helm/charts/headlamp-gke-google/Chart.yaml](helm/charts/headlamp-gke-google/Chart.yaml) | GKE Google 인증 전용 Headlamp 차트 |
-| [helm/charts/headlamp-gke-google/values.yaml](helm/charts/headlamp-gke-google/values.yaml) | OAuth 프록시 및 GKE 연결 기본값 |
-| [helm/charts/headlamp-gke-google/templates/web.yaml](helm/charts/headlamp-gke-google/templates/web.yaml) | GKE 전용 인증 프록시·서비스·Ingress |
-| [scripts/tests/test-headlamp-gke-google.py](scripts/tests/test-headlamp-gke-google.py) | Google 인증 프록시와 보안 경계 렌더링 검사 |
-| [helm/charts/headlamp-team/templates/google-auth-plugin.yaml](helm/charts/headlamp-team/templates/google-auth-plugin.yaml) | GKE 로그인 화면 플러그인 ConfigMap |
-| [helm/charts/headlamp-team/files/google-login.js](helm/charts/headlamp-team/files/google-login.js) | 기존 UI의 GKE 인증 경로만 Google 로그인으로 연결 |
-| [helm/charts/headlamp-gke-google/templates/proxy-config.yaml](helm/charts/headlamp-gke-google/templates/proxy-config.yaml) | Google access token 전달과 신뢰 헤더 재생성 설정 |
-| [scripts/prepare-headlamp-google.py](scripts/prepare-headlamp-google.py) | Google backend의 실제 GKE context 준비·안전한 기존 별칭 보존 |
-| [scripts/tests/test-headlamp-google-config.py](scripts/tests/test-headlamp-google-config.py) | GKE kubeconfig 준비·충돌·무자격 인증 경계 검사 |
-| [docs/adr/0028-unify-headlamp-cluster-ui.md](docs/adr/0028-unify-headlamp-cluster-ui.md) | 단일 UI와 클러스터별 인증 경로 결정 |
-| [docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md](docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md) | 단일 CNPG 인스턴스의 업데이트 정책과 admission 제약 |
-| [docs/plans/2026-11-03-headlamp-unified.md](docs/plans/2026-11-03-headlamp-unified.md) | 세 클러스터 통합 구현·검증·배포 계획 |
+| [terraform/](terraform) | AWS·GCP 기반과 state, 권한, 클러스터, 서비스별 통합 |
+| [helm/](helm) · [clusters/](clusters) | Helm 차트, Argo CD 애플리케이션 구성, 환경별 values와 매니페스트 |
+| [config/](config) · [scripts/](scripts) | 공유 설정, 입력 검증, Terraform 실행과 운영 보조 스크립트 |
+| [docs/runbooks/](docs/runbooks) · [docs/operations/](docs/operations) · [docs/adr/](docs/adr) | 실행 절차, 관측 준비, 설계 결정과 적용 범위 |
 
-2026 SoftBank Hackathon Charlie 프로젝트의 AWS 인프라 저장소입니다. Terraform으로 **AWS 서울 리전의 공유 VPC, 관리용 private EKS, 워크로드용 private EKS**를 구성하고, Helm과 Argo CD로 클러스터 공통 구성과 관측 도구를 관리합니다.
+## 로컬 검증
 
-저장소: [2026-Softbank-Hackathon-Charlie/infra](https://github.com/2026-Softbank-Hackathon-Charlie/infra). 아래 명령과 경로는 모두 이 저장소 루트를 기준으로 합니다.
-
-## Agent 지침과 의사결정 기록
-
-| 파일 | 설명 |
+| 명령 | 확인 범위 |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | 주요 의사결정을 ADR로 기록하는 Agent 지침 |
-| [docs/adr/template.md](docs/adr/template.md) | 배경·대안·결정 이유·영향을 기록하는 ADR 템플릿 |
-| [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
-| [docs/adr/0029-add-gcp-app-image-repository.md](docs/adr/0029-add-gcp-app-image-repository.md) | 기존 GCP bootstrap의 앱 이미지 저장소와 노드 읽기 권한 재사용 제안 |
-| [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
-| [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
-| [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC용 GKE 2대 증설 이력; 현재 3대 기준은 ADR0068 |
-| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
-| [docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md](docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md) | AWS CNPG 앱의 admission 기본값·Role 생략 값 비교 정책 |
-| [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
-| [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
-| [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
-| [docs/adr/0017-adopt-existing-helm-resources-in-argocd.md](docs/adr/0017-adopt-existing-helm-resources-in-argocd.md) | 기존 Helm 리소스를 보존하는 단계적 Argo CD 연결 결정 |
-| [docs/plans/metrics-and-management-monitoring.md](docs/plans/metrics-and-management-monitoring.md) | metrics-server 양쪽과 관리 Prometheus 스택의 한정 설치 계획·실행 결과 |
-| [docs/adr/0018-stage-minimal-management-monitoring.md](docs/adr/0018-stage-minimal-management-monitoring.md) | HyperDX 선택을 유지하는 기본 모니터링 단계적 도입 결정 |
-| [docs/adr/0019-use-chart-managed-prometheus-scrape-token.md](docs/adr/0019-use-chart-managed-prometheus-scrape-token.md) | Prometheus scrape용 장기 ServiceAccount 토큰의 추가 승인 경계 |
+| `make inventory-check` | README의 추적 파일 링크와 Terraform 상대 참조 |
+| `make config-check` | 프로젝트 설정과 네트워크 입력 |
+| `make check` | Terraform 형식·validate·mock, Helm 렌더, CI 스크립트와 인벤토리 |
+
+로컬 종합 검사에는 Bash, make, Terraform(`.terraform-version`), Helm, Python과 PyYAML이 필요합니다. 설치 예시와 각 검사 범위는 아래 **로컬 검사 상세**에 있습니다. 실제 배포와 접속 결과는 각 실행 기록을 따릅니다.
+
+## 배포와 운영
+
+| 작업 | 확인할 문서 |
+| --- | --- |
+| **AWS 배포** | [AWS workflow](.github/workflows/terraform-check.yml). `main`에서 AWS 배포 입력이 바뀐 경우 자동 배포를 판단합니다. 수동 실행은 대상 stack과 `plan` 또는 `apply`를 선택합니다. |
+| **GCP 배포** | [GCP workflow](.github/workflows/terraform-gcp.yml) · [GCP 구축 절차](docs/gcp-deployment.md). 배포는 `main`에서 수동으로 시작합니다. |
+| **앱 경로와 데이터 이전** | [앱 라우팅](docs/runbooks/app-routing.md) · [AWS↔GKE Tailscale](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md) · [DB 이전](docs/runbooks/aws-gcp-db-migration.md) |
+| **관측과 클러스터 조회** | [ClickStack 구성](docs/clickstack-architecture.md) · [GKE 관측](docs/operations/gke-observability.md) · [온프레미스 관측](docs/operations/onprem-observability.md) · [Headlamp](docs/headlamp-team.md) |
+
+기본 [GitOps values](helm/gitops/values.yaml)의 대상은 비어 있고 Headlamp, 관측, 온프레미스 자동 등록은 별도 활성화가 필요합니다. 리소스 생성·변경과 권한 작업에는 [저장소 승인 지침](AGENTS.md)을 따릅니다.
+
+## 상세 절차와 인벤토리
+
+기존 운영 절차와 파일 링크를 주제별로 펼쳐 볼 수 있습니다. 접속 주소와 자원 수는 해당 문서가 작성된 시점의 기록 또는 코드의 기본값입니다.
+
+<details>
+<summary>AWS 구성, state 초기화와 Private EKS 접근</summary>
 
 ## 구조와 소유권
-
-```mermaid
-flowchart TD
-    B[bootstrap: S3 state] --> F[foundation: VPC / NAT / SSM / Argo IAM / Loki S3]
-    A[account: GitHub OIDC / CI IAM] --> F
-    F --> M[관리 EKS: AZ별 노드 1대]
-    F --> W[워크로드 EKS: AZ별 노드 1대]
-    M --> H[Helm bootstrap: Argo CD]
-    H --> G[GitOps: baseline / 공통 addon]
-    G --> M
-    G --> W
-```
-
 - Terraform: S3 state, VPC/SG/IAM, EKS/노드, VPC CNI/CoreDNS/kube-proxy/Pod Identity/EBS CSI. 관리·워크로드 stack은 foundation state만 참조하며 서로의 state는 읽지 않습니다.
 - Helm bootstrap: Argo CD 자체. 클러스터 등록 Secret, private 저장소 credential, root Application은 운영자가 준비합니다.
 - Argo CD: Namespace/gp3/Quota/LimitRange/NetworkPolicy, AWS LBC, metrics-server, Prometheus/Grafana/Alertmanager, Loki, Sealed Secrets, Argo Rollouts. OTel은 준비 후 활성화합니다. Terraform managed addon을 중복 설치하지 않습니다.
@@ -102,32 +69,6 @@ flowchart TD
 - 외부 ALB는 기본 비활성화입니다. 도메인·ACM 인증서와 애플리케이션 Ingress·정책을 준비한 뒤 baseline의 `externalAlb`을 켭니다. DNS/ACM 자동 생성은 포함하지 않습니다.
 - 애플리케이션, 빌드 파이프라인, 서비스 ECR, RDS는 별도로 구성합니다.
 - 실제 tfvars·backend 설정·state·plan·kubeconfig와 비밀값은 Git에 저장하지 않습니다.
-
-## GCP 이전 대상 인프라
-
-GCP 대상 GKE1개·GCS state·GitHub WIF·전용 baseline/workflow를 제공합니다. [GCP 구축·배포 절차](docs/gcp-deployment.md)를 먼저 읽으세요. 코드 검사와 실제 배포·연결 검증을 구분합니다. 기존 AWS 경로와 분리하며 CNPG·cross-cloud 연결은 후속 작업입니다.
-
-## 검증
-
-필요 도구는 `.terraform-version`의 Terraform **1.16.4**, Helm **3.19.1**, Python 3(권장 3.12), PyYAML **6.0.3**, Bash, make입니다. 운영에는 AWS CLI v2, kubectl 1.35, SSM session-manager-plugin이 추가로 필요합니다. provider와 공식 chart 다운로드에 네트워크가 필요합니다.
-
-```bash
-python3 -m venv /tmp/charlie-check-venv
-/tmp/charlie-check-venv/bin/python -m pip install PyYAML==6.0.3
-make check PYTHON=/tmp/charlie-check-venv/bin/python
-```
-
-| 명령 | 확인 범위 |
-| --- | --- |
-| `make tf-check` | fmt + 정제 임시 복사본에서 backend 없는 init/validate. state/AWS 연결 없음 |
-| `make tf-verify` | root당 init 한 번 후 validate/mock 실행; CI matrix도 같은 runner 사용 |
-| `make config-check` | 공유 프로젝트 JSON의 스키마·명명·네트워크 입력 검사 |
-| `make tf-test` | 로컬 state/tfvars/override를 제외한 임시 복사본에서 provider mock test |
-| `make ci-test PYTHON=...` | fake AWS/Terraform 실행 순서·계정·state key·삭제 guard·실패 처리, workflow main 자동 apply·수동 실행 조건, shell 구문 |
-| `make helm-check PYTHON=...` | 임시 chart dependency, bootstrap/GitOps/두 baseline 및 고정 외부 addon lint/render, AppProject/namespace·이미지 digest 검사 |
-| `make inventory-check` | README 파일 목록 누락과 Terraform의 상대 module/file 참조 검사 |
-
-이 검증은 실제 IAM 충분성, 네트워크 연결, 리소스 수용량, 이미지 pull, DNS/TLS 또는 배포 성공을 보장하지 않습니다. Helm 검사는 합성 target fixture를 쓰며 운영 Secret/NLB를 요구하지 않습니다. 기본 GitOps values의 빈 `targets`는 의도적이며 실제 출력 또는 CI fixture를 넣어야 schema 검사를 통과합니다.
 
 ## 처음 사용할 때: 입력과 state
 
@@ -212,75 +153,6 @@ make tf-apply STACK=account/aws
 
 AWS workload mode의 canonical 입력은 `config/project.json`의 `workload_network_policy_enforcing_mode`(`standard` 기본, `standard|strict`만 허용)이며 workload에만 전달됩니다. 최초 bootstrap/rollback은 standard 기본값을 유지합니다. strict는 별도 조율·검토·승인 후 이 값을 명시적으로 바꾸어 선택합니다([ADR 0050](docs/adr/0048-keep-workload-network-policy-standard-by-default.md)). CI는 main의 해당 파일을 사용하므로 reviewed 설정 변경이 main에 반영돼야 하며 `TF_VAR_*`로 우회할 수 없습니다. baseline은 main을 automated sync하므로 [ADR 0046의 merge 전 inventory gate](docs/adr/0046-use-strict-network-policy-on-aws-workload.md)를 완료하기 전에는 이 정책 변경을 merge하지 않습니다.
 
-
-## GitHub Actions 파이프라인
-
-- push/PR: Terraform 6개 root의 validate/mock을 matrix(최대 동시 3개)로 실행하고 Helm·스크립트 검사를 병렬 실행합니다. 모든 검사에 AWS 인증을 부여하지 않습니다. fork PR도 공통 설정 검증을 수행합니다.
-- `check`는 모든 검증의 성공만 허용하는 집계 job이며 실패·skip·취소 시 배포하지 않습니다. 기존 필수 검사 이름을 유지합니다. Terraform은 정제된 임시 복사본에서 root당 init 한 번(총 6회)을 수행합니다. OS/아키텍처/CLI/root/lock별 provider 전용 캐시를 사용하고 state·plan·tfvars·전체 `.terraform`는 캐시하지 않습니다. runner별 캐시는 독립적입니다.
-- 각 Terraform root의 경과 시간을 로그에 출력합니다. cold/warm 실행 비교는 실제 GitHub 실행 후 확인해야 하며 특정 속도 향상을 보장하지 않습니다. 병렬 runner 사용 분이 증가할 수 있습니다.
-- main 머지/push: AWS 배포 입력 경로가 바뀌고 check가 성공한 경우에만 `all-runtime`을 순서대로 plan하고 Terraform 변경이 있는 stack만 자동 apply합니다. GCP 전용 설정·문서·테스트·CI 정의만 바뀌면 배포 job을 생략합니다. 변경이 없으면 apply를 생략하며 별도 dispatch는 필요하지 않습니다([ADR 0069](docs/adr/0069-limit-aws-auto-apply-to-deployment-inputs.md)).
-- 수동 실행: main에서 `action=plan|apply`, `stack=bootstrap|foundation|management|workload|all-runtime`을 선택합니다. 기본값은 **`plan + bootstrap`**이며 리소스를 적용하지 않습니다. 기존 `apply` boolean 입력은 이 두 choice 입력으로 대체했습니다.
-- 배포 job이 선택되고 check가 성공한 경우에만 OIDC로 인증하고 선택한 stack을 실행합니다. 개별 선택은 의존 stack을 자동 생성하지 않습니다. main 자동 실행과 수동 `all-runtime` 선택은 bootstrap → foundation → management → workload를 순차 실행하며 account는 관리자 로컬 전용입니다. apply는 저장한 plan을 사용하고 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체 guard를 유지합니다.
-- `bootstrap`은 state S3와 보호 설정만 관리합니다. `foundation` apply는 VPC·NAT·SSM bridge·IAM·Loki S3를, `management`/`workload` apply는 각 EKS를 포함합니다. `all-runtime + apply`는 두 EKS까지 포함합니다.
-- PR 및 main 이외 브랜치의 push에서는 AWS 배포를 실행하지 않습니다. main 자동 실행과 수동 plan/apply에는 기존 S3 backend·CI 역할이 필요하며 state 잠금 파일을 일시 생성할 수 있습니다. workflow는 `.github/workflows/terraform-check.yml`에 정의되어 있습니다.
-
-| Repository variable | 설정 값 |
-| --- | --- |
-| `AWS_ACCOUNT_ID` | 실제 12자리 계정 |
-| `AWS_REGION` | 선택 사항. 설정 시 project.json의 리전과 같아야 함 |
-| `TF_STATE_BUCKET` | 선택 사항. 설정 시 공통 설정에서 계산한 버킷명과 같아야 함 |
-| `TERRAFORM_APPLY_ROLE_ARN` | account 출력 `terraform_apply_role_arn` |
-| `EKS_OPERATOR_PRINCIPAL_ARN` | 기존 운영자 IAM role/user ARN |
-| `EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS` | 추가 운영자 ARN JSON 배열, 기본 `[]` |
-
-배포 인증 전 실행 저장소/브랜치가 공통 설정과 일치하는지도 확인합니다. OIDC subject는 account의 명시 입력이며 맞춤 subject 설정은 관리자 책임입니다.
-
-동일 apply concurrency group은 취소하지 않고 직렬 실행합니다. CI 역할에는 AWS 관리형 `AdministratorAccess`를 연결합니다. 기존 태그·이름 범위 정책도 남아 있지만 실제 권한의 상한이 아니며 account state·자체 역할·OIDC·다른 프로젝트를 포함한 계정 전체에 관리 권한을 가집니다. OIDC 신뢰는 이 저장소의 main 브랜치와 `sts.amazonaws.com` audience로 유지합니다. branch 보호/저장소 접근 권한은 운영 정책으로 별도 관리하세요.
-
-### 최소 구축과 첫 파이프라인 실행 순서
-
-1. 관리자 로컬 인증으로 S3 bootstrap을 생성하고 그 bootstrap state만 S3로 이전합니다. 위 최초 생성 절차를 사용합니다.
-2. 로컬에서 `account/aws` plan을 검토하고 별도 승인 후 apply하여 CI 역할을 생성합니다. 기존 GitHub OIDC provider는 config의 ARN으로 참조합니다.
-3. Repository variables를 설정하고 이 workflow 변경을 main에 반영합니다. 코드가 로컬에만 있으면 GitHub의 기존 workflow 동작은 바뀌지 않습니다.
-4. Run workflow에서 `action=plan`, `stack=bootstrap`으로 실행해 OIDC·state 연결을 확인합니다. 이 단계에서 EKS는 생성하지 않습니다.
-5. 이후 필요할 때만 foundation과 EKS를 각각 검토·적용합니다. EKS에는 운영자 IAM ARN과 선행 foundation state가 필요합니다.
-
-### Self-hosted runner
-
-조직 private 저장소(infra, platform, frontend, cli, rin)의 job은 모두 조직 self-hosted runner(label `hopcharlie`)에서 돈다. GitHub-hosted 사용량이 Free 플랜 한도를 넘어 job이 시작되지 않기 때문이다([ADR 0045](docs/adr/0045-run-actions-on-self-hosted-runner.md)). GCP 호스트의 목표 사양은 프로젝트 `project-b47cdba3-db5b-42a2-9a6`, asia-northeast3-a의 VM 한 대(`hopcharlie-github-runner`, e2-standard-8, 8 vCPU/32 GB/200 GB)와 runner 6개(`hopcharlie-gcp-runner-1`부터 `6`)다([ADR 0067](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md)). 실제 축소 적용·검증은 별도 승인을 받는다. 처음 쓴 AWS EC2 호스트(`Name=hopcharlie-github-runner`, t3.xlarge, runner `hopcharlie-runner-1`부터 `3`)는 GCP runner가 job을 받는 것을 확인한 뒤 지운다. 두 호스트의 label이 같아서 workflow는 바꾸지 않는다. 호스트가 없으면 job은 실패하지 않고 24시간까지 `queued`로 기다린다.
-
-GCP 호스트는 저장소 루트에서 아래 명령으로 올리고 내린다. gcloud에 로그인해 위 프로젝트를 활성 프로젝트로 두고(`gcloud config set project project-b47cdba3-db5b-42a2-9a6`), `admin:org` 권한이 있는 gh를 쓴다. Windows에서는 PowerShell이나 Git Bash에서 Windows용 `python`으로 실행한다. Git Bash의 `python3`(MSYS2)로 실행하면 gcloud가 뜨지 않는다.
-
-```bash
-gh auth refresh -h github.com -s admin:org
-python scripts/github-runner/gcp_up.py --dry-run   # describe와 조회만 하고 바꿀 것을 출력한다
-python scripts/github-runner/gcp_up.py             # 방화벽 규칙과 VM을 만들고 IAP SSH로 runner 6개를 등록한 뒤 조직 runner 상태를 출력한다
-python scripts/github-runner/gcp_up.py --resize    # 승인 후, 다른 사양의 기존 VM을 중지·변경·시작한다
-# 축소는 유휴 확인·7~9 서비스 중지/비활성화 후 수행하고, 조직 등록은 1~6 복구 확인 후 정리한다(ADR 0067).
-python scripts/github-runner/gcp_down.py           # 지울 것만 출력한다
-python scripts/github-runner/gcp_down.py --apply   # VM과 디스크, GCP runner 등록, 방화벽 규칙 2개를 지운다
-```
-
-AWS 호스트에서 GCP 호스트로 옮기는 순서는 다음과 같다.
-
-1. `python scripts/github-runner/gcp_up.py --dry-run`으로 만들 자원을 확인하고 `python scripts/github-runner/gcp_up.py`를 실행한다.
-2. `gh api orgs/2026-Softbank-Hackathon-Charlie/actions/runners --jq '.runners[] | [.name, .status, .busy] | @tsv'`(또는 조직 Settings의 Actions Runners)에서 `hopcharlie-gcp-runner-1`부터 `3`까지 `online`인지 확인한다. 이어서 run의 "Set up job" 로그에서 Runner name이 `hopcharlie-gcp-runner-N`인 job이 성공하는지 보고, docker를 쓰는 job(platform CI, 이미지 게시)도 하나 이상 확인한다.
-3. `python scripts/github-runner/down.py`로 지울 AWS 자원을 확인하고 `python scripts/github-runner/down.py --apply`로 지운다. 이때 `hopcharlie-runner-1`부터 `3`까지의 등록도 해제된다. GCP runner는 이름이 달라서 건드리지 않는다. AWS runner가 그 순간 돌리던 job은 실패하므로 다시 실행한다.
-
-`gcp_up.py`와 `up.py`는 다시 실행해도 안전하다. 있는 자원은 그대로 쓰고 이미 등록한 runner는 건너뛴다. AWS 스크립트(`up.py`, `down.py`)는 AWS 프로필 `hopcharlie`(또는 `AWS_PROFILE`)를 쓰고, GCP 호스트에 문제가 생기면 되돌아갈 경로로 남긴다. GCP 호스트 셸은 `gcloud compute ssh hopcharlie-github-runner --zone asia-northeast3-a --tunnel-through-iap`로, AWS 호스트 셸은 `aws ssm start-session --target <instance-id>`로 연다. bootstrap 로그는 두 호스트 모두 `/var/log/github-runner-bootstrap.log`에 있다.
-
-| 파일 | 역할 |
-| --- | --- |
-| [docs/adr/0045-run-actions-on-self-hosted-runner.md](docs/adr/0045-run-actions-on-self-hosted-runner.md) | private 저장소의 Actions를 조직 self-hosted runner에서 실행하고 호스트를 GCP VM으로 옮기는 결정 |
-| [docs/adr/0046-use-strict-network-policy-on-aws-workload.md](docs/adr/0046-use-strict-network-policy-on-aws-workload.md) | workload strict NetworkPolicy와 시스템 정책 선행 적용·bootstrap·rollback 제안 |
-| [docs/adr/0048-keep-workload-network-policy-standard-by-default.md](docs/adr/0048-keep-workload-network-policy-standard-by-default.md) | workload standard 기본값 유지와 조율된 strict opt-in 제안 |
-| [docs/plans/2026-11-05-eks-strict-network-policy.md](docs/plans/2026-11-05-eks-strict-network-policy.md) | strict NetworkPolicy 구현 범위·로컬 검증·live 적용 경계 |
-| [scripts/github-runner/gcp_up.py](scripts/github-runner/gcp_up.py) | GCP 방화벽 규칙과 VM을 찾거나 만들고 IAP SSH로 token 파일과 bootstrap을 보내 실행 |
-| [scripts/github-runner/gcp_down.py](scripts/github-runner/gcp_down.py) | GCP runner 등록과 VM, 방화벽 규칙 삭제 |
-| [scripts/github-runner/up.py](scripts/github-runner/up.py) | AWS runner 호스트 IAM, 보안 그룹, EC2를 찾거나 만들고 SSM으로 bootstrap을 실행 |
-| [scripts/github-runner/bootstrap.sh](scripts/github-runner/bootstrap.sh) | AWS와 GCP 호스트에서 root로 도구, runner 3개, 메타데이터 차단, Docker 정리 타이머를 설치 |
-| [scripts/github-runner/down.py](scripts/github-runner/down.py) | AWS runner 등록 해제와 호스트 자원 삭제 |
-
 ## Private EKS 접근과 Argo CD 설치
 
 이미 설치한 Argo CD에 접속할 때는 아래 두 명령만 실행합니다. 저장소 루트에서 각각 별도 터미널을 사용합니다.
@@ -359,6 +231,574 @@ kubectl --kubeconfig .generated/access/management.kubeconfig --context charlie-d
 
 기본 addon 목록은 `helm/gitops/values.yaml`입니다. root 예제의 `valuesObject`는 targets/저장소를 override하며, 운영 addon 목록은 해당 기본값을 사용합니다. root/addon 모두 prune=false이므로 목록에서 제거하는 것만으로 실제 자원이 철거되지는 않습니다. Kubernetes 삭제/ALB·PVC 처리와 Terraform destroy는 별도 계획이 필요합니다.
 
+## 영향과 복구
+
+배포하면 EKS 2개, 기본 노드 4대, NAT 2개, bridge EC2, S3/EBS 및 OTel 활성화 시 내부 NLB 비용이 발생합니다. NAT single 모드는 비용/장애 범위가 달라집니다. Argo와 지정 운영자의 EKS 권한은 cluster-admin입니다. Prometheus/Grafana/Alertmanager/Loki와 Argo는 단일 replica·일부 AZ 종속 EBS이므로 전체 서비스 HA를 보장하지 않습니다. 저장소에 고정한 Kubernetes/addon/node image 버전 지원 여부와 계정 quota는 실제 배포 직전에 확인하세요.
+
+GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 versioning으로 보호합니다. state 삭제나 다른 프로젝트의 state 재사용으로 롤백하지 않습니다. foundation guard가 막는 삭제·교체는 별도 검토 후 명시적인 운영 변경으로 처리합니다. Sealed Secrets를 운영에서 사용하기 전 private key 백업·복구 절차를 별도로 준비하세요.
+
+</details>
+
+<details>
+<summary>GitHub Actions, 플랫폼과 앱 배포</summary>
+
+## GitHub Actions 파이프라인
+
+- push/PR: Terraform 7개 root의 validate/mock을 matrix(최대 동시 3개)로 실행하고 Helm·스크립트 검사를 병렬 실행합니다. 모든 검사에 AWS 인증을 부여하지 않습니다. fork PR도 공통 설정 검증을 수행합니다.
+- `check`는 모든 검증의 성공만 허용하는 집계 job이며 실패·skip·취소 시 배포하지 않습니다. 기존 필수 검사 이름을 유지합니다. Terraform은 정제된 임시 복사본에서 root당 init 한 번을 수행합니다. OS/아키텍처/CLI/root/lock별 provider 전용 캐시를 사용하고 state·plan·tfvars·전체 `.terraform`는 캐시하지 않습니다. runner별 캐시는 독립적입니다.
+- 각 Terraform root의 경과 시간을 로그에 출력합니다. cold/warm 실행 비교는 실제 GitHub 실행 후 확인해야 하며 특정 속도 향상을 보장하지 않습니다. 병렬 runner 사용 분이 증가할 수 있습니다.
+- main 머지/push: AWS 배포 입력 경로가 바뀌고 check가 성공한 경우에만 `all-runtime`을 순서대로 plan하고 Terraform 변경이 있는 stack만 자동 apply합니다. GCP 전용 설정·문서·테스트·CI 정의만 바뀌면 배포 job을 생략합니다. 변경이 없으면 apply를 생략하며 별도 dispatch는 필요하지 않습니다([ADR 0069](docs/adr/0069-limit-aws-auto-apply-to-deployment-inputs.md)).
+- 수동 실행: main에서 `action=plan|apply`, `stack=bootstrap|foundation|management|workload|all-runtime`을 선택합니다. 기본값은 **`plan + bootstrap`**이며 리소스를 적용하지 않습니다. 기존 `apply` boolean 입력은 이 두 choice 입력으로 대체했습니다.
+- 배포 job이 선택되고 check가 성공한 경우에만 OIDC로 인증하고 선택한 stack을 실행합니다. 개별 선택은 의존 stack을 자동 생성하지 않습니다. main 자동 실행과 수동 `all-runtime` 선택은 bootstrap → foundation → management → workload를 순차 실행하며 account는 관리자 로컬 전용입니다. apply는 저장한 plan을 사용하고 foundation의 VPC/subnet/NAT/EIP/Loki 삭제·교체 guard를 유지합니다.
+- `bootstrap`은 state S3와 보호 설정만 관리합니다. `foundation` apply는 VPC·NAT·SSM bridge·IAM·Loki S3를, `management`/`workload` apply는 각 EKS를 포함합니다. `all-runtime + apply`는 두 EKS까지 포함합니다.
+- PR 및 main 이외 브랜치의 push에서는 AWS 배포를 실행하지 않습니다. main 자동 실행과 수동 plan/apply에는 기존 S3 backend·CI 역할이 필요하며 state 잠금 파일을 일시 생성할 수 있습니다. workflow는 `.github/workflows/terraform-check.yml`에 정의되어 있습니다.
+
+| Repository variable | 설정 값 |
+| --- | --- |
+| `AWS_ACCOUNT_ID` | 실제 12자리 계정 |
+| `AWS_REGION` | 선택 사항. 설정 시 project.json의 리전과 같아야 함 |
+| `TF_STATE_BUCKET` | 선택 사항. 설정 시 공통 설정에서 계산한 버킷명과 같아야 함 |
+| `TERRAFORM_APPLY_ROLE_ARN` | account 출력 `terraform_apply_role_arn` |
+| `EKS_OPERATOR_PRINCIPAL_ARN` | 기존 운영자 IAM role/user ARN |
+| `EKS_ADDITIONAL_OPERATOR_PRINCIPAL_ARNS` | 추가 운영자 ARN JSON 배열, 기본 `[]` |
+
+배포 인증 전 실행 저장소/브랜치가 공통 설정과 일치하는지도 확인합니다. OIDC subject는 account의 명시 입력이며 맞춤 subject 설정은 관리자 책임입니다.
+
+동일 apply concurrency group은 취소하지 않고 직렬 실행합니다. CI 역할에는 AWS 관리형 `AdministratorAccess`를 연결합니다. 기존 태그·이름 범위 정책도 남아 있지만 실제 권한의 상한이 아니며 account state·자체 역할·OIDC·다른 프로젝트를 포함한 계정 전체에 관리 권한을 가집니다. OIDC 신뢰는 이 저장소의 main 브랜치와 `sts.amazonaws.com` audience로 유지합니다. branch 보호/저장소 접근 권한은 운영 정책으로 별도 관리하세요.
+
+### 최소 구축과 첫 파이프라인 실행 순서
+
+1. 관리자 로컬 인증으로 S3 bootstrap을 생성하고 그 bootstrap state만 S3로 이전합니다. 위 최초 생성 절차를 사용합니다.
+2. 로컬에서 `account/aws` plan을 검토하고 별도 승인 후 apply하여 CI 역할을 생성합니다. 기존 GitHub OIDC provider는 config의 ARN으로 참조합니다.
+3. Repository variables를 설정하고 이 workflow 변경을 main에 반영합니다. 코드가 로컬에만 있으면 GitHub의 기존 workflow 동작은 바뀌지 않습니다.
+4. Run workflow에서 `action=plan`, `stack=bootstrap`으로 실행해 OIDC·state 연결을 확인합니다. 이 단계에서 EKS는 생성하지 않습니다.
+5. 이후 필요할 때만 foundation과 EKS를 각각 검토·적용합니다. EKS에는 운영자 IAM ARN과 선행 foundation state가 필요합니다.
+
+### Self-hosted runner
+
+본선 기간에는 조직 공용 `hopcharlie` self-hosted runner를 운영했습니다. 아래는 당시 호스트의 구성과 이전 절차입니다. 현재 infra의 AWS·GCP 검증 workflow는 GitHub-hosted `ubuntu-latest`를 사용합니다. [도입 기록](docs/adr/0045-run-actions-on-self-hosted-runner.md) · [GCP 호스트 사양 변경](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md)
+
+GCP 호스트는 저장소 루트에서 아래 명령으로 올리고 내린다. gcloud에 로그인해 위 프로젝트를 활성 프로젝트로 두고(`gcloud config set project project-b47cdba3-db5b-42a2-9a6`), `admin:org` 권한이 있는 gh를 쓴다. Windows에서는 PowerShell이나 Git Bash에서 Windows용 `python`으로 실행한다. Git Bash의 `python3`(MSYS2)로 실행하면 gcloud가 뜨지 않는다.
+
+```bash
+gh auth refresh -h github.com -s admin:org
+python scripts/github-runner/gcp_up.py --dry-run   # describe와 조회만 하고 바꿀 것을 출력한다
+python scripts/github-runner/gcp_up.py             # 방화벽 규칙과 VM을 만들고 IAP SSH로 runner 6개를 등록한 뒤 조직 runner 상태를 출력한다
+python scripts/github-runner/gcp_up.py --resize    # 승인 후, 다른 사양의 기존 VM을 중지·변경·시작한다
+# 축소는 유휴 확인·7~9 서비스 중지/비활성화 후 수행하고, 조직 등록은 1~6 복구 확인 후 정리한다(ADR 0067).
+python scripts/github-runner/gcp_down.py           # 지울 것만 출력한다
+python scripts/github-runner/gcp_down.py --apply   # VM과 디스크, GCP runner 등록, 방화벽 규칙 2개를 지운다
+```
+
+AWS 호스트에서 GCP 호스트로 옮기는 순서는 다음과 같다.
+
+1. `python scripts/github-runner/gcp_up.py --dry-run`으로 만들 자원을 확인하고 `python scripts/github-runner/gcp_up.py`를 실행한다.
+2. `gh api orgs/2026-Softbank-Hackathon-Charlie/actions/runners --jq '.runners[] | [.name, .status, .busy] | @tsv'`(또는 조직 Settings의 Actions Runners)에서 `hopcharlie-gcp-runner-1`부터 `3`까지 `online`인지 확인한다. 이어서 run의 "Set up job" 로그에서 Runner name이 `hopcharlie-gcp-runner-N`인 job이 성공하는지 보고, docker를 쓰는 job(platform CI, 이미지 게시)도 하나 이상 확인한다.
+3. `python scripts/github-runner/down.py`로 지울 AWS 자원을 확인하고 `python scripts/github-runner/down.py --apply`로 지운다. 이때 `hopcharlie-runner-1`부터 `3`까지의 등록도 해제된다. GCP runner는 이름이 달라서 건드리지 않는다. AWS runner가 그 순간 돌리던 job은 실패하므로 다시 실행한다.
+
+`gcp_up.py`와 `up.py`는 다시 실행해도 안전하다. 있는 자원은 그대로 쓰고 이미 등록한 runner는 건너뛴다. AWS 스크립트(`up.py`, `down.py`)는 AWS 프로필 `hopcharlie`(또는 `AWS_PROFILE`)를 쓰고, GCP 호스트에 문제가 생기면 되돌아갈 경로로 남긴다. GCP 호스트 셸은 `gcloud compute ssh hopcharlie-github-runner --zone asia-northeast3-a --tunnel-through-iap`로, AWS 호스트 셸은 `aws ssm start-session --target <instance-id>`로 연다. bootstrap 로그는 두 호스트 모두 `/var/log/github-runner-bootstrap.log`에 있다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0045-run-actions-on-self-hosted-runner.md](docs/adr/0045-run-actions-on-self-hosted-runner.md) | private 저장소의 Actions를 조직 self-hosted runner에서 실행하고 호스트를 GCP VM으로 옮기는 결정 |
+| [docs/adr/0046-use-strict-network-policy-on-aws-workload.md](docs/adr/0046-use-strict-network-policy-on-aws-workload.md) | workload strict NetworkPolicy와 시스템 정책 선행 적용·bootstrap·rollback 제안 |
+| [docs/adr/0048-keep-workload-network-policy-standard-by-default.md](docs/adr/0048-keep-workload-network-policy-standard-by-default.md) | workload standard 기본값 유지와 조율된 strict opt-in 제안 |
+| [docs/plans/2026-11-05-eks-strict-network-policy.md](docs/plans/2026-11-05-eks-strict-network-policy.md) | strict NetworkPolicy 구현 범위·로컬 검증·live 적용 경계 |
+| [scripts/github-runner/gcp_up.py](scripts/github-runner/gcp_up.py) | GCP 방화벽 규칙과 VM을 찾거나 만들고 IAP SSH로 token 파일과 bootstrap을 보내 실행 |
+| [scripts/github-runner/gcp_down.py](scripts/github-runner/gcp_down.py) | GCP runner 등록과 VM, 방화벽 규칙 삭제 |
+| [scripts/github-runner/up.py](scripts/github-runner/up.py) | AWS runner 호스트 IAM, 보안 그룹, EC2를 찾거나 만들고 SSM으로 bootstrap을 실행 |
+| [scripts/github-runner/bootstrap.sh](scripts/github-runner/bootstrap.sh) | AWS와 GCP 호스트에서 root로 도구, runner 3개, 메타데이터 차단, Docker 정리 타이머를 설치 |
+| [scripts/github-runner/down.py](scripts/github-runner/down.py) | AWS runner 등록 해제와 호스트 자원 삭제 |
+
+## 관리 EKS 노드 추가 CI
+
+`management-scaleout`은 관리 2a 노드 그룹 1→2대 증설만 허용하는 일회성 수동 선택이다. 기본 배포 동작은 바꾸지 않는다. main의 승인 merge SHA를 `expected_sha`로 지정해야 하며, 자세한 실행 순서는 아래 계획을 따른다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0047-run-management-scaleout-through-ci.md](docs/adr/0047-run-management-scaleout-through-ci.md) | 노드 증설의 CI 실행 결정 |
+| [docs/adr/0049-allow-platform-gcs-bucket-discovery.md](docs/adr/0049-allow-platform-gcs-bucket-discovery.md) | 플랫폼 GCS 소유 확인을 위한 프로젝트 버킷 목록 권한 보완안 |
+| [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
+| [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
+| [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |
+
+## HopCharlie 플랫폼
+
+관리 클러스터의 `charlie-platform` namespace에서 플랫폼 API, 트래픽 게이트웨이, 콘솔, PostgreSQL이 실행되도록 구성합니다. Argo CD Application `charlie-management-hopcharlie-platform`이 배포합니다. 비밀값은 SSM `/hopcharlie/*`에만 있고, 각 pod의 init 컨테이너가 Pod Identity로 읽습니다. Pod Identity 역할과 연결, ECR, SSM 파라미터는 이 레포의 `terraform/platform/aws`가 관리하고, ACM 인증서와 Cloudflare 레코드는 별도 root인 `terraform/platform/aws/dns`가 관리합니다. 결정 이유와 적용 순서는 [ADR 0016](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md)에 있습니다.
+
+플랫폼과 콘솔 이미지는 platform, frontend 저장소의 workflow가 main push마다 게시하고, values의 이미지와 [helm/images.lock.json](helm/images.lock.json)의 digest를 함께 바꾸는 커밋을 이 저장소 main에 바로 넣습니다([ADR 0025](docs/adr/0025-pin-images-on-infra-main.md)). 다른 이미지는 지금처럼 두 곳을 함께 바꾸는 PR을 올립니다.
+
+GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `deploy`)은 [ADR 0021](docs/adr/0021-configure-platform-github-app-deploy.md)을 따릅니다. GitHub App의 private key와 webhook secret은 SSM에 먼저 넣어야 합니다([절차](terraform/platform/aws/README.md#설정-바꾸기)).
+
+콘솔 관리자 계정은 SSM `/hopcharlie/platform-admins`에 bcrypt 해시로 두고 API의 `PLATFORM_ADMINS`로 넘깁니다([ADR 0033](docs/adr/0033-platform-admin-accounts-from-ssm.md)). 이 파라미터도 차트보다 먼저 만들어야 합니다.
+
+앱 버킷과 앱 시크릿(platform ADR 0016, 0019)을 위해 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷과 `/hopcharlie-apps/` IAM 사용자를 관리하고, API가 SSM `/hopcharlie/app-secrets-key`와 클러스터마다의 Sealed Secrets 공개 인증서(`/hopcharlie/sealed-secrets/<환경>`)를 읽습니다([ADR 0035](docs/adr/0035-app-storage-and-secrets-infra.md)). 이 변경, 플랫폼 이미지, envs.yaml 변경(별도 PR) 순서로 적용하며 자세한 단계는 [절차](terraform/platform/aws/README.md#앱-버킷과-시크릿)를 따릅니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md) | 플랫폼을 관리 클러스터에서 운영하는 결정 |
+| [docs/adr/0021-configure-platform-github-app-deploy.md](docs/adr/0021-configure-platform-github-app-deploy.md) | 플랫폼 차트에 GitHub 앱 배포 설정을 넣는 결정 |
+| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정을 SSM에서 플랫폼 API로 넘기는 결정 |
+| [clusters/aws-dev-management/values/hopcharlie-platform.yaml](clusters/aws-dev-management/values/hopcharlie-platform.yaml) | 이미지 digest, 게이트웨이 백엔드, CORS, 도메인, ALB 연결 여부 |
+| [helm/charts/hopcharlie-platform/Chart.yaml](helm/charts/hopcharlie-platform/Chart.yaml) | 플랫폼 chart 메타데이터 |
+| [helm/charts/hopcharlie-platform/values.yaml](helm/charts/hopcharlie-platform/values.yaml) | SSM 경로, 저장소 크기, egress 포트 기본값 |
+| [helm/charts/hopcharlie-platform/templates/_helpers.tpl](helm/charts/hopcharlie-platform/templates/_helpers.tpl) | 공통 label, 보안 설정, SSM을 읽는 init 컨테이너 |
+| [helm/charts/hopcharlie-platform/templates/settings.yaml](helm/charts/hopcharlie-platform/templates/settings.yaml) | Pod Identity용 ServiceAccount와 SSM을 읽는 스크립트 |
+| [helm/charts/hopcharlie-platform/templates/postgres.yaml](helm/charts/hopcharlie-platform/templates/postgres.yaml) | 플랫폼 PostgreSQL StatefulSet과 Service |
+| [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
+| [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
+| [docs/adr/0091-opt-in-same-node-gateway-pod-failover.md](docs/adr/0091-opt-in-same-node-gateway-pod-failover.md) | 단일 상태 소유자 기반 동일 노드 파드 복구 준비·운영 승인 경계 (제안) |
+| [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
+| [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
+| [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |
+
+### GitHub에서 배포하는 앱
+
+플랫폼은 GitHub 저장소로 등록한 앱을 빌드하고 gitops 저장소에 `apps/<app>/<env>.yaml`을 커밋합니다. Argo CD Application `charlie-management-hopcharlie-apps`가 그리는 ApplicationSet이 파일마다 Application `<app>-<env>`를 만들고, `hopcharlie-app` 차트로 워크로드 클러스터의 `<app>` 네임스페이스에 배포합니다. 결정 이유와 남은 작업은 [ADR 0023](docs/adr/0023-deploy-github-apps-with-applicationset.md)에 있습니다.
+
+앱 주소 `https://<instance>.hopcharlie.dev`는 와일드카드 DNS와 ALB 규칙이 게이트웨이로 보내고, 게이트웨이는 플랫폼이 워크로드 kubeconfig로 찾은 내부 NLB로 보냅니다. root를 sync하지 않고 앱 ApplicationSet만 등록하는 방법, gitops 저장소 자격 증명, kubeconfig 권한, 네트워크 근거는 [ADR 0036](docs/adr/0036-app-routing-and-argo-apps.md), 단계별 명령은 [실행 순서](docs/runbooks/app-routing.md)에 있습니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [docs/adr/0023-deploy-github-apps-with-applicationset.md](docs/adr/0023-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
+| [docs/adr/0035-app-storage-and-secrets-infra.md](docs/adr/0035-app-storage-and-secrets-infra.md) | 앱 버킷과 앱 시크릿에 필요한 역할 권한, boundary, 시크릿 키, 인증서, 차트 변경 제안 |
+| [docs/adr/0036-app-routing-and-argo-apps.md](docs/adr/0036-app-routing-and-argo-apps.md) | 앱 ApplicationSet 개별 등록, gitops 자격 증명, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거 제안 |
+| [docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md) | AWS 게이트웨이와 GKE 앱 사이 Tailscale 서브넷 라우터 제안 |
+| [docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md](docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md) | GKE 동적 앱 namespace의 제한된 Argo 권한·소유권 보호 제안 |
+| [docs/adr/0039-add-gke-app-environment.md](docs/adr/0039-add-gke-app-environment.md) | 앱 ApplicationSet의 GKE 환경과 내부 로드밸런서 제안 |
+| [docs/adr/0040-use-gcs-for-gke-app-buckets.md](docs/adr/0040-use-gcs-for-gke-app-buckets.md) | GKE 앱 파일 저장소를 GCS의 S3 호환 API로 쓰는 제안 |
+| [docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md](docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md) | 플랫폼 gcs 드라이버의 키 없는 GCP 권한 제안 |
+| [docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md](docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md) | 플랫폼 앱 이미지를 AR에도 올려 GKE가 받게 하는 제안 |
+| [docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md](docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md) | GKE sealed-secrets 값 파일·수동 적용·키 백업 절차 |
+| [docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md](docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md) | 플랫폼 API의 GKE 읽기 전용 토큰 kubeconfig 제안 |
+| [docs/adr/0056-render-app-service-contract-in-chart.md](docs/adr/0056-render-app-service-contract-in-chart.md) | 앱 차트의 워커 서비스, 서비스별 메모리와 CPU, DB 연결 변수, Postgres 파드 resources 제안 |
+| [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
+| [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
+| [docs/adr/0058-share-one-app-entry-per-workload-cluster.md](docs/adr/0058-share-one-app-entry-per-workload-cluster.md) | 워크로드 EKS의 앱 진입점을 Traefik과 내부 NLB 하나로 모으는 제안, GKE 후속 작업 |
+| [docs/runbooks/app-entry.md](docs/runbooks/app-entry.md) | 앱 진입점 등록, 롤링 재시작 시험, 전환, 앱 NLB 정리, NLB 재생성과 되돌리기 |
+| [scripts/register-traefik.py](scripts/register-traefik.py) | root sync 없이 워크로드 AppProject 변경과 Traefik Application만 미리 보기, 생성, sync. AppProject가 Traefik 저장소와 대상 말고 바뀌면 멈춤 |
+| [scripts/tests/test-register-traefik.py](scripts/tests/test-register-traefik.py) | 위 스크립트의 AppProject 변경 검사 오프라인 테스트 |
+| [terraform/environments/aws/dev/workload/apps-dns.tf](terraform/environments/aws/dev/workload/apps-dns.tf) | 앱 진입점 내부 이름: VPC에 연결한 private zone `hopcharlie.internal`과 Traefik NLB를 가리키는 `*.eks.hopcharlie.internal`(NLB가 없으면 레코드 없이 plan) |
+| [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
+| [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
+| [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
+| [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
+| [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
+| [clusters/onprem-dev-workload/hopcharlie-platform-access.yaml](clusters/onprem-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 onprem(노트북 WSL k3s)에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(GKE와 같은 규칙) |
+| [clusters/onprem-dev-workload/hopai-sandbox-access.yaml](clusters/onprem-dev-workload/hopai-sandbox-access.yaml) | hopai가 onprem(노트북 WSL k3s)에서 리허설 샌드박스를 만들 때 쓰는 cluster-admin ServiceAccount와 토큰(ADR 0099, 손으로 적용) |
+| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
+| [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
+| [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
+| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
+| [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
+| [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
+| [helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml](helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml) | 플랫폼 API가 만드는 Job을 AI 실행기(라벨, ServiceAccount, 이미지, 볼륨)로 한정하는 ValidatingAdmissionPolicy (`platform.aiRunner.enabled`) |
+| [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
+| [helm/charts/hopcharlie-app/Chart.yaml](helm/charts/hopcharlie-app/Chart.yaml) | 앱 chart 메타데이터 |
+| [helm/charts/hopcharlie-app/values.yaml](helm/charts/hopcharlie-app/values.yaml) | gitops 파일 형식과 환경 프로필 기본값 |
+| [helm/charts/hopcharlie-app/values.schema.json](helm/charts/hopcharlie-app/values.schema.json) | gitops 파일과 프로필 검증 |
+| [helm/charts/hopcharlie-app/ci/stateful-values.yaml](helm/charts/hopcharlie-app/ci/stateful-values.yaml) | DB와 버킷이 있는 앱의 검사용 값 |
+| [helm/charts/hopcharlie-app/ci/stateless-values.yaml](helm/charts/hopcharlie-app/ci/stateless-values.yaml) | 상태 없는 앱의 검사용 값 |
+| [helm/charts/hopcharlie-app/templates/_helpers.tpl](helm/charts/hopcharlie-app/templates/_helpers.tpl) | label, 플랫폼이 넣는 환경 변수, 값 검사 |
+| [helm/charts/hopcharlie-app/templates/namespace.yaml](helm/charts/hopcharlie-app/templates/namespace.yaml) | 앱 네임스페이스와 Pod Security label |
+| [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
+| [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
+| [helm/charts/hopcharlie-app/templates/ingress.yaml](helm/charts/hopcharlie-app/templates/ingress.yaml) | 공개 서비스의 공용 진입점 Ingress, 호스트 `<instance>.<hostSuffix>`(ADR 0058) |
+| [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
+| [helm/charts/hopcharlie-app/templates/dbnetwork.yaml](helm/charts/hopcharlie-app/templates/dbnetwork.yaml) | 두 환경 앱 DB의 Tailscale ingress, egress Service와 복제 NetworkPolicy(ADR 0063) |
+| [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
+| [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
+| [scripts/put-sealed-secrets-cert.sh](scripts/put-sealed-secrets-cert.sh) | 워크로드 클러스터의 Sealed Secrets 공개 인증서를 SSM `/hopcharlie/sealed-secrets/eks`에 넣는 스크립트 |
+
+## 플랫폼 Terraform 이관
+
+기존 platform의 관리 EC2·ECR·IAM·SSM 및 state 버킷은 [terraform/platform/aws](terraform/platform/aws/README.md)의 독립 root 세 개로 관리합니다. 기존 hopcharlie S3 backend와 resource 주소를 유지하며, 기존 AWS `all-runtime` 및 charlie 입력 생성기에 포함하지 않습니다. [이관 가이드](docs/platform-terraform-migration.md)의 linked PR 순서·운영 입력 인수 절차를 확인하세요. 별도 검증은 AWS 인증 없이 backend-disabled 임시 복사본에서만 수행합니다.
+
+### 플랫폼 이관 추가 파일
+
+| 파일 | 역할 |
+|---|---|
+| [.github/workflows/platform-terraform.yml](.github/workflows/platform-terraform.yml) | AWS 인증 없는 두 root 전용 검증 workflow |
+| [docs/adr/0022-platform-app-build.md](docs/adr/0022-platform-app-build.md) | 앱 CodeBuild 및 제한된 IAM 제안 |
+| [docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md](docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md) | 앱 CodeBuild의 로컬 Docker layer 캐시와 동시 빌드 4개 결정 |
+| [docs/plans/2026-11-03-app-deploy-infra-spec.md](docs/plans/2026-11-03-app-deploy-infra-spec.md) | 앱 배포 인프라 명세 및 실제 완료 조건 |
+| [docs/plans/2026-11-03-app-deploy-infra.md](docs/plans/2026-11-03-app-deploy-infra.md) | 앱 배포 인프라 순차 실행 계획 |
+| [terraform/platform/aws/app-build.tf](terraform/platform/aws/app-build.tf) | 전용 CodeBuild 프로젝트와 최소 IAM 정책 |
+| [terraform/platform/aws/tests/app-build.tftest.hcl](terraform/platform/aws/tests/app-build.tftest.hcl) | 빌드 설정·IAM 범위 mock 계약 검사 |
+| [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
+| [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
+| [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
+| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
+| [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
+| [terraform/platform/aws/onboarding/inspect.sh](terraform/platform/aws/onboarding/inspect.sh) | 기존 compose 앱 VM을 읽기만 하는 조사 스크립트(platform ADR 0042, SSM 문서 HopCharlie-Inspect) |
+| [terraform/platform/aws/onboarding/connect.sh](terraform/platform/aws/onboarding/connect.sh) | 승인 뒤 원본 DB 준비와 tailnet 연결 스크립트(HopCharlie-Connect) |
+| [terraform/platform/aws/onboarding/disconnect.sh](terraform/platform/aws/onboarding/disconnect.sh) | connect.sh가 더한 것을 되돌리는 스크립트(HopCharlie-Disconnect) |
+| [terraform/platform/aws/onboarding/.gitattributes](terraform/platform/aws/onboarding/.gitattributes) | VM에서 도는 스크립트의 줄바꿈을 LF로 고정 |
+| [terraform/platform/aws/onboarding/test/run.sh](terraform/platform/aws/onboarding/test/run.sh) | 로컬 docker compose 대역에서 세 스크립트를 SSM 없이 시험 |
+| [terraform/platform/aws/onboarding/test/checks.sh](terraform/platform/aws/onboarding/test/checks.sh) | 시험 결과 확인 함수 |
+| [terraform/platform/aws/onboarding/test/compose.yaml](terraform/platform/aws/onboarding/test/compose.yaml) | 시험용 compose 대역(postgres, 앱, 프록시) |
+| [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
+| [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
+| [terraform/platform/aws/onboarding.tf](terraform/platform/aws/onboarding.tf) | compose 앱 가져오기의 SSM 문서 세 개(두 리전)와 플랫폼 역할의 EC2 조회, 문서 실행, 태그, 중지 권한(ADR 0082) |
+| [terraform/platform/aws/tests/onboarding.tftest.hcl](terraform/platform/aws/tests/onboarding.tftest.hcl) | 온보딩 문서 매개변수와 권한의 mock 계약 검사 |
+| [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
+| [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
+| [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |
+| [scripts/test-platform-terraform.py](scripts/test-platform-terraform.py) | 자격/로컬 artifact 제외·검증 명령 경계 회귀시험 |
+| [terraform/platform/aws/.terraform.lock.hcl](terraform/platform/aws/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
+| [terraform/platform/aws/README.md](terraform/platform/aws/README.md) | 관리 호스트 운영·앱 helper 연결 안내 |
+| [terraform/platform/aws/backend.tf](terraform/platform/aws/backend.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/host/envs.yaml](terraform/platform/aws/host/envs.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
+| [terraform/platform/aws/main.tf](terraform/platform/aws/main.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/outputs.tf](terraform/platform/aws/outputs.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/state/.terraform.lock.hcl](terraform/platform/aws/state/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
+| [terraform/platform/aws/state/backend.tf](terraform/platform/aws/state/backend.tf) | 별도 state 버킷 root·기존 backend 보존 |
+| [terraform/platform/aws/state/main.tf](terraform/platform/aws/state/main.tf) | 별도 state 버킷 root·기존 backend 보존 |
+| [terraform/platform/aws/tf.sh](terraform/platform/aws/tf.sh) | 기존 계정 guard·Docker Terraform1.17.1 실행 입구 |
+| [terraform/platform/aws/variables.tf](terraform/platform/aws/variables.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/versions.tf](terraform/platform/aws/versions.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
+| [terraform/platform/aws/dns/.terraform.lock.hcl](terraform/platform/aws/dns/.terraform.lock.hcl) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/dns/backend.tf](terraform/platform/aws/dns/backend.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+| [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
+
+</details>
+
+<details>
+<summary>GCP, 클러스터 간 네트워크와 DB 이전</summary>
+
+## GCP 이전 대상 인프라
+
+GCP의 GCS state, GitHub Actions Workload Identity Federation, GKE와 전용 baseline은 [GCP 구축·배포 절차](docs/gcp-deployment.md)에 정리되어 있습니다. Argo CD의 GKE 접근과 권한 범위는 [GKE 운영 접근](docs/gcp-operational-access.md), DB 복제와 클러스터 간 연결은 [DB 이전 런북](docs/runbooks/aws-gcp-db-migration.md)을 참조하세요.
+
+## GKE 운영 접근 준비
+
+EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준비다. 실제 적용과 권한 검증은 별도 승인 후 진행하며, 기존 AWS 연결·GitHub WIF는 유지한다.
+
+| 파일 | 역할 |
+|---|---|
+| [helm/charts/gcp-argocd-access/Chart.yaml](helm/charts/gcp-argocd-access/Chart.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/values.yaml](helm/charts/gcp-argocd-access/values.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/values.schema.json](helm/charts/gcp-argocd-access/values.schema.json) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/templates/rbac.yaml](helm/charts/gcp-argocd-access/templates/rbac.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml](helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml) | 소유 GKE 앱 namespace만 관리하는 Argo 권한·admission |
+| [scripts/prepare-argocd-gcp.py](scripts/prepare-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [scripts/tests/test-argocd-gcp.py](scripts/tests/test-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [docs/gcp-operational-access.md](docs/gcp-operational-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [docs/adr/0021-keyless-argocd-gke-access.md](docs/adr/0021-keyless-argocd-gke-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/.terraform.lock.hcl](terraform/integrations/gcp/argocd/.terraform.lock.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/backend.hcl.example](terraform/integrations/gcp/argocd/backend.hcl.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/main.tf](terraform/integrations/gcp/argocd/main.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/outputs.tf](terraform/integrations/gcp/argocd/outputs.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/terraform.tfvars.example](terraform/integrations/gcp/argocd/terraform.tfvars.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/variables.tf](terraform/integrations/gcp/argocd/variables.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/versions.tf](terraform/integrations/gcp/argocd/versions.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/argocd/tests/federation.tftest.hcl](terraform/integrations/gcp/argocd/tests/federation.tftest.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
+| [terraform/integrations/gcp/platform-storage/.terraform.lock.hcl](terraform/integrations/gcp/platform-storage/.terraform.lock.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/backend.hcl.example](terraform/integrations/gcp/platform-storage/backend.hcl.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/main.tf](terraform/integrations/gcp/platform-storage/main.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/security-findings.tf](terraform/integrations/gcp/platform-storage/security-findings.tf) | SCC API 활성화와 플랫폼 계정의 SCC 결과 읽기 권한(ADR 0066) |
+| [terraform/integrations/gcp/platform-storage/onboarding.tf](terraform/integrations/gcp/platform-storage/onboarding.tf) | 플랫폼 계정의 VM 인스턴스와 주소 조회 권한(ADR 0082) |
+| [terraform/integrations/gcp/platform-storage/outputs.tf](terraform/integrations/gcp/platform-storage/outputs.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/terraform.tfvars.example](terraform/integrations/gcp/platform-storage/terraform.tfvars.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/variables.tf](terraform/integrations/gcp/platform-storage/variables.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/versions.tf](terraform/integrations/gcp/platform-storage/versions.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl](terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
+| [terraform/integrations/gcp/app-images/.terraform.lock.hcl](terraform/integrations/gcp/app-images/.terraform.lock.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/backend.hcl.example](terraform/integrations/gcp/app-images/backend.hcl.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/main.tf](terraform/integrations/gcp/app-images/main.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/image-scan.tf](terraform/integrations/gcp/app-images/image-scan.tf) | 이미지 스캐너의 GitHub OIDC 신뢰와 AR 저장소 읽기 권한(ADR 0065) |
+| [terraform/integrations/gcp/app-images/outputs.tf](terraform/integrations/gcp/app-images/outputs.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/terraform.tfvars.example](terraform/integrations/gcp/app-images/terraform.tfvars.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/versions.tf](terraform/integrations/gcp/app-images/versions.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-images/tests/access.tftest.hcl](terraform/integrations/gcp/app-images/tests/access.tftest.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
+| [terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl](terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/backend.hcl.example](terraform/integrations/gcp/app-db-backup/backend.hcl.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/main.tf](terraform/integrations/gcp/app-db-backup/main.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/outputs.tf](terraform/integrations/gcp/app-db-backup/outputs.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/terraform.tfvars.example](terraform/integrations/gcp/app-db-backup/terraform.tfvars.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/variables.tf](terraform/integrations/gcp/app-db-backup/variables.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/versions.tf](terraform/integrations/gcp/app-db-backup/versions.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+| [terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl](terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
+
+## AWS↔GKE 앱 사설 경로 (Tailscale)
+
+관리 EKS 게이트웨이가 GKE 앱의 내부 로드밸런서로 가는 경로다([ADR 0037](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md)). 양쪽 라우터 VM, 라우트, 방화벽만 만들고 tailnet 정책은 바꾸지 않는다. CI는 backend 없는 validate와 mock test만 하며, 실제 apply와 tailnet 등록은 별도 승인 후 진행한다.
+
+### 실행 순서
+
+state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 입력값과 적용 결과는 커밋하지 않는다(`.gitignore`). 팀 노션의 적용 기록을 본다.
+
+1. `backend.hcl.example`, `terraform.tfvars.example`을 복사해 기존 값으로 채운다. 이미지는 공식 이미지 ID로 고정한다.
+2. AWS 프로필과 GCP ADC로 `terraform init -backend-config=backend.hcl`, `terraform plan -out=router.tfplan`을 실행하고, 생성만 있는지 확인한 뒤 승인받아 `terraform apply router.tfplan`한다.
+3. 라우터 등록: AWS는 SSM 포트 포워딩, GCP는 IAP 터널로 라우터의 `5252` 포트에 접속해 tailnet 소유자 계정으로 로그인한다. 인증 키는 쓰지 않는다.
+4. tailnet 정책: `terraform output -raw tailscale_policy_candidate`를 기존 정책에 **합친다**. 통째로 덮어쓰지 않는다.
+5. 회수: 같은 설정으로 `terraform destroy` 후 tailnet에서 두 기기를 지운다.
+
+| 파일 | 역할 |
+|---|---|
+| [terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl](terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/backend.hcl.example](terraform/integrations/aws-gcp/tailscale/backend.hcl.example) | state 버킷 입력 예시(prefix는 코드에 고정) |
+| [terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example](terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example) | 기존 VPC·서브넷·고정 이미지 입력 예시 |
+| [terraform/integrations/aws-gcp/tailscale/versions.tf](terraform/integrations/aws-gcp/tailscale/versions.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/variables.tf](terraform/integrations/aws-gcp/tailscale/variables.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/main.tf](terraform/integrations/aws-gcp/tailscale/main.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/outputs.tf](terraform/integrations/aws-gcp/tailscale/outputs.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl](terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/policy.json.tftpl](terraform/integrations/aws-gcp/tailscale/policy.json.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl](terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+| [terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py](terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
+
+## AWS CNPG PoC — 구축 상태와 접속
+
+단일 PostgreSQL과 서비스 A/B DB·Role, 전용 S3 백업·수동 복구 구성을 제공합니다.
+[접속 가이드](docs/runbooks/cnpg-access.md), [승인된 계획](docs/plans/cnpg-aws-poc.md), [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
+2026-11-04 확인에서 DB Ready1/1·DB2/Role4 적용·Argo Synced/Healthy였으며 SQL 접속·migration/grant·실제 복원/RPO/RTO는 아직 미검증입니다.
+새 Argo 앱은 수동 상태이며 root 전체 sync·관리 플랫폼 DB 변경은 하지 않습니다.
+실제 백업 버킷 입력이 없으면 DB 차트 렌더링은 실패합니다. 코드·로컬 검사 성공은 배포나 RPO/RTO 달성 증명이 아닙니다.
+
+| 파일 | 설명 |
+| --- | --- |
+| [clusters/aws-dev-workload/values/cert-manager.yaml](clusters/aws-dev-workload/values/cert-manager.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/cloudnative-pg.yaml](clusters/aws-dev-workload/values/cloudnative-pg.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/cnpg-poc.yaml](clusters/aws-dev-workload/values/cnpg-poc.yaml) | CNPG 구현·검증·운영 기록 |
+| [clusters/aws-dev-workload/values/plugin-barman-cloud.yaml](clusters/aws-dev-workload/values/plugin-barman-cloud.yaml) | CNPG 구현·검증·운영 기록 |
+| [docs/adr/0005-scope-aws-cnpg-poc.md](docs/adr/0005-scope-aws-cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/adr/0006-back-up-cnpg-poc-with-barman.md](docs/adr/0006-back-up-cnpg-poc-with-barman.md) | CNPG 구현·검증·운영 기록 |
+| [docs/plans/cnpg-aws-poc.md](docs/plans/cnpg-aws-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/runbooks/cnpg-poc.md](docs/runbooks/cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
+| [docs/runbooks/cnpg-access.md](docs/runbooks/cnpg-access.md) | DB 접속 정보·SSM/port-forward·TLS·앱 설정·오류 확인 안내 |
+| [examples/cnpg-initial-backup.yaml.example](examples/cnpg-initial-backup.yaml.example) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/Chart.yaml](examples/cnpg-poc/Chart.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/fingerprint.sql](examples/cnpg-poc/files/fingerprint.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/grants.sql](examples/cnpg-poc/files/grants.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/marker.sql](examples/cnpg-poc/files/marker.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/migrate.sql](examples/cnpg-poc/files/migrate.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/run.sh](examples/cnpg-poc/files/run.sh) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/files/verify.sql](examples/cnpg-poc/files/verify.sql) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/templates/job.yaml](examples/cnpg-poc/templates/job.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/values.schema.json](examples/cnpg-poc/values.schema.json) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-poc/values.yaml](examples/cnpg-poc/values.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/Chart.yaml](examples/cnpg-restore/Chart.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/templates/restore.yaml](examples/cnpg-restore/templates/restore.yaml) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/values.schema.json](examples/cnpg-restore/values.schema.json) | CNPG 수동 검증·복원 fixture |
+| [examples/cnpg-restore/values.yaml](examples/cnpg-restore/values.yaml) | CNPG 수동 검증·복원 fixture |
+| [helm/charts/cnpg-poc/Chart.yaml](helm/charts/cnpg-poc/Chart.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/_helpers.tpl](helm/charts/cnpg-poc/templates/_helpers.tpl) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/backups.yaml](helm/charts/cnpg-poc/templates/backups.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/cluster.yaml](helm/charts/cnpg-poc/templates/cluster.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/databases.yaml](helm/charts/cnpg-poc/templates/databases.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/network.yaml](helm/charts/cnpg-poc/templates/network.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/templates/resources.yaml](helm/charts/cnpg-poc/templates/resources.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/values.schema.json](helm/charts/cnpg-poc/values.schema.json) | CNPG 구현·검증·운영 기록 |
+| [helm/charts/cnpg-poc/values.yaml](helm/charts/cnpg-poc/values.yaml) | CNPG 구현·검증·운영 기록 |
+| [helm/cnpg-poc-applications.yaml.example](helm/cnpg-poc-applications.yaml.example) | CNPG 구현·검증·운영 기록 |
+| [scripts/check-cnpg.py](scripts/check-cnpg.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/cnpg-freeze-archive.py](scripts/cnpg-freeze-archive.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/tests/test-cnpg-freeze.py](scripts/tests/test-cnpg-freeze.py) | CNPG 구현·검증·운영 기록 |
+| [scripts/test-cnpg-migration-admission.py](scripts/test-cnpg-migration-admission.py) | AWS·GCP·onprem 정책 동등성 및 실제 RBAC/CEL 허용·거절 회귀 |
+| [scripts/tests/test-cnpg-jobs.py](scripts/tests/test-cnpg-jobs.py) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/foundation/cnpg.tf](terraform/environments/aws/dev/foundation/cnpg.tf) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl](terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl) | CNPG 구현·검증·운영 기록 |
+| [terraform/environments/aws/dev/workload/identity.tf](terraform/environments/aws/dev/workload/identity.tf) | CNPG 구현·검증·운영 기록 |
+
+## AWS-GCP DB migration preparation
+
+DB network and temporary-access code; disabled examples require separate deployment approval.
+
+- [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
+- [docs/adr/0050-let-migrations-own-app-database-topology.md](docs/adr/0050-let-migrations-own-app-database-topology.md)
+- [docs/adr/0052-allow-db-network-dns-through-node-local-cache.md](docs/adr/0052-allow-db-network-dns-through-node-local-cache.md)
+- [docs/adr/0053-migrate-gke-moimroom-into-new-standby.md](docs/adr/0053-migrate-gke-moimroom-into-new-standby.md)
+- [docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md](docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md)
+- [docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md](docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)
+- [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
+- [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
+- [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
+- [helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml](helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml)
+- [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
+- [helm/charts/hopcharlie-db-network/templates/platform-apps.yaml](helm/charts/hopcharlie-db-network/templates/platform-apps.yaml)
+- [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
+- [helm/charts/hopcharlie-db-network/templates/services.yaml](helm/charts/hopcharlie-db-network/templates/services.yaml)
+- [helm/charts/hopcharlie-db-network/templates/validate.yaml](helm/charts/hopcharlie-db-network/templates/validate.yaml)
+- [helm/charts/hopcharlie-db-network/values.schema.json](helm/charts/hopcharlie-db-network/values.schema.json)
+- [helm/charts/hopcharlie-db-network/values.yaml](helm/charts/hopcharlie-db-network/values.yaml)
+- [helm/db-network/apps.yaml.example](helm/db-network/apps.yaml.example)
+- [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
+- [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
+- [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
+- [helm/db-network/management.yaml](helm/db-network/management.yaml)
+- [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
+- [helm/db-network/onprem.yaml](helm/db-network/onprem.yaml)
+- [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
+- [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
+- [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
+- [scripts/db-migration-access.py](scripts/db-migration-access.py)
+- [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
+- [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
+- [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
+- [docs/plans/2026-11-06-management-db-connectivity.md](docs/plans/2026-11-06-management-db-connectivity.md)
+
+## rin 전용 GCP 이전
+
+로컬 코드·검증 단계이며 실제 cloud 생성/전환과 Git 발행은 별도 승인이 필요합니다. [운영 계약](docs/rin-gcp-host.md)을 확인합니다.
+
+| 파일 | 설명 |
+|---|---|
+| [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
+| [docs/adr/0066-platform-reads-scc-findings.md](docs/adr/0066-platform-reads-scc-findings.md) | 플랫폼 API가 SCC Standard 결과를 읽기 전용으로 읽음 |
+| [docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md) | GCP runner 호스트를 최초의 2배인 8 vCPU/32 GB·동시 6개로 축소하고 디스크는 보존 |
+| [docs/adr/0068-record-three-node-gke-workload-capacity.md](docs/adr/0068-record-three-node-gke-workload-capacity.md) | 이미 적용된 GKE workload 3대 기준을 Terraform 기본값·예제·검사에 기록 |
+| [docs/adr/0070-declare-gke-control-plane-patch-target.md](docs/adr/0070-declare-gke-control-plane-patch-target.md) | GKE 제어 영역 최소 버전 목표와 노드 보존·실제 plan 검토·별도 적용 승인 범위 |
+| [docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md](docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md) | 지운 moimroom의 앱 목록 파일과 AWS·GCP 이미지 게시 자원 제거, 적용 순서 |
+| [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/outputs.tf](terraform/environments/gcp/dev/rin/outputs.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/startup.sh](terraform/environments/gcp/dev/rin/startup.sh) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/terraform.tfvars.example](terraform/environments/gcp/dev/rin/terraform.tfvars.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/host.tftest.hcl](terraform/environments/gcp/dev/rin/tests/host.tftest.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/tests/test_bootstrap.py](terraform/environments/gcp/dev/rin/tests/test_bootstrap.py) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/variables.tf](terraform/environments/gcp/dev/rin/variables.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+| [terraform/environments/gcp/dev/rin/versions.tf](terraform/environments/gcp/dev/rin/versions.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
+
+</details>
+
+<details>
+<summary>온프레미스 등록, 수집 준비와 별도 GCE 워크로드</summary>
+
+### 온프레미스 관측 준비
+
+- [계약](clusters/onprem-dev-workload/observability-contract.json)
+- [로컬 renderer](scripts/render-onprem-observability.py)
+- [실제 차트 회귀](scripts/tests/test-onprem-observability.py)
+- [운영 준비 절차](docs/operations/onprem-observability.md)
+- [ADR 0092](docs/adr/0092-onprem-observability-preparation.md)
+
+### Onprem registration preparation (disabled)
+
+- [helm/db-network/onprem-registration-policy-fragment.json.example](helm/db-network/onprem-registration-policy-fragment.json.example)
+- [.github/workflows/onprem-admission.yml](.github/workflows/onprem-admission.yml)
+- [scripts/test-onprem-admission.py](scripts/test-onprem-admission.py)
+- [scripts/tests/test-onprem-registration.py](scripts/tests/test-onprem-registration.py)
+- [scripts/tests/test-onprem-settings.py](scripts/tests/test-onprem-settings.py)
+- [terraform/platform/aws/onprem-registration.tf](terraform/platform/aws/onprem-registration.tf)
+- [terraform/platform/aws/tests/onprem-registration.tftest.hcl](terraform/platform/aws/tests/onprem-registration.tftest.hcl)
+- [helm/charts/hopcharlie-platform/templates/onprem-registration.yaml](helm/charts/hopcharlie-platform/templates/onprem-registration.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml](helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-network.yaml](helm/charts/hopcharlie-platform/templates/onprem-network.yaml)
+- [helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml](helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml)
+- [docs/adr/0084-isolate-onprem-registration-capabilities.md](docs/adr/0084-isolate-onprem-registration-capabilities.md)
+- [docs/adr/0087-bound-gke-observability-argocd-writes.md](docs/adr/0087-bound-gke-observability-argocd-writes.md) — GKE 관측 Argo의 단계별 admission·권한 위임과 실효 권한 (채택)
+- [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
+- [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록
+- [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
+
+| 파일 | 설명 |
+| --- | --- |
+| [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+| [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
+
+- [docs/adr/0093-authorize-gke-app-observability-resources.md](docs/adr/0093-authorize-gke-app-observability-resources.md) — GKE 새 앱의 공개 CA·CNPG PodMonitor 자동 등록 권한과 admission 제한
+- [helm/charts/gcp-argocd-access/templates/app-observability.yaml](helm/charts/gcp-argocd-access/templates/app-observability.yaml) — 기본 off인 앱 관측 자원 guard와 단계별 권한
+
+| 파일 | 설명 |
+| --- | --- |
+| [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
+| [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
+| [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |
+
+- [scripts/apply-onprem-observability.py](scripts/apply-onprem-observability.py)
+- [scripts/tests/test-onprem-observability-apply.py](scripts/tests/test-onprem-observability-apply.py)
+- [docs/adr/0093-explicit-onprem-collector-installation.md](docs/adr/0093-explicit-onprem-collector-installation.md)
+- [docs/runbooks/hopai-langfuse.md](docs/runbooks/hopai-langfuse.md) — 실제 hopai 자동 계측 검증 결과, 활성화 관문과 미완료 사항
+
+- [hopai Langfuse 실제 수신 검증 기록](docs/runbooks/hopai-langfuse-live-check.json)
+
+| 파일 | 설명 |
+| --- | --- |
+| [scripts/render-gpu-canary-activation.py](scripts/render-gpu-canary-activation.py) | 전용 GPU 품질 카나리의 source-only 활성화 렌더러 |
+| [scripts/tests/test-gpu-canary-activation.py](scripts/tests/test-gpu-canary-activation.py) | 정책·비밀·라우팅·영속 상태 경계 회귀 검사 |
+| [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
+| [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
+
+## Independent GCE workload storage
+
+- [helm/charts/gce-workload-deployment/Chart.yaml](helm/charts/gce-workload-deployment/Chart.yaml)
+- [helm/charts/gce-workload-deployment/values.yaml](helm/charts/gce-workload-deployment/values.yaml)
+- [helm/charts/gce-workload-deployment/templates/minio.yaml](helm/charts/gce-workload-deployment/templates/minio.yaml)
+- [clusters/onprem-dev-workload/values/apps.yaml](clusters/onprem-dev-workload/values/apps.yaml)
+- [scripts/tests/test-gce-storage-settings.py](scripts/tests/test-gce-storage-settings.py)
+- [clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json](clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json)
+- [clusters/onprem-dev-workload/values/observability-transport.yaml](clusters/onprem-dev-workload/values/observability-transport.yaml)
+- [clusters/aws-dev-management/values/observability-onprem-query-transport.yaml](clusters/aws-dev-management/values/observability-onprem-query-transport.yaml)
+- [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
+- [docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md](docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md)
+- [docs/adr/0099-hopai-onprem-rehearsal-target.md](docs/adr/0099-hopai-onprem-rehearsal-target.md)
+
+- [docs/operations/onprem-observability-live-check.json](docs/operations/onprem-observability-live-check.json)
+
+GCE HTTP routing:
+
+- [helm/charts/gce-app-web-route/Chart.yaml](helm/charts/gce-app-web-route/Chart.yaml)
+- [helm/charts/gce-app-web-route/templates/service.yaml](helm/charts/gce-app-web-route/templates/service.yaml)
+- [helm/charts/gce-app-web-route/values.yaml](helm/charts/gce-app-web-route/values.yaml)
+
+- [scripts/tests/test-gce-web-route.py](scripts/tests/test-gce-web-route.py)
+
+- [docs/adr/0098-expand-aws-workload-platform-metrics.md](docs/adr/0098-expand-aws-workload-platform-metrics.md)
+
+- [helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml](helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml)
+
+</details>
+
+<details>
+<summary>Headlamp, ClickStack과 워크로드 관측</summary>
+
+## 팀 공용 Headlamp
+
+`https://headlamp.hopcharlie.dev`는 본선에서 사용한 접속 주소입니다. 팀 공용 Headlamp는 한 화면에서 관리 EKS·워크로드 EKS·GKE를 전환하도록 구성했습니다. EKS는 기존 개인 Cognito 로그인을 사용하며 GKE는 Google 로그인과 자동 토큰 갱신을 사용합니다. GKE 권한은 개인 IAM/RBAC를 따릅니다.
+통합 Google 로그인은 opt-in이며 [운영 절차](docs/headlamp-gke-google.md)에 따라 적용합니다. 실제 배포·검증 상태는 실행 기록과 구분하며 GitOps의 `headlamp.enabled`는 기본 false입니다.
+
+| 파일 | 설명 |
+| --- | --- |
+| [docs/headlamp-team.md](docs/headlamp-team.md) | 배포·검증·팀원 등록·비용·정리 절차 |
+| [docs/adr/0017-team-headlamp-with-cognito.md](docs/adr/0017-team-headlamp-with-cognito.md) | 인증·권한·배포 구성 제안 |
+| [helm/charts/headlamp-team/Chart.yaml](helm/charts/headlamp-team/Chart.yaml) | Headlamp 팀 차트 |
+| [helm/charts/headlamp-team/values.yaml](helm/charts/headlamp-team/values.yaml) | 고정 이미지와 기본값 |
+| [helm/charts/headlamp-team/templates/web.yaml](helm/charts/headlamp-team/templates/web.yaml) | OIDC 웹 앱·클러스터 설정·HTTPS Ingress |
+| [helm/charts/headlamp-team/templates/rbac.yaml](helm/charts/headlamp-team/templates/rbac.yaml) | Secret을 제외한 조회 권한 |
+| [helm/charts/headlamp-team/templates/network.yaml](helm/charts/headlamp-team/templates/network.yaml) | Headlamp 네트워크 정책 |
+| [clusters/aws-dev-management/values/headlamp-team.yaml](clusters/aws-dev-management/values/headlamp-team.yaml) | 관리 EKS 설정 초안 |
+| [clusters/aws-dev-workload/values/headlamp-team.yaml](clusters/aws-dev-workload/values/headlamp-team.yaml) | 워크로드 EKS 조회 권한 설정 |
+| [terraform/platform/aws/headlamp/main.tf](terraform/platform/aws/headlamp/main.tf) | Cognito·EKS OIDC·DNS·API 네트워크 |
+| [terraform/platform/aws/headlamp/.terraform.lock.hcl](terraform/platform/aws/headlamp/.terraform.lock.hcl) | provider 버전 고정 |
+| [terraform/platform/aws/headlamp/tests/main.tftest.hcl](terraform/platform/aws/headlamp/tests/main.tftest.hcl) | 클라우드 연결 없는 Terraform mock 검사 |
+| [scripts/prepare-headlamp.py](scripts/prepare-headlamp.py) | 공개 values 생성 및 승인 후 Secret 등록 |
+| [scripts/tests/test-headlamp.py](scripts/tests/test-headlamp.py) | 인증 경계·RBAC·GitOps 로컬 렌더링 검사 |
+| [docs/headlamp-gke.md](docs/headlamp-gke.md) | 기존 AWS 로그인을 유지하는 GKE 개인 인증 연결 절차와 승인 경계 |
+| [docs/adr/0020-add-gke-to-team-headlamp.md](docs/adr/0020-add-gke-to-team-headlamp.md) | GKE 개인 Google 인증 분리 제안 |
+| [scripts/register-headlamp-gke.py](scripts/register-headlamp-gke.py) | 오프라인 GKE 연결 미리보기와 승인 후 기존 Secret 갱신 |
+| [scripts/tests/test-headlamp-gke.py](scripts/tests/test-headlamp-gke.py) | AWS 설정 보존·무자격 GKE context·적용 경계 회귀 검사 |
+| [docs/headlamp-gke-google.md](docs/headlamp-gke-google.md) | GKE 개인 Google 로그인·자동 갱신 준비와 운영 검증 절차 |
+| [docs/adr/0027-headlamp-google-auto-refresh.md](docs/adr/0027-headlamp-google-auto-refresh.md) | GKE 인증 프록시와 자동 갱신 제안 |
+| [docs/plans/2026-11-03-headlamp-google-refresh.md](docs/plans/2026-11-03-headlamp-google-refresh.md) | Google 자동 갱신 구현·검증 계획 |
+| [helm/charts/headlamp-gke-google/Chart.yaml](helm/charts/headlamp-gke-google/Chart.yaml) | GKE Google 인증 전용 Headlamp 차트 |
+| [helm/charts/headlamp-gke-google/values.yaml](helm/charts/headlamp-gke-google/values.yaml) | OAuth 프록시 및 GKE 연결 기본값 |
+| [helm/charts/headlamp-gke-google/templates/web.yaml](helm/charts/headlamp-gke-google/templates/web.yaml) | GKE 전용 인증 프록시·서비스·Ingress |
+| [scripts/tests/test-headlamp-gke-google.py](scripts/tests/test-headlamp-gke-google.py) | Google 인증 프록시와 보안 경계 렌더링 검사 |
+| [helm/charts/headlamp-team/templates/google-auth-plugin.yaml](helm/charts/headlamp-team/templates/google-auth-plugin.yaml) | GKE 로그인 화면 플러그인 ConfigMap |
+| [helm/charts/headlamp-team/files/google-login.js](helm/charts/headlamp-team/files/google-login.js) | 기존 UI의 GKE 인증 경로만 Google 로그인으로 연결 |
+| [helm/charts/headlamp-gke-google/templates/proxy-config.yaml](helm/charts/headlamp-gke-google/templates/proxy-config.yaml) | Google access token 전달과 신뢰 헤더 재생성 설정 |
+| [scripts/prepare-headlamp-google.py](scripts/prepare-headlamp-google.py) | Google backend의 실제 GKE context 준비·안전한 기존 별칭 보존 |
+| [scripts/tests/test-headlamp-google-config.py](scripts/tests/test-headlamp-google-config.py) | GKE kubeconfig 준비·충돌·무자격 인증 경계 검사 |
+| [docs/adr/0028-unify-headlamp-cluster-ui.md](docs/adr/0028-unify-headlamp-cluster-ui.md) | 단일 UI와 클러스터별 인증 경로 결정 |
+| [docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md](docs/adr/0029-use-unsupervised-updates-for-single-instance-cnpg.md) | 단일 CNPG 인스턴스의 업데이트 정책과 admission 제약 |
+| [docs/plans/2026-11-03-headlamp-unified.md](docs/plans/2026-11-03-headlamp-unified.md) | 세 클러스터 통합 구현·검증·배포 계획 |
+
 ## OTel 연결: 준비 후 활성화
 
 1. 두 클러스터에 `observability` namespace를 준비합니다. 동일한 write 암호로 양쪽 `otel-write-auth` Secret을 만들고 `WRITE_PASSWORD` 키를 설정합니다. 현재 고정 collector 구성은 gateway inline 평문 htpasswd를 사용하므로 양쪽에 같은 암호를 설정합니다. collector 버전을 변경할 때는 인증 형식과 실제 401/200 응답을 재확인합니다. Secret은 Git·values에 저장하지 않습니다.
@@ -373,11 +813,216 @@ kubectl --context charlie-dev-management -n observability get svc opentelemetry-
 5. 수집 namespace 변경 시 `config.receivers.filelog.include`(Pod 로그 경로)와 `extraEnvs.COLLECT_NAMESPACE_PATTERN`(메트릭 필터)을 함께 변경합니다. 선택 라벨 추출은 `config.processors.k8sattributes.extract.labels`, Loki 인덱스 라벨은 management Loki values의 `otlp_config`입니다. 기본은 `charlie/release-id` → `charlie.release_id`입니다. 필요 없으면 둘 다 제거합니다.
 6. 새 endpoint/필터를 저장한 후 workload addons 목록에도 `opentelemetry-collector`를 추가하고 동기화합니다. collector auth 오류·Loki 로그·Prometheus 메트릭을 실제로 확인합니다. 내부 NLB와 private API 경로는 별개입니다.
 
-## 영향과 복구
+## ClickStack 관측 구성
 
-배포하면 EKS 2개, 기본 노드 4대, NAT 2개, bridge EC2, S3/EBS 및 OTel 활성화 시 내부 NLB 비용이 발생합니다. NAT single 모드는 비용/장애 범위가 달라집니다. Argo와 지정 운영자의 EKS 권한은 cluster-admin입니다. Prometheus/Grafana/Alertmanager/Loki와 Argo는 단일 replica·일부 AZ 종속 EBS이므로 전체 서비스 HA를 보장하지 않습니다. 저장소에 고정한 Kubernetes/addon/node image 버전 지원 여부와 계정 quota는 실제 배포 직전에 확인하세요.
+- [docs/runbooks/app-langfuse-collector-recovery.json](docs/runbooks/app-langfuse-collector-recovery.json)
 
-GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 versioning으로 보호합니다. state 삭제나 다른 프로젝트의 state 재사용으로 롤백하지 않습니다. foundation guard가 막는 삭제·교체는 별도 검토 후 명시적인 운영 변경으로 처리합니다. Sealed Secrets를 운영에서 사용하기 전 private key 백업·복구 절차를 별도로 준비하세요.
+- [scripts/check-langfuse-service-binding.py](scripts/check-langfuse-service-binding.py)
+
+- [docs/adr/0096-forward-app-llm-traces-through-central-collector.md](docs/adr/0096-forward-app-llm-traces-through-central-collector.md)
+- [helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml](helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml)
+- [clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml)
+
+해커톤 구현 기준과 실제 배포 전 검토는 ADR0050과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
+
+| 파일 | 역할 |
+| --- | --- |
+| [clusters/aws-dev-management/values/clickstack-operators.yaml](clusters/aws-dev-management/values/clickstack-operators.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-management/values/clickstack.yaml](clusters/aws-dev-management/values/clickstack.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-management/values/otel-gateway.yaml](clusters/aws-dev-management/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [clusters/aws-dev-workload/values/otel-gateway.yaml](clusters/aws-dev-workload/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
+| [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
+| [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
+| [docs/adr/0064-platform-creates-management-app-db-routes.md](docs/adr/0064-platform-creates-management-app-db-routes.md) | 관리 EKS의 등록 앱 DB egress Service를 플랫폼이 만들고(별도 릴리스의 Role, VAP) 앱 파일을 플랫폼 신원으로 옮기는 제안 |
+| [docs/adr/0074-born-paired-app-database-before-its-peer-exists.md](docs/adr/0074-born-paired-app-database-before-its-peer-exists.md) | 한 환경 앱 DB도 짝의 primary로 태어나고(`dbTopology.peerPresent: false`) 상대를 더할 때 tailnet 객체만 생기게 하는 제안 |
+| [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
+| [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/LICENSE](helm/charts/clickstack/LICENSE) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/UPSTREAM.md](helm/charts/clickstack/UPSTREAM.md) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/ci/connections.json](helm/charts/clickstack/ci/connections.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/ci/sources.json](helm/charts/clickstack/ci/sources.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/NOTES.txt](helm/charts/clickstack/templates/NOTES.txt) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/_helpers.tpl](helm/charts/clickstack/templates/_helpers.tpl) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/additional-manifests.yaml](helm/charts/clickstack/templates/additional-manifests.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/clickhouse/cluster.yaml](helm/charts/clickstack/templates/clickhouse/cluster.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/clickhouse/keeper.yaml](helm/charts/clickstack/templates/clickhouse/keeper.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/configmap.yaml](helm/charts/clickstack/templates/hyperdx/configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml](helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/deployment.yaml](helm/charts/clickstack/templates/hyperdx/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/hpa.yaml](helm/charts/clickstack/templates/hyperdx/hpa.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/ingress.yaml](helm/charts/clickstack/templates/hyperdx/ingress.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml](helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/pdb.yaml](helm/charts/clickstack/templates/hyperdx/pdb.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/service.yaml](helm/charts/clickstack/templates/hyperdx/service.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml](helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/mongodb/community.yaml](helm/charts/clickstack/templates/mongodb/community.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/otel-collector/custom-config.yaml](helm/charts/clickstack/templates/otel-collector/custom-config.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/otel-collector/deployment.yaml](helm/charts/clickstack/templates/otel-collector/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/queue.yaml](helm/charts/clickstack/templates/queue.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/templates/validate.yaml](helm/charts/clickstack/templates/validate.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/values.schema.json](helm/charts/clickstack/values.schema.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/charts/clickstack/values.yaml](helm/charts/clickstack/values.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
+| [helm/gitops/templates/observability.yaml](helm/gitops/templates/observability.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/check-clickstack.py](scripts/check-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/observability-smoke.py](scripts/observability-smoke.py) | ClickStack 수집·검증·의사결정/배포 검토 |
+| [scripts/tests/test-clickstack.py](scripts/tests/test-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
+
+### 자동 워크로드 관측 준비 파일
+
+- [clusters/aws-dev-management/values/alloy.yaml](clusters/aws-dev-management/values/alloy.yaml)
+- [clusters/aws-dev-management/values/observability-boundary.yaml](clusters/aws-dev-management/values/observability-boundary.yaml)
+- [clusters/aws-dev-management/values/otel-gateway-automatic.yaml](clusters/aws-dev-management/values/otel-gateway-automatic.yaml)
+- [clusters/aws-dev-workload/values/alloy.yaml](clusters/aws-dev-workload/values/alloy.yaml)
+- [clusters/aws-dev-workload/values/cnpg-prometheus.yaml](clusters/aws-dev-workload/values/cnpg-prometheus.yaml)
+- [clusters/aws-dev-workload/values/observability-boundary.yaml](clusters/aws-dev-workload/values/observability-boundary.yaml)
+- [clusters/aws-dev-workload/values/otel-gateway-automatic.yaml](clusters/aws-dev-workload/values/otel-gateway-automatic.yaml)
+- [docs/operations/automatic-workload-observability.md](docs/operations/automatic-workload-observability.md)
+- [helm/charts/clickstack/templates/otel-collector/private-service.yaml](helm/charts/clickstack/templates/otel-collector/private-service.yaml)
+- [helm/charts/hopcharlie-app/templates/observability.yaml](helm/charts/hopcharlie-app/templates/observability.yaml)
+- [helm/charts/observability-boundary/Chart.yaml](helm/charts/observability-boundary/Chart.yaml)
+- [helm/charts/observability-boundary/templates/gateway-policy.yaml](helm/charts/observability-boundary/templates/gateway-policy.yaml)
+- [helm/charts/observability-boundary/templates/metadata-rbac.yaml](helm/charts/observability-boundary/templates/metadata-rbac.yaml)
+- [helm/charts/observability-boundary/templates/metrics-query.yaml](helm/charts/observability-boundary/templates/metrics-query.yaml)
+- [helm/charts/observability-boundary/templates/metrics-rbac.yaml](helm/charts/observability-boundary/templates/metrics-rbac.yaml)
+- [helm/charts/observability-boundary/values.schema.json](helm/charts/observability-boundary/values.schema.json)
+- [helm/charts/observability-boundary/values.yaml](helm/charts/observability-boundary/values.yaml)
+- [scripts/tests/proof-alloy-discovery.py](scripts/tests/proof-alloy-discovery.py)
+- [scripts/tests/proof-metrics-query.py](scripts/tests/proof-metrics-query.py)
+- [scripts/tests/test-automatic-observability.py](scripts/tests/test-automatic-observability.py)
+
+- [docs/plans/workload-observability-activation.md](docs/plans/workload-observability-activation.md) — AWS 자동 관측 활성화 실행 계획·승인 범위
+- [EKS 자동 관측 최종 활성화 C3](docs/plans/workload-observability-c3.md)
+- [docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md](docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md) — 관측 TLS 수명·CA bundle 갱신 제안
+- [clusters/aws-dev-management/values/observability-activation.yaml](clusters/aws-dev-management/values/observability-activation.yaml)
+- [clusters/aws-dev-management/values/clickstack-workload.yaml](clusters/aws-dev-management/values/clickstack-workload.yaml)
+- [clusters/aws-dev-workload/values/baseline-observability.yaml](clusters/aws-dev-workload/values/baseline-observability.yaml)
+- [scripts/render-observability-activation.py](scripts/render-observability-activation.py)
+- [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)
+
+- [helm/charts/observability-boundary/templates/_helpers.tpl](helm/charts/observability-boundary/templates/_helpers.tpl) — query 설정과 Pod checksum 공유
+
+### HyperDX Prometheus 인증 수정 준비
+
+- [images/hyperdx-prometheus-auth/Dockerfile](images/hyperdx-prometheus-auth/Dockerfile)
+- [images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs](images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs)
+- [images/hyperdx-prometheus-auth/render-buildspec.py](images/hyperdx-prometheus-auth/render-buildspec.py)
+- [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
+- [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
+- [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
+- [docs/adr/0072-add-onprem-as-paired-database-environment.md](docs/adr/0072-add-onprem-as-paired-database-environment.md)
+
+- [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
+
+### 운영 환경 동등성 검사
+
+- [docs/adr/0076-enable-platform-parity-audit.md](docs/adr/0076-enable-platform-parity-audit.md) — 감사 모드 활성화와 검증 범위
+- [helm/charts/hopcharlie-platform/templates/parity.yaml](helm/charts/hopcharlie-platform/templates/parity.yaml) — 비밀값 없는 검사 설정
+- [scripts/tests/test-platform-parity.py](scripts/tests/test-platform-parity.py) — API 한정 활성화·설정 교체·안전 모드 검사
+
+### hopai 활동 조회 (콘솔 이주 지도)
+
+- [docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md](docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md) — API가 관측 ClickHouse에서 hopai 호출을 읽는다 (제안)
+- [docs/adr/0078-manage-three-member-db-paths-with-gitops.md](docs/adr/0078-manage-three-member-db-paths-with-gitops.md) — 세 멤버 DB 경로의 GitOps 소유권과 primary source 준비의 최소 권한 (제안)
+- [docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md](docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md) — API가 쓰기 기록 토큰을 SSM에서 선택적으로 읽는다 (제안)
+- [docs/adr/0080-fetch-optional-residency-policy-from-ssm.md](docs/adr/0080-fetch-optional-residency-policy-from-ssm.md) — API가 레지던시 정책을 SSM에서 선택적으로 읽어 시작 전 검사를 켠다 (제안)
+- [docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md](docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md) — onprem 앱 저장소를 노트북 MinIO로 두고 관리 플랫폼에 MinIO 이미지를 고정 (제안)
+- [docs/adr/0082-onboard-existing-compose-apps-infra.md](docs/adr/0082-onboard-existing-compose-apps-infra.md) — compose로 돌던 앱 가져오기의 차트, Argo, 승인 정책, 플랫폼 권한 (제안)
+- [docs/adr/0083-allow-cnpg-api-backend-egress-on-onprem.md](docs/adr/0083-allow-cnpg-api-backend-egress-on-onprem.md) — 온프렘 CNPG와 bootstrap Job의 API backend egress를 앱과 분리 (제안, 운영 미적용)
+- [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)
+
+- [scripts/tests/test-platform-written-tokens.py](scripts/tests/test-platform-written-tokens.py) — 실제 설정 스크립트와 API entrypoint의 미설정·전달·접근 거부·리터럴 값 보존 검사
+
+## GKE 중앙 관측 연결 준비
+
+[ADR0082](docs/adr/0082-connect-gke-to-central-observability.md)의 코드 준비안입니다. gate는 off이며 실제 설치·GKE 앱 rollout·Secret·tailnet ACL 변경은 별도 실행 범위입니다. 온프레미스는 제외합니다. [운영·검증·복구 순서](docs/operations/gke-observability.md)를 따릅니다.
+
+| 파일 | 용도 |
+| --- | --- |
+| [clusters/aws-dev-management/values/clickstack-gke.yaml](clusters/aws-dev-management/values/clickstack-gke.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/aws-dev-management/values/observability-transport.yaml](clusters/aws-dev-management/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/observability-contract.json](clusters/gcp-dev-workload/observability-contract.json) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/alloy.yaml](clusters/gcp-dev-workload/values/alloy.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/app-observability.yaml](clusters/gcp-dev-workload/values/app-observability.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml](clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-activation.yaml](clusters/gcp-dev-workload/values/observability-activation.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-boundary.yaml](clusters/gcp-dev-workload/values/observability-boundary.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/observability-transport.yaml](clusters/gcp-dev-workload/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml](clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml](helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/Chart.yaml](helm/charts/observability-transport/Chart.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/templates/routes.yaml](helm/charts/observability-transport/templates/routes.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/values.schema.json](helm/charts/observability-transport/values.schema.json) | GKE 관측 코드·준비 설정·검증 |
+| [helm/charts/observability-transport/values.yaml](helm/charts/observability-transport/values.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [helm/gitops/templates/observability-external.yaml](helm/gitops/templates/observability-external.yaml) | GKE 관측 코드·준비 설정·검증 |
+| [scripts/tests/test-gke-observability.py](scripts/tests/test-gke-observability.py) | GKE 관측 코드·준비 설정·검증 |
+| [clusters/gcp-dev-workload/observability-namespace.yaml](clusters/gcp-dev-workload/observability-namespace.yaml) | 노드 로그·지표 agent용 namespace의 명시적 실행 준비 |
+| [terraform/environments/aws/dev/foundation/langfuse.tf](terraform/environments/aws/dev/foundation/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/management/langfuse.tf](terraform/environments/aws/dev/management/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
+| [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
+| [docs/adr/0090-remove-duplicate-feature-push-ci.md](docs/adr/0090-remove-duplicate-feature-push-ci.md) | 기능 브랜치 push·PR 중복 검사 제거, 검증·배포 경계 유지 |
+
+</details>
+
+<details>
+<summary>로컬 검사 상세</summary>
+
+## 검증
+
+필요 도구는 `.terraform-version`의 Terraform **1.16.4**, Helm **3.19.1**, Python 3(권장 3.12), PyYAML **6.0.3**, Bash, make입니다. 운영에는 AWS CLI v2, kubectl 1.35, SSM session-manager-plugin이 추가로 필요합니다. provider와 공식 chart 다운로드에 네트워크가 필요합니다.
+
+```bash
+python3 -m venv /tmp/charlie-check-venv
+/tmp/charlie-check-venv/bin/python -m pip install PyYAML==6.0.3
+make check PYTHON=/tmp/charlie-check-venv/bin/python
+```
+
+| 명령 | 확인 범위 |
+| --- | --- |
+| `make tf-check` | fmt + 정제 임시 복사본에서 backend 없는 init/validate. state/AWS 연결 없음 |
+| `make tf-verify` | root당 init 한 번 후 validate/mock 실행; CI matrix도 같은 runner 사용 |
+| `make config-check` | 공유 프로젝트 JSON의 스키마·명명·네트워크 입력 검사 |
+| `make tf-test` | 로컬 state/tfvars/override를 제외한 임시 복사본에서 provider mock test |
+| `make ci-test PYTHON=...` | fake AWS/Terraform 실행 순서·계정·state key·삭제 guard·실패 처리, workflow main 자동 apply·수동 실행 조건, shell 구문 |
+| `make helm-check PYTHON=...` | 임시 chart dependency, bootstrap/GitOps/두 baseline 및 고정 외부 addon lint/render, AppProject/namespace·이미지 digest 검사 |
+| `make inventory-check` | README 파일 목록 누락과 Terraform의 상대 module/file 참조 검사 |
+
+이 검증은 실제 IAM 충분성, 네트워크 연결, 리소스 수용량, 이미지 pull, DNS/TLS 또는 배포 성공을 보장하지 않습니다. Helm 검사는 합성 target fixture를 쓰며 운영 Secret/NLB를 요구하지 않습니다. 기본 GitOps values의 빈 `targets`는 의도적이며 실제 출력 또는 CI fixture를 넣어야 schema 검사를 통과합니다.
+
+</details>
+
+<details>
+<summary>ADR 및 파일 인벤토리</summary>
+
+## Agent 지침과 의사결정 기록
+
+| 파일 | 설명 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | 주요 의사결정을 ADR로 기록하는 Agent 지침 |
+| [docs/adr/template.md](docs/adr/template.md) | 배경·대안·결정 이유·영향을 기록하는 ADR 템플릿 |
+| [docs/adr/0001-record-decisions-as-adrs.md](docs/adr/0001-record-decisions-as-adrs.md) | Agent의 주요 의사결정을 ADR로 기록하기로 한 결정 |
+| [docs/adr/0029-add-gcp-app-image-repository.md](docs/adr/0029-add-gcp-app-image-repository.md) | 기존 GCP bootstrap의 앱 이미지 저장소와 노드 읽기 권한 재사용 제안 |
+| [docs/adr/0030-publish-moimroom-to-aws-and-gcp.md](docs/adr/0030-publish-moimroom-to-aws-and-gcp.md) | 모임룸의 AWS·GCP 이미지 게시와 Terraform 권한 관리 |
+| [docs/adr/0031-reproduce-cnpg-poc-on-gke.md](docs/adr/0031-reproduce-cnpg-poc-on-gke.md) | AWS PostgreSQL PoC의 GKE 동등 구성·GCS 백업·키 없는 인증 |
+| [docs/adr/0032-add-gke-capacity-for-cnpg-poc.md](docs/adr/0032-add-gke-capacity-for-cnpg-poc.md) | PostgreSQL PoC용 GKE 2대 증설 이력; 현재 3대 기준은 ADR0068 |
+| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정(bcrypt 해시)을 SSM에서 플랫폼 API로 넘기는 결정 |
+| [docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md](docs/adr/0034-compare-cnpg-admission-defaults-in-argocd.md) | AWS CNPG 앱의 admission 기본값·Role 생략 값 비교 정책 |
+| [docs/adr/0002-require-approval-for-privileged-operations.md](docs/adr/0002-require-approval-for-privileged-operations.md) | 권한이 필요한 감사·변경 작업의 사전 승인 정책 |
+| [docs/plans/argocd-workload-target.md](docs/plans/argocd-workload-target.md) | 실제 조회 결과와 Argo CD workload 등록·private 저장소 접근 점검 계획 |
+| [docs/plans/argocd-root-bootstrap.md](docs/plans/argocd-root-bootstrap.md) | Argo CD 수동 Application 등록 계획·실행 결과와 sync 승인 경계 |
+| [docs/adr/0017-adopt-existing-helm-resources-in-argocd.md](docs/adr/0017-adopt-existing-helm-resources-in-argocd.md) | 기존 Helm 리소스를 보존하는 단계적 Argo CD 연결 결정 |
+| [docs/plans/metrics-and-management-monitoring.md](docs/plans/metrics-and-management-monitoring.md) | metrics-server 양쪽과 관리 Prometheus 스택의 한정 설치 계획·실행 결과 |
+| [docs/adr/0018-stage-minimal-management-monitoring.md](docs/adr/0018-stage-minimal-management-monitoring.md) | HyperDX 선택을 유지하는 기본 모니터링 단계적 도입 결정 |
+| [docs/adr/0019-use-chart-managed-prometheus-scrape-token.md](docs/adr/0019-use-chart-managed-prometheus-scrape-token.md) | Prometheus scrape용 장기 ServiceAccount 토큰의 추가 승인 경계 |
 
 ## 파일별 역할
 
@@ -554,6 +1199,9 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/environments/gcp/dev/workload/variables.tf](terraform/environments/gcp/dev/workload/variables.tf) | GCP: 필수 입력·유효성 검사 |
 | [terraform/environments/gcp/dev/workload/versions.tf](terraform/environments/gcp/dev/workload/versions.tf) | GCP: provider·backend 정의 |
 
+
+| 파일 | 설명 |
+| --- | --- |
 | [terraform/bootstrap/gcp/.terraform.lock.hcl](terraform/bootstrap/gcp/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl](terraform/bootstrap/gcp/tests/bootstrap.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 | [terraform/bootstrap/gcp/cnpg-poc-backup.tf](terraform/bootstrap/gcp/cnpg-poc-backup.tf) | 선택적 PoC 백업 GCS·전용 계정·버킷 한정 Workload Identity |
@@ -566,573 +1214,4 @@ GitOps는 검토한 이전 commit SHA로 고정하여 되돌리고, state는 S3 
 | [terraform/environments/gcp/dev/workload/.terraform.lock.hcl](terraform/environments/gcp/dev/workload/.terraform.lock.hcl) | GCP: provider 버전·Linux/Windows checksum 고정 |
 | [terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl](terraform/environments/gcp/dev/workload/tests/workload.tftest.hcl) | GCP: backend 없는 신뢰·스토리지·클러스터 회귀시험 |
 
-## HopCharlie 플랫폼
-
-관리 클러스터의 `charlie-platform` namespace에서 플랫폼 API, 트래픽 게이트웨이, 콘솔, PostgreSQL이 돕니다. Argo CD Application `charlie-management-hopcharlie-platform`이 배포합니다. 비밀값은 SSM `/hopcharlie/*`에만 있고, 각 pod의 init 컨테이너가 Pod Identity로 읽습니다. Pod Identity 역할과 연결, ECR, SSM 파라미터는 이 레포의 `terraform/platform/aws`가 관리하고, ACM 인증서와 Cloudflare 레코드는 별도 root인 `terraform/platform/aws/dns`가 관리합니다. 결정 이유와 적용 순서는 [ADR 0016](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md)에 있습니다.
-
-플랫폼과 콘솔 이미지는 platform, frontend 저장소의 workflow가 main push마다 게시하고, values의 이미지와 [helm/images.lock.json](helm/images.lock.json)의 digest를 함께 바꾸는 커밋을 이 저장소 main에 바로 넣습니다([ADR 0025](docs/adr/0025-pin-images-on-infra-main.md)). 다른 이미지는 지금처럼 두 곳을 함께 바꾸는 PR을 올립니다.
-
-GitHub에서 앱을 등록하고 배포하는 설정(`appDomain`, `github`, `deploy`)은 [ADR 0021](docs/adr/0021-configure-platform-github-app-deploy.md)을 따릅니다. GitHub App의 private key와 webhook secret은 SSM에 먼저 넣어야 합니다([절차](terraform/platform/aws/README.md#설정-바꾸기)).
-
-콘솔 관리자 계정은 SSM `/hopcharlie/platform-admins`에 bcrypt 해시로 두고 API의 `PLATFORM_ADMINS`로 넘깁니다([ADR 0033](docs/adr/0033-platform-admin-accounts-from-ssm.md)). 이 파라미터도 차트보다 먼저 만들어야 합니다.
-
-앱 버킷과 앱 시크릿(platform ADR 0016, 0019)을 위해 플랫폼 pod 역할이 `hopcharlie-eks-*` 버킷과 `/hopcharlie-apps/` IAM 사용자를 관리하고, API가 SSM `/hopcharlie/app-secrets-key`와 클러스터마다의 Sealed Secrets 공개 인증서(`/hopcharlie/sealed-secrets/<환경>`)를 읽습니다([ADR 0035](docs/adr/0035-app-storage-and-secrets-infra.md)). 이 변경, 플랫폼 이미지, envs.yaml 변경(별도 PR) 순서로 적용하며 자세한 단계는 [절차](terraform/platform/aws/README.md#앱-버킷과-시크릿)를 따릅니다.
-
-| 파일 | 역할 |
-| --- | --- |
-| [docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md](docs/adr/0016-run-hopcharlie-platform-on-management-cluster.md) | 플랫폼을 관리 클러스터에서 운영하는 결정 |
-| [docs/adr/0021-configure-platform-github-app-deploy.md](docs/adr/0021-configure-platform-github-app-deploy.md) | 플랫폼 차트에 GitHub 앱 배포 설정을 넣는 결정 |
-| [docs/adr/0033-platform-admin-accounts-from-ssm.md](docs/adr/0033-platform-admin-accounts-from-ssm.md) | 콘솔 관리자 계정을 SSM에서 플랫폼 API로 넘기는 결정 |
-| [clusters/aws-dev-management/values/hopcharlie-platform.yaml](clusters/aws-dev-management/values/hopcharlie-platform.yaml) | 이미지 digest, 게이트웨이 백엔드, CORS, 도메인, ALB 연결 여부 |
-| [helm/charts/hopcharlie-platform/Chart.yaml](helm/charts/hopcharlie-platform/Chart.yaml) | 플랫폼 chart 메타데이터 |
-| [helm/charts/hopcharlie-platform/values.yaml](helm/charts/hopcharlie-platform/values.yaml) | SSM 경로, 저장소 크기, egress 포트 기본값 |
-| [helm/charts/hopcharlie-platform/templates/_helpers.tpl](helm/charts/hopcharlie-platform/templates/_helpers.tpl) | 공통 label, 보안 설정, SSM을 읽는 init 컨테이너 |
-| [helm/charts/hopcharlie-platform/templates/settings.yaml](helm/charts/hopcharlie-platform/templates/settings.yaml) | Pod Identity용 ServiceAccount와 SSM을 읽는 스크립트 |
-| [helm/charts/hopcharlie-platform/templates/postgres.yaml](helm/charts/hopcharlie-platform/templates/postgres.yaml) | 플랫폼 PostgreSQL StatefulSet과 Service |
-| [helm/charts/hopcharlie-platform/templates/api.yaml](helm/charts/hopcharlie-platform/templates/api.yaml) | 플랫폼 API Deployment, run 상태 PVC, Service |
-| [helm/charts/hopcharlie-platform/templates/gateway.yaml](helm/charts/hopcharlie-platform/templates/gateway.yaml) | 트래픽 게이트웨이 Deployment, 상태 PVC, Service |
-| [docs/adr/0091-opt-in-same-node-gateway-pod-failover.md](docs/adr/0091-opt-in-same-node-gateway-pod-failover.md) | 단일 상태 소유자 기반 동일 노드 파드 복구 준비·운영 승인 경계 (제안) |
-| [helm/charts/hopcharlie-platform/templates/console.yaml](helm/charts/hopcharlie-platform/templates/console.yaml) | 콘솔 정적 파일 Deployment와 Service |
-| [helm/charts/hopcharlie-platform/templates/network.yaml](helm/charts/hopcharlie-platform/templates/network.yaml) | egress 허용, ALB에서 오는 트래픽 허용, 공유 ALB Ingress와 앱 와일드카드 Ingress |
-| [helm/charts/hopcharlie-platform/templates/hopai.yaml](helm/charts/hopcharlie-platform/templates/hopai.yaml) | 콘솔에서 띄우는 AI 실행기(hopai) Job 템플릿, 설정을 SSM에서 받는 스크립트, API의 Job 생성 Role (`hopai.enabled`) |
-
-### GitHub에서 배포하는 앱
-
-플랫폼은 GitHub 저장소로 등록한 앱을 빌드하고 gitops 저장소에 `apps/<app>/<env>.yaml`을 커밋합니다. Argo CD Application `charlie-management-hopcharlie-apps`가 그리는 ApplicationSet이 파일마다 Application `<app>-<env>`를 만들고, `hopcharlie-app` 차트로 워크로드 클러스터의 `<app>` 네임스페이스에 배포합니다. 결정 이유와 남은 작업은 [ADR 0023](docs/adr/0023-deploy-github-apps-with-applicationset.md)에 있습니다.
-
-앱 주소 `https://<instance>.hopcharlie.dev`는 와일드카드 DNS와 ALB 규칙이 게이트웨이로 보내고, 게이트웨이는 플랫폼이 워크로드 kubeconfig로 찾은 내부 NLB로 보냅니다. root를 sync하지 않고 앱 ApplicationSet만 등록하는 방법, gitops 저장소 자격 증명, kubeconfig 권한, 네트워크 근거는 [ADR 0036](docs/adr/0036-app-routing-and-argo-apps.md), 단계별 명령은 [실행 순서](docs/runbooks/app-routing.md)에 있습니다.
-
-| 파일 | 역할 |
-| --- | --- |
-| [docs/adr/0023-deploy-github-apps-with-applicationset.md](docs/adr/0023-deploy-github-apps-with-applicationset.md) | 앱 차트와 ApplicationSet을 infra에서 관리하는 결정 |
-| [docs/adr/0035-app-storage-and-secrets-infra.md](docs/adr/0035-app-storage-and-secrets-infra.md) | 앱 버킷과 앱 시크릿에 필요한 역할 권한, boundary, 시크릿 키, 인증서, 차트 변경 제안 |
-| [docs/adr/0036-app-routing-and-argo-apps.md](docs/adr/0036-app-routing-and-argo-apps.md) | 앱 ApplicationSet 개별 등록, gitops 자격 증명, 와일드카드 DNS와 ALB 규칙, 워크로드 kubeconfig, 네트워크 근거 제안 |
-| [docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md) | AWS 게이트웨이와 GKE 앱 사이 Tailscale 서브넷 라우터 제안 |
-| [docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md](docs/adr/0038-limit-argocd-to-owned-gke-app-namespaces.md) | GKE 동적 앱 namespace의 제한된 Argo 권한·소유권 보호 제안 |
-| [docs/adr/0039-add-gke-app-environment.md](docs/adr/0039-add-gke-app-environment.md) | 앱 ApplicationSet의 GKE 환경과 내부 로드밸런서 제안 |
-| [docs/adr/0040-use-gcs-for-gke-app-buckets.md](docs/adr/0040-use-gcs-for-gke-app-buckets.md) | GKE 앱 파일 저장소를 GCS의 S3 호환 API로 쓰는 제안 |
-| [docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md](docs/adr/0041-keyless-gcp-access-for-platform-app-storage.md) | 플랫폼 gcs 드라이버의 키 없는 GCP 권한 제안 |
-| [docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md](docs/adr/0042-copy-app-images-to-artifact-registry-for-gke.md) | 플랫폼 앱 이미지를 AR에도 올려 GKE가 받게 하는 제안 |
-| [docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md](docs/adr/0043-manage-gke-sealed-secrets-with-pinned-values.md) | GKE sealed-secrets 값 파일·수동 적용·키 백업 절차 |
-| [docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md](docs/adr/0044-platform-reads-gke-with-token-kubeconfig.md) | 플랫폼 API의 GKE 읽기 전용 토큰 kubeconfig 제안 |
-| [docs/adr/0056-render-app-service-contract-in-chart.md](docs/adr/0056-render-app-service-contract-in-chart.md) | 앱 차트의 워커 서비스, 서비스별 메모리와 CPU, DB 연결 변수, Postgres 파드 resources 제안 |
-| [docs/runbooks/app-routing.md](docs/runbooks/app-routing.md) | 앱 주소를 여는 운영 작업의 실행 순서와 확인 명령 |
-| [scripts/register-hopcharlie-apps.py](scripts/register-hopcharlie-apps.py) | root sync 없이 앱 AppProject와 Application만 미리 보기, 생성, sync하고 gitops 저장소 Secret 등록 |
-| [docs/adr/0058-share-one-app-entry-per-workload-cluster.md](docs/adr/0058-share-one-app-entry-per-workload-cluster.md) | 워크로드 EKS의 앱 진입점을 Traefik과 내부 NLB 하나로 모으는 제안, GKE 후속 작업 |
-| [docs/runbooks/app-entry.md](docs/runbooks/app-entry.md) | 앱 진입점 등록, 롤링 재시작 시험, 전환, 앱 NLB 정리, NLB 재생성과 되돌리기 |
-| [scripts/register-traefik.py](scripts/register-traefik.py) | root sync 없이 워크로드 AppProject 변경과 Traefik Application만 미리 보기, 생성, sync. AppProject가 Traefik 저장소와 대상 말고 바뀌면 멈춤 |
-| [scripts/tests/test-register-traefik.py](scripts/tests/test-register-traefik.py) | 위 스크립트의 AppProject 변경 검사 오프라인 테스트 |
-| [terraform/environments/aws/dev/workload/apps-dns.tf](terraform/environments/aws/dev/workload/apps-dns.tf) | 앱 진입점 내부 이름: VPC에 연결한 private zone `hopcharlie.internal`과 Traefik NLB를 가리키는 `*.eks.hopcharlie.internal`(NLB가 없으면 레코드 없이 plan) |
-| [clusters/aws-dev-workload/values/traefik.yaml](clusters/aws-dev-workload/values/traefik.yaml) | 워크로드 Traefik: 고정 이미지, 내부 NLB annotation, 무중단 종료, 헤더 신뢰 범위 |
-| [scripts/put-platform-kubeconfig.py](scripts/put-platform-kubeconfig.py) | 워크로드(EKS·GKE) RBAC 적용, 토큰 kubeconfig 생성과 권한 확인, SSM `/hopcharlie/kube/<env>` 저장 |
-| [scripts/tests/test-app-routing.py](scripts/tests/test-app-routing.py) | 두 스크립트의 계정 확인, 덮어쓰기 거부, 토큰 비노출 오프라인 검사 |
-| [clusters/aws-dev-workload/hopcharlie-platform-access.yaml](clusters/aws-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 워크로드에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
-| [clusters/gcp-dev-workload/hopcharlie-platform-access.yaml](clusters/gcp-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 GKE에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole(ADR 0044), VAP로 좁힌 CNPG 이전 권한(ADR 0063) |
-| [clusters/onprem-dev-workload/hopcharlie-platform-access.yaml](clusters/onprem-dev-workload/hopcharlie-platform-access.yaml) | 플랫폼 API가 onprem(노트북 WSL k3s)에서 쓰는 ServiceAccount, 토큰, 읽기 전용 ClusterRole, VAP로 좁힌 CNPG 이전 권한(GKE와 같은 규칙) |
-| [clusters/onprem-dev-workload/hopai-sandbox-access.yaml](clusters/onprem-dev-workload/hopai-sandbox-access.yaml) | hopai가 onprem(노트북 WSL k3s)에서 리허설 샌드박스를 만들 때 쓰는 cluster-admin ServiceAccount와 토큰(ADR 0099, 손으로 적용) |
-| [clusters/aws-dev-management/values/hopcharlie-apps.yaml](clusters/aws-dev-management/values/hopcharlie-apps.yaml) | 환경 `eks`, `gke`의 프로필: 내부 로드밸런서 80 포트, CNPG와 Postgres 파드 resources, S3, quota, NetworkPolicy |
-| [helm/charts/hopcharlie-apps/Chart.yaml](helm/charts/hopcharlie-apps/Chart.yaml) | 앱 ApplicationSet chart 메타데이터 |
-| [helm/charts/hopcharlie-apps/values.yaml](helm/charts/hopcharlie-apps/values.yaml) | gitops 저장소, 앱 차트 위치, 막는 네임스페이스, 플랫폼 ServiceAccount |
-| [helm/charts/hopcharlie-apps/templates/applicationset.yaml](helm/charts/hopcharlie-apps/templates/applicationset.yaml) | gitops 파일마다 Application을 만드는 ApplicationSet, 상위 Application의 cascade 삭제에서 제외 |
-| [helm/charts/hopcharlie-apps/templates/appproject.yaml](helm/charts/hopcharlie-apps/templates/appproject.yaml) | 앱이 쓸 수 있는 클러스터, 네임스페이스, 객체를 정하는 AppProject |
-| [helm/charts/hopcharlie-apps/templates/platform-rbac.yaml](helm/charts/hopcharlie-apps/templates/platform-rbac.yaml) | 플랫폼 API의 Application refresh 권한과 그 범위를 막는 ValidatingAdmissionPolicy |
-| [helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml](helm/charts/hopcharlie-apps/templates/ai-runner-policy.yaml) | 플랫폼 API가 만드는 Job을 AI 실행기(라벨, ServiceAccount, 이미지, 볼륨)로 한정하는 ValidatingAdmissionPolicy (`platform.aiRunner.enabled`) |
-| [helm/charts/hopcharlie-app/README.md](helm/charts/hopcharlie-app/README.md) | 앱 차트가 그리는 객체와 값 설명 |
-| [helm/charts/hopcharlie-app/Chart.yaml](helm/charts/hopcharlie-app/Chart.yaml) | 앱 chart 메타데이터 |
-| [helm/charts/hopcharlie-app/values.yaml](helm/charts/hopcharlie-app/values.yaml) | gitops 파일 형식과 환경 프로필 기본값 |
-| [helm/charts/hopcharlie-app/values.schema.json](helm/charts/hopcharlie-app/values.schema.json) | gitops 파일과 프로필 검증 |
-| [helm/charts/hopcharlie-app/ci/stateful-values.yaml](helm/charts/hopcharlie-app/ci/stateful-values.yaml) | DB와 버킷이 있는 앱의 검사용 값 |
-| [helm/charts/hopcharlie-app/ci/stateless-values.yaml](helm/charts/hopcharlie-app/ci/stateless-values.yaml) | 상태 없는 앱의 검사용 값 |
-| [helm/charts/hopcharlie-app/templates/_helpers.tpl](helm/charts/hopcharlie-app/templates/_helpers.tpl) | label, 플랫폼이 넣는 환경 변수, 값 검사 |
-| [helm/charts/hopcharlie-app/templates/namespace.yaml](helm/charts/hopcharlie-app/templates/namespace.yaml) | 앱 네임스페이스와 Pod Security label |
-| [helm/charts/hopcharlie-app/templates/deployment.yaml](helm/charts/hopcharlie-app/templates/deployment.yaml) | 서비스마다 Deployment |
-| [helm/charts/hopcharlie-app/templates/service.yaml](helm/charts/hopcharlie-app/templates/service.yaml) | 서비스마다 Service, 공개 서비스는 환경의 load balancer |
-| [helm/charts/hopcharlie-app/templates/ingress.yaml](helm/charts/hopcharlie-app/templates/ingress.yaml) | 공개 서비스의 공용 진입점 Ingress, 호스트 `<instance>.<hostSuffix>`(ADR 0058) |
-| [helm/charts/hopcharlie-app/templates/postgres.yaml](helm/charts/hopcharlie-app/templates/postgres.yaml) | postgres 리소스의 CNPG Cluster |
-| [helm/charts/hopcharlie-app/templates/dbnetwork.yaml](helm/charts/hopcharlie-app/templates/dbnetwork.yaml) | 두 환경 앱 DB의 Tailscale ingress, egress Service와 복제 NetworkPolicy(ADR 0063) |
-| [helm/charts/hopcharlie-app/templates/sealedsecrets.yaml](helm/charts/hopcharlie-app/templates/sealedsecrets.yaml) | 플랫폼이 봉인한 버킷 키와 앱 시크릿의 SealedSecret `app-s3`, `app-secrets` |
-| [helm/charts/hopcharlie-app/templates/guardrails.yaml](helm/charts/hopcharlie-app/templates/guardrails.yaml) | 네임스페이스의 ResourceQuota, LimitRange, NetworkPolicy |
-| [scripts/put-sealed-secrets-cert.sh](scripts/put-sealed-secrets-cert.sh) | 워크로드 클러스터의 Sealed Secrets 공개 인증서를 SSM `/hopcharlie/sealed-secrets/eks`에 넣는 스크립트 |
-
-
-## 플랫폼 Terraform 이관
-
-기존 platform의 관리 EC2·ECR·IAM·SSM 및 state 버킷은 [terraform/platform/aws](terraform/platform/aws/README.md)의 독립 root 세 개로 관리합니다. 기존 hopcharlie S3 backend와 resource 주소를 유지하며, 기존 AWS `all-runtime` 및 charlie 입력 생성기에 포함하지 않습니다. [이관 가이드](docs/platform-terraform-migration.md)의 linked PR 순서·운영 입력 인수 절차를 확인하세요. 별도 검증은 AWS 인증 없이 backend-disabled 임시 복사본에서만 수행합니다.
-
-### 플랫폼 이관 추가 파일
-
-| 파일 | 역할 |
-|---|---|
-| [.github/workflows/platform-terraform.yml](.github/workflows/platform-terraform.yml) | AWS 인증 없는 두 root 전용 검증 workflow |
-| [docs/adr/0022-platform-app-build.md](docs/adr/0022-platform-app-build.md) | 앱 CodeBuild 및 제한된 IAM 제안 |
-| [docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md](docs/adr/0055-cache-app-build-layers-and-allow-four-builds.md) | 앱 CodeBuild의 로컬 Docker layer 캐시와 동시 빌드 4개 결정 |
-| [docs/plans/2026-11-03-app-deploy-infra-spec.md](docs/plans/2026-11-03-app-deploy-infra-spec.md) | 앱 배포 인프라 명세 및 실제 완료 조건 |
-| [docs/plans/2026-11-03-app-deploy-infra.md](docs/plans/2026-11-03-app-deploy-infra.md) | 앱 배포 인프라 순차 실행 계획 |
-| [terraform/platform/aws/app-build.tf](terraform/platform/aws/app-build.tf) | 전용 CodeBuild 프로젝트와 최소 IAM 정책 |
-| [terraform/platform/aws/tests/app-build.tftest.hcl](terraform/platform/aws/tests/app-build.tftest.hcl) | 빌드 설정·IAM 범위 mock 계약 검사 |
-| [docs/adr/0024-publish-images-from-github-actions.md](docs/adr/0024-publish-images-from-github-actions.md) | 플랫폼과 콘솔 이미지를 각 저장소 GitHub Actions로 게시하는 결정 |
-| [docs/adr/0025-pin-images-on-infra-main.md](docs/adr/0025-pin-images-on-infra-main.md) | 게시한 이미지를 PR 없이 infra main에 바로 고정하는 결정 |
-| [docs/adr/0026-retire-platform-ec2-host.md](docs/adr/0026-retire-platform-ec2-host.md) | 플랫폼 EC2 관리 호스트를 철거하는 결정 |
-| [terraform/platform/aws/image-publish.tf](terraform/platform/aws/image-publish.tf) | platform·frontend 각 저장소 main만 신뢰하는 ECR 게시 OIDC 역할 |
-| [terraform/platform/aws/tests/image-publish.tftest.hcl](terraform/platform/aws/tests/image-publish.tftest.hcl) | 게시 역할의 신뢰 조건과 ECR 범위 mock 계약 검사 |
-| [terraform/platform/aws/onboarding/inspect.sh](terraform/platform/aws/onboarding/inspect.sh) | 기존 compose 앱 VM을 읽기만 하는 조사 스크립트(platform ADR 0042, SSM 문서 HopCharlie-Inspect) |
-| [terraform/platform/aws/onboarding/connect.sh](terraform/platform/aws/onboarding/connect.sh) | 승인 뒤 원본 DB 준비와 tailnet 연결 스크립트(HopCharlie-Connect) |
-| [terraform/platform/aws/onboarding/disconnect.sh](terraform/platform/aws/onboarding/disconnect.sh) | connect.sh가 더한 것을 되돌리는 스크립트(HopCharlie-Disconnect) |
-| [terraform/platform/aws/onboarding/.gitattributes](terraform/platform/aws/onboarding/.gitattributes) | VM에서 도는 스크립트의 줄바꿈을 LF로 고정 |
-| [terraform/platform/aws/onboarding/test/run.sh](terraform/platform/aws/onboarding/test/run.sh) | 로컬 docker compose 대역에서 세 스크립트를 SSM 없이 시험 |
-| [terraform/platform/aws/onboarding/test/checks.sh](terraform/platform/aws/onboarding/test/checks.sh) | 시험 결과 확인 함수 |
-| [terraform/platform/aws/onboarding/test/compose.yaml](terraform/platform/aws/onboarding/test/compose.yaml) | 시험용 compose 대역(postgres, 앱, 프록시) |
-| [terraform/platform/aws/app-storage.tf](terraform/platform/aws/app-storage.tf) | 플랫폼 pod 역할의 앱 버킷과 IAM 사용자 권한, permissions boundary, 앱 시크릿 키 |
-| [terraform/platform/aws/tests/app-storage.tftest.hcl](terraform/platform/aws/tests/app-storage.tftest.hcl) | 앱 버킷 권한, boundary, 시크릿 키, envs.yaml의 mock 계약 검사 |
-| [terraform/platform/aws/onboarding.tf](terraform/platform/aws/onboarding.tf) | compose 앱 가져오기의 SSM 문서 세 개(두 리전)와 플랫폼 역할의 EC2 조회, 문서 실행, 태그, 중지 권한(ADR 0082) |
-| [terraform/platform/aws/tests/onboarding.tftest.hcl](terraform/platform/aws/tests/onboarding.tftest.hcl) | 온보딩 문서 매개변수와 권한의 mock 계약 검사 |
-| [docs/adr/0015-centralize-platform-terraform-ownership.md](docs/adr/0015-centralize-platform-terraform-ownership.md) | 독립 root·기존 state 보존 및 소유권 결정 |
-| [docs/platform-terraform-migration.md](docs/platform-terraform-migration.md) | 두 저장소 이관·인수·동시 PR 처리 절차 |
-| [scripts/check-platform-terraform.py](scripts/check-platform-terraform.py) | 허용 자산만 복사한 backend-disabled 검증 |
-| [scripts/test-platform-terraform.py](scripts/test-platform-terraform.py) | 자격/로컬 artifact 제외·검증 명령 경계 회귀시험 |
-| [terraform/platform/aws/.terraform.lock.hcl](terraform/platform/aws/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
-| [terraform/platform/aws/README.md](terraform/platform/aws/README.md) | 관리 호스트 운영·앱 helper 연결 안내 |
-| [terraform/platform/aws/backend.tf](terraform/platform/aws/backend.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/host/envs.yaml](terraform/platform/aws/host/envs.yaml) | 기존 SSM 호스트 payload·운영 기본 설정 보존 |
-| [terraform/platform/aws/main.tf](terraform/platform/aws/main.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/outputs.tf](terraform/platform/aws/outputs.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/state/.terraform.lock.hcl](terraform/platform/aws/state/.terraform.lock.hcl) | 기존 provider 버전과 checksum 보존 |
-| [terraform/platform/aws/state/backend.tf](terraform/platform/aws/state/backend.tf) | 별도 state 버킷 root·기존 backend 보존 |
-| [terraform/platform/aws/state/main.tf](terraform/platform/aws/state/main.tf) | 별도 state 버킷 root·기존 backend 보존 |
-| [terraform/platform/aws/tf.sh](terraform/platform/aws/tf.sh) | 기존 계정 guard·Docker Terraform1.17.1 실행 입구 |
-| [terraform/platform/aws/variables.tf](terraform/platform/aws/variables.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/versions.tf](terraform/platform/aws/versions.tf) | 기존 관리 호스트 root·리소스/입력/출력 계약 |
-| [terraform/platform/aws/dns/.terraform.lock.hcl](terraform/platform/aws/dns/.terraform.lock.hcl) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
-| [terraform/platform/aws/dns/backend.tf](terraform/platform/aws/dns/backend.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
-| [terraform/platform/aws/dns/main.tf](terraform/platform/aws/dns/main.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
-| [terraform/platform/aws/eks.tf](terraform/platform/aws/eks.tf) | 최신 platform main의 Pod Identity·DNS·provider lock 보존 |
-
-## AWS CNPG PoC — 구축 상태와 접속
-
-단일 PostgreSQL과 서비스 A/B DB·Role, 전용 S3 백업·수동 복구 구성을 제공합니다.
-[접속 가이드](docs/runbooks/cnpg-access.md), [승인된 계획](docs/plans/cnpg-aws-poc.md), [실행 runbook](docs/runbooks/cnpg-poc.md)을 따릅니다.
-2026-11-04 확인에서 DB Ready1/1·DB2/Role4 적용·Argo Synced/Healthy였으며 SQL 접속·migration/grant·실제 복원/RPO/RTO는 아직 미검증입니다.
-새 Argo 앱은 수동 상태이며 root 전체 sync·관리 플랫폼 DB 변경은 하지 않습니다.
-실제 백업 버킷 입력이 없으면 DB 차트 렌더링은 실패합니다. 코드·로컬 검사 성공은 배포나 RPO/RTO 달성 증명이 아닙니다.
-
-| 파일 | 설명 |
-| --- | --- |
-| [clusters/aws-dev-workload/values/cert-manager.yaml](clusters/aws-dev-workload/values/cert-manager.yaml) | CNPG 구현·검증·운영 기록 |
-| [clusters/aws-dev-workload/values/cloudnative-pg.yaml](clusters/aws-dev-workload/values/cloudnative-pg.yaml) | CNPG 구현·검증·운영 기록 |
-| [clusters/aws-dev-workload/values/cnpg-poc.yaml](clusters/aws-dev-workload/values/cnpg-poc.yaml) | CNPG 구현·검증·운영 기록 |
-| [clusters/aws-dev-workload/values/plugin-barman-cloud.yaml](clusters/aws-dev-workload/values/plugin-barman-cloud.yaml) | CNPG 구현·검증·운영 기록 |
-| [docs/adr/0005-scope-aws-cnpg-poc.md](docs/adr/0005-scope-aws-cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
-| [docs/adr/0006-back-up-cnpg-poc-with-barman.md](docs/adr/0006-back-up-cnpg-poc-with-barman.md) | CNPG 구현·검증·운영 기록 |
-| [docs/plans/cnpg-aws-poc.md](docs/plans/cnpg-aws-poc.md) | CNPG 구현·검증·운영 기록 |
-| [docs/runbooks/cnpg-poc.md](docs/runbooks/cnpg-poc.md) | CNPG 구현·검증·운영 기록 |
-| [docs/runbooks/cnpg-access.md](docs/runbooks/cnpg-access.md) | DB 접속 정보·SSM/port-forward·TLS·앱 설정·오류 확인 안내 |
-| [examples/cnpg-initial-backup.yaml.example](examples/cnpg-initial-backup.yaml.example) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/Chart.yaml](examples/cnpg-poc/Chart.yaml) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/fingerprint.sql](examples/cnpg-poc/files/fingerprint.sql) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/grants.sql](examples/cnpg-poc/files/grants.sql) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/marker.sql](examples/cnpg-poc/files/marker.sql) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/migrate.sql](examples/cnpg-poc/files/migrate.sql) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/run.sh](examples/cnpg-poc/files/run.sh) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/files/verify.sql](examples/cnpg-poc/files/verify.sql) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/templates/job.yaml](examples/cnpg-poc/templates/job.yaml) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/values.schema.json](examples/cnpg-poc/values.schema.json) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-poc/values.yaml](examples/cnpg-poc/values.yaml) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-restore/Chart.yaml](examples/cnpg-restore/Chart.yaml) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-restore/templates/restore.yaml](examples/cnpg-restore/templates/restore.yaml) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-restore/values.schema.json](examples/cnpg-restore/values.schema.json) | CNPG 수동 검증·복원 fixture |
-| [examples/cnpg-restore/values.yaml](examples/cnpg-restore/values.yaml) | CNPG 수동 검증·복원 fixture |
-| [helm/charts/cnpg-poc/Chart.yaml](helm/charts/cnpg-poc/Chart.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/_helpers.tpl](helm/charts/cnpg-poc/templates/_helpers.tpl) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/backups.yaml](helm/charts/cnpg-poc/templates/backups.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/cluster.yaml](helm/charts/cnpg-poc/templates/cluster.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/databases.yaml](helm/charts/cnpg-poc/templates/databases.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/network.yaml](helm/charts/cnpg-poc/templates/network.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/templates/resources.yaml](helm/charts/cnpg-poc/templates/resources.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/values.schema.json](helm/charts/cnpg-poc/values.schema.json) | CNPG 구현·검증·운영 기록 |
-| [helm/charts/cnpg-poc/values.yaml](helm/charts/cnpg-poc/values.yaml) | CNPG 구현·검증·운영 기록 |
-| [helm/cnpg-poc-applications.yaml.example](helm/cnpg-poc-applications.yaml.example) | CNPG 구현·검증·운영 기록 |
-| [scripts/check-cnpg.py](scripts/check-cnpg.py) | CNPG 구현·검증·운영 기록 |
-| [scripts/cnpg-freeze-archive.py](scripts/cnpg-freeze-archive.py) | CNPG 구현·검증·운영 기록 |
-| [scripts/tests/test-cnpg-freeze.py](scripts/tests/test-cnpg-freeze.py) | CNPG 구현·검증·운영 기록 |
-| [scripts/test-cnpg-migration-admission.py](scripts/test-cnpg-migration-admission.py) | AWS·GCP·onprem 정책 동등성 및 실제 RBAC/CEL 허용·거절 회귀 |
-| [scripts/tests/test-cnpg-jobs.py](scripts/tests/test-cnpg-jobs.py) | CNPG 구현·검증·운영 기록 |
-| [terraform/environments/aws/dev/foundation/cnpg.tf](terraform/environments/aws/dev/foundation/cnpg.tf) | CNPG 구현·검증·운영 기록 |
-| [terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl](terraform/environments/aws/dev/foundation/tests/cnpg.tftest.hcl) | CNPG 구현·검증·운영 기록 |
-| [terraform/environments/aws/dev/workload/identity.tf](terraform/environments/aws/dev/workload/identity.tf) | CNPG 구현·검증·운영 기록 |
-
-## GKE 운영 접근 준비
-
-EKS ServiceAccount OIDC와 별도 Google WIF를 이용하는 Argo CD 연결 준비다. 실제 적용과 권한 검증은 별도 승인 후 진행하며, 기존 AWS 연결·GitHub WIF는 유지한다.
-
-| 파일 | 역할 |
-|---|---|
-| [helm/charts/gcp-argocd-access/Chart.yaml](helm/charts/gcp-argocd-access/Chart.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [helm/charts/gcp-argocd-access/values.yaml](helm/charts/gcp-argocd-access/values.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [helm/charts/gcp-argocd-access/values.schema.json](helm/charts/gcp-argocd-access/values.schema.json) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [helm/charts/gcp-argocd-access/templates/rbac.yaml](helm/charts/gcp-argocd-access/templates/rbac.yaml) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml](helm/charts/gcp-argocd-access/templates/dynamic-apps.yaml) | 소유 GKE 앱 namespace만 관리하는 Argo 권한·admission |
-| [scripts/prepare-argocd-gcp.py](scripts/prepare-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [scripts/tests/test-argocd-gcp.py](scripts/tests/test-argocd-gcp.py) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [docs/gcp-operational-access.md](docs/gcp-operational-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [docs/adr/0021-keyless-argocd-gke-access.md](docs/adr/0021-keyless-argocd-gke-access.md) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/.terraform.lock.hcl](terraform/integrations/gcp/argocd/.terraform.lock.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/backend.hcl.example](terraform/integrations/gcp/argocd/backend.hcl.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/main.tf](terraform/integrations/gcp/argocd/main.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/outputs.tf](terraform/integrations/gcp/argocd/outputs.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/terraform.tfvars.example](terraform/integrations/gcp/argocd/terraform.tfvars.example) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/variables.tf](terraform/integrations/gcp/argocd/variables.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/versions.tf](terraform/integrations/gcp/argocd/versions.tf) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/argocd/tests/federation.tftest.hcl](terraform/integrations/gcp/argocd/tests/federation.tftest.hcl) | 키 없는 GKE 인증·범위 제한·오프라인 준비 및 검증 |
-| [terraform/integrations/gcp/platform-storage/.terraform.lock.hcl](terraform/integrations/gcp/platform-storage/.terraform.lock.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/backend.hcl.example](terraform/integrations/gcp/platform-storage/backend.hcl.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/main.tf](terraform/integrations/gcp/platform-storage/main.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/security-findings.tf](terraform/integrations/gcp/platform-storage/security-findings.tf) | SCC API 활성화와 플랫폼 계정의 SCC 결과 읽기 권한(ADR 0066) |
-| [terraform/integrations/gcp/platform-storage/onboarding.tf](terraform/integrations/gcp/platform-storage/onboarding.tf) | 플랫폼 계정의 VM 인스턴스와 주소 조회 권한(ADR 0082) |
-| [terraform/integrations/gcp/platform-storage/outputs.tf](terraform/integrations/gcp/platform-storage/outputs.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/terraform.tfvars.example](terraform/integrations/gcp/platform-storage/terraform.tfvars.example) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/variables.tf](terraform/integrations/gcp/platform-storage/variables.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/versions.tf](terraform/integrations/gcp/platform-storage/versions.tf) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl](terraform/integrations/gcp/platform-storage/tests/access.tftest.hcl) | 플랫폼 GKE 앱 버킷용 키 없는 GCP 권한(ADR 0041) |
-| [terraform/integrations/gcp/app-images/.terraform.lock.hcl](terraform/integrations/gcp/app-images/.terraform.lock.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/backend.hcl.example](terraform/integrations/gcp/app-images/backend.hcl.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/main.tf](terraform/integrations/gcp/app-images/main.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/image-scan.tf](terraform/integrations/gcp/app-images/image-scan.tf) | 이미지 스캐너의 GitHub OIDC 신뢰와 AR 저장소 읽기 권한(ADR 0065) |
-| [terraform/integrations/gcp/app-images/outputs.tf](terraform/integrations/gcp/app-images/outputs.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/terraform.tfvars.example](terraform/integrations/gcp/app-images/terraform.tfvars.example) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/variables.tf](terraform/integrations/gcp/app-images/variables.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/versions.tf](terraform/integrations/gcp/app-images/versions.tf) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-images/tests/access.tftest.hcl](terraform/integrations/gcp/app-images/tests/access.tftest.hcl) | GKE용 앱 이미지 AR 저장소와 CodeBuild 키 없는 push 권한(ADR 0042) |
-| [terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl](terraform/integrations/gcp/app-db-backup/.terraform.lock.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/backend.hcl.example](terraform/integrations/gcp/app-db-backup/backend.hcl.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/main.tf](terraform/integrations/gcp/app-db-backup/main.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/outputs.tf](terraform/integrations/gcp/app-db-backup/outputs.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/terraform.tfvars.example](terraform/integrations/gcp/app-db-backup/terraform.tfvars.example) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/variables.tf](terraform/integrations/gcp/app-db-backup/variables.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/versions.tf](terraform/integrations/gcp/app-db-backup/versions.tf) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-| [terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl](terraform/integrations/gcp/app-db-backup/tests/access.tftest.hcl) | GKE 앱 DB 백업 버킷과 Workload Identity 계정(ADR 0057) |
-
-## AWS↔GKE 앱 사설 경로 (Tailscale)
-
-관리 EKS 게이트웨이가 GKE 앱의 내부 로드밸런서로 가는 경로다([ADR 0037](docs/adr/0037-connect-aws-gateway-to-gke-apps-with-tailscale-routers.md)). 양쪽 라우터 VM, 라우트, 방화벽만 만들고 tailnet 정책은 바꾸지 않는다. CI는 backend 없는 validate와 mock test만 하며, 실제 apply와 tailnet 등록은 별도 승인 후 진행한다.
-
-### 실행 순서
-
-state는 기존 GCP state 버킷의 `aws-gcp/dev/tailscale`에 둔다. 실제 입력값과 적용 결과는 커밋하지 않는다(`.gitignore`). 팀 노션의 적용 기록을 본다.
-
-1. `backend.hcl.example`, `terraform.tfvars.example`을 복사해 기존 값으로 채운다. 이미지는 공식 이미지 ID로 고정한다.
-2. AWS 프로필과 GCP ADC로 `terraform init -backend-config=backend.hcl`, `terraform plan -out=router.tfplan`을 실행하고, 생성만 있는지 확인한 뒤 승인받아 `terraform apply router.tfplan`한다.
-3. 라우터 등록: AWS는 SSM 포트 포워딩, GCP는 IAP 터널로 라우터의 `5252` 포트에 접속해 tailnet 소유자 계정으로 로그인한다. 인증 키는 쓰지 않는다.
-4. tailnet 정책: `terraform output -raw tailscale_policy_candidate`를 기존 정책에 **합친다**. 통째로 덮어쓰지 않는다.
-5. 회수: 같은 설정으로 `terraform destroy` 후 tailnet에서 두 기기를 지운다.
-
-| 파일 | 역할 |
-|---|---|
-| [terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl](terraform/integrations/aws-gcp/tailscale/.terraform.lock.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/backend.hcl.example](terraform/integrations/aws-gcp/tailscale/backend.hcl.example) | state 버킷 입력 예시(prefix는 코드에 고정) |
-| [terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example](terraform/integrations/aws-gcp/tailscale/terraform.tfvars.example) | 기존 VPC·서브넷·고정 이미지 입력 예시 |
-| [terraform/integrations/aws-gcp/tailscale/versions.tf](terraform/integrations/aws-gcp/tailscale/versions.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/variables.tf](terraform/integrations/aws-gcp/tailscale/variables.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/main.tf](terraform/integrations/aws-gcp/tailscale/main.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/outputs.tf](terraform/integrations/aws-gcp/tailscale/outputs.tf) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl](terraform/integrations/aws-gcp/tailscale/router-bootstrap.sh.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/policy.json.tftpl](terraform/integrations/aws-gcp/tailscale/policy.json.tftpl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl](terraform/integrations/aws-gcp/tailscale/tests/network.tftest.hcl) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-| [terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py](terraform/integrations/aws-gcp/tailscale/tests/test_router_assets.py) | GKE 앱 대역과 관리 게이트웨이 대역을 잇는 라우터·경로·검증 |
-
-## 관리 EKS 노드 추가 CI
-
-`management-scaleout`은 관리 2a 노드 그룹 1→2대 증설만 허용하는 일회성 수동 선택이다. 기본 배포 동작은 바꾸지 않는다. main의 승인 merge SHA를 `expected_sha`로 지정해야 하며, 자세한 실행 순서는 아래 계획을 따른다.
-
-| 파일 | 역할 |
-| --- | --- |
-| [docs/adr/0047-run-management-scaleout-through-ci.md](docs/adr/0047-run-management-scaleout-through-ci.md) | 노드 증설의 CI 실행 결정 |
-| [docs/adr/0049-allow-platform-gcs-bucket-discovery.md](docs/adr/0049-allow-platform-gcs-bucket-discovery.md) | 플랫폼 GCS 소유 확인을 위한 프로젝트 버킷 목록 권한 보완안 |
-| [docs/plans/management-capacity-ci.md](docs/plans/management-capacity-ci.md) | 계획·검증 및 머지 후 수동 실행 안내 |
-| [scripts/check-management-scaleout-plan.py](scripts/check-management-scaleout-plan.py) | 지정 증설과 승인된 refresh 차이 검사 |
-| [scripts/tests/test-management-scaleout-plan.py](scripts/tests/test-management-scaleout-plan.py) | plan guard 경계 검증 |
-
-## ClickStack 관측 구성
-
-- [docs/runbooks/app-langfuse-collector-recovery.json](docs/runbooks/app-langfuse-collector-recovery.json)
-
-- [scripts/check-langfuse-service-binding.py](scripts/check-langfuse-service-binding.py)
-
-- [docs/adr/0096-forward-app-llm-traces-through-central-collector.md](docs/adr/0096-forward-app-llm-traces-through-central-collector.md)
-- [helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml](helm/charts/clickstack/templates/otel-collector/langfuse-policy.yaml)
-- [clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-app-ingress.yaml)
-
-해커톤 구현 기준과 실제 배포 전 검토는 ADR0050과 배포 검토 문서를 따른다. 기본 활성화는 꺼져 있으며 실제 클러스터 변경을 포함하지 않는다.
-
-| 파일 | 역할 |
-| --- | --- |
-| [clusters/aws-dev-management/values/clickstack-operators.yaml](clusters/aws-dev-management/values/clickstack-operators.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [clusters/aws-dev-management/values/clickstack.yaml](clusters/aws-dev-management/values/clickstack.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [clusters/aws-dev-management/values/otel-gateway.yaml](clusters/aws-dev-management/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [clusters/aws-dev-workload/values/otel-gateway.yaml](clusters/aws-dev-workload/values/otel-gateway.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/adr/0050-adopt-clickstack-for-hackathon-observability.md](docs/adr/0050-adopt-clickstack-for-hackathon-observability.md) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/clickstack-architecture.md](docs/clickstack-architecture.md) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/clickstack-deployment-review.md](docs/clickstack-deployment-review.md) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [docs/adr/0061-private-otlp-ingress-for-aws-workload.md](docs/adr/0061-private-otlp-ingress-for-aws-workload.md) | AWS workload 관측 전송·조회 사설 경로 제안 |
-| [docs/adr/0062-automatically-observe-platform-workloads.md](docs/adr/0062-automatically-observe-platform-workloads.md) | 신규 앱·CNPG·플랫폼 작업의 관측 자동 연결 제안 |
-| [docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md](docs/adr/0063-born-paired-app-databases-for-two-environment-apps.md) | 두 환경 앱 DB를 처음부터 CNPG 분산 토폴로지 짝으로 만들고 플랫폼 계정에 좁은 이전 권한을 주는 제안 |
-| [docs/adr/0064-platform-creates-management-app-db-routes.md](docs/adr/0064-platform-creates-management-app-db-routes.md) | 관리 EKS의 등록 앱 DB egress Service를 플랫폼이 만들고(별도 릴리스의 Role, VAP) 앱 파일을 플랫폼 신원으로 옮기는 제안 |
-| [docs/adr/0074-born-paired-app-database-before-its-peer-exists.md](docs/adr/0074-born-paired-app-database-before-its-peer-exists.md) | 한 환경 앱 DB도 짝의 primary로 태어나고(`dbTopology.peerPresent: false`) 상대를 더할 때 tailnet 객체만 생기게 하는 제안 |
-| [docs/plans/workload-observability-expansion.md](docs/plans/workload-observability-expansion.md) | 플랫폼 workload 자동 관측 계획·검증·승인 경계 |
-| [docs/plans/clickstack-implementation.md](docs/plans/clickstack-implementation.md) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [helm/charts/clickstack/Chart.yaml](helm/charts/clickstack/Chart.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/LICENSE](helm/charts/clickstack/LICENSE) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/UPSTREAM.md](helm/charts/clickstack/UPSTREAM.md) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/ci/connections.json](helm/charts/clickstack/ci/connections.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/ci/sources.json](helm/charts/clickstack/ci/sources.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/NOTES.txt](helm/charts/clickstack/templates/NOTES.txt) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/_helpers.tpl](helm/charts/clickstack/templates/_helpers.tpl) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/additional-manifests.yaml](helm/charts/clickstack/templates/additional-manifests.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/clickhouse/cluster.yaml](helm/charts/clickstack/templates/clickhouse/cluster.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/clickhouse/keeper.yaml](helm/charts/clickstack/templates/clickhouse/keeper.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/configmap.yaml](helm/charts/clickstack/templates/hyperdx/configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml](helm/charts/clickstack/templates/hyperdx/cronjob-check-alerts.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-configmap.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml](helm/charts/clickstack/templates/hyperdx/dashboard-provisioner-rbac.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/deployment.yaml](helm/charts/clickstack/templates/hyperdx/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/hpa.yaml](helm/charts/clickstack/templates/hyperdx/hpa.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/ingress.yaml](helm/charts/clickstack/templates/hyperdx/ingress.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml](helm/charts/clickstack/templates/hyperdx/networkpolicy.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/pdb.yaml](helm/charts/clickstack/templates/hyperdx/pdb.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/service.yaml](helm/charts/clickstack/templates/hyperdx/service.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml](helm/charts/clickstack/templates/hyperdx/serviceaccount.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/mongodb/community.yaml](helm/charts/clickstack/templates/mongodb/community.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/otel-collector/custom-config.yaml](helm/charts/clickstack/templates/otel-collector/custom-config.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/otel-collector/deployment.yaml](helm/charts/clickstack/templates/otel-collector/deployment.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/queue.yaml](helm/charts/clickstack/templates/queue.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/templates/validate.yaml](helm/charts/clickstack/templates/validate.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/values.schema.json](helm/charts/clickstack/values.schema.json) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/charts/clickstack/values.yaml](helm/charts/clickstack/values.yaml) | ClickStack 로컬 배포·Secret 참조 템플릿 |
-| [helm/gitops/templates/observability.yaml](helm/gitops/templates/observability.yaml) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [scripts/check-clickstack.py](scripts/check-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [scripts/observability-smoke.py](scripts/observability-smoke.py) | ClickStack 수집·검증·의사결정/배포 검토 |
-| [scripts/tests/test-clickstack.py](scripts/tests/test-clickstack.py) | ClickStack 수집·검증·의사결정/배포 검토 |
-
-## AWS-GCP DB migration preparation
-
-DB network and temporary-access code; disabled examples require separate deployment approval.
-
-- [docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md](docs/adr/0048-connect-cloud-databases-with-scoped-migration-access.md)
-- [docs/adr/0050-let-migrations-own-app-database-topology.md](docs/adr/0050-let-migrations-own-app-database-topology.md)
-- [docs/adr/0052-allow-db-network-dns-through-node-local-cache.md](docs/adr/0052-allow-db-network-dns-through-node-local-cache.md)
-- [docs/adr/0053-migrate-gke-moimroom-into-new-standby.md](docs/adr/0053-migrate-gke-moimroom-into-new-standby.md)
-- [docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md](docs/adr/0057-back-up-gke-moimroom-db-with-workload-identity.md)
-- [docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md](docs/adr/0060-allow-live-moimroom-db-in-protected-namespace-for-migration-access.md)
-- [docs/runbooks/aws-gcp-db-migration.md](docs/runbooks/aws-gcp-db-migration.md)
-- [helm/charts/hopcharlie-db-network/Chart.yaml](helm/charts/hopcharlie-db-network/Chart.yaml)
-- [helm/charts/hopcharlie-db-network/templates/_helpers.tpl](helm/charts/hopcharlie-db-network/templates/_helpers.tpl)
-- [helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml](helm/charts/hopcharlie-db-network/templates/management-app-routes.yaml)
-- [helm/charts/hopcharlie-db-network/templates/network.yaml](helm/charts/hopcharlie-db-network/templates/network.yaml)
-- [helm/charts/hopcharlie-db-network/templates/platform-apps.yaml](helm/charts/hopcharlie-db-network/templates/platform-apps.yaml)
-- [helm/charts/hopcharlie-db-network/templates/proxyclass.yaml](helm/charts/hopcharlie-db-network/templates/proxyclass.yaml)
-- [helm/charts/hopcharlie-db-network/templates/services.yaml](helm/charts/hopcharlie-db-network/templates/services.yaml)
-- [helm/charts/hopcharlie-db-network/templates/validate.yaml](helm/charts/hopcharlie-db-network/templates/validate.yaml)
-- [helm/charts/hopcharlie-db-network/values.schema.json](helm/charts/hopcharlie-db-network/values.schema.json)
-- [helm/charts/hopcharlie-db-network/values.yaml](helm/charts/hopcharlie-db-network/values.yaml)
-- [helm/db-network/apps.yaml.example](helm/db-network/apps.yaml.example)
-- [helm/db-network/eks.yaml.example](helm/db-network/eks.yaml.example)
-- [helm/db-network/gke.yaml.example](helm/db-network/gke.yaml.example)
-- [helm/db-network/management.yaml.example](helm/db-network/management.yaml.example)
-- [helm/db-network/management.yaml](helm/db-network/management.yaml)
-- [helm/db-network/management-app-routes.yaml](helm/db-network/management-app-routes.yaml)
-- [helm/db-network/onprem.yaml](helm/db-network/onprem.yaml)
-- [helm/db-network/operator-values.yaml](helm/db-network/operator-values.yaml)
-- [helm/db-network/platform-values.yaml.example](helm/db-network/platform-values.yaml.example)
-- [helm/db-network/policy-fragment.json.example](helm/db-network/policy-fragment.json.example)
-- [scripts/db-migration-access.py](scripts/db-migration-access.py)
-- [scripts/tests/test-db-migration-access.py](scripts/tests/test-db-migration-access.py)
-- [scripts/tests/test-db-network-assets.py](scripts/tests/test-db-network-assets.py)
-- [scripts/tests/test-db-network.py](scripts/tests/test-db-network.py)
-- [docs/plans/2026-11-06-management-db-connectivity.md](docs/plans/2026-11-06-management-db-connectivity.md)
-
-## rin 전용 GCP 이전
-
-로컬 코드·검증 단계이며 실제 cloud 생성/전환과 Git 발행은 별도 승인이 필요합니다. [운영 계약](docs/rin-gcp-host.md)을 확인합니다.
-
-| 파일 | 설명 |
-|---|---|
-| [docs/rin-gcp-host.md](docs/rin-gcp-host.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md](docs/adr/0059-isolate-rin-gcp-host-and-ci-access.md) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [docs/adr/0065-image-scanner-reads-artifact-registry.md](docs/adr/0065-image-scanner-reads-artifact-registry.md) | 이미지 스캐너에 GitHub OIDC로 AR 읽기 권한만 부여 |
-| [docs/adr/0066-platform-reads-scc-findings.md](docs/adr/0066-platform-reads-scc-findings.md) | 플랫폼 API가 SCC Standard 결과를 읽기 전용으로 읽음 |
-| [docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md](docs/adr/0067-reduce-gcp-runner-to-double-initial-capacity.md) | GCP runner 호스트를 최초의 2배인 8 vCPU/32 GB·동시 6개로 축소하고 디스크는 보존 |
-| [docs/adr/0068-record-three-node-gke-workload-capacity.md](docs/adr/0068-record-three-node-gke-workload-capacity.md) | 이미 적용된 GKE workload 3대 기준을 Terraform 기본값·예제·검사에 기록 |
-| [docs/adr/0070-declare-gke-control-plane-patch-target.md](docs/adr/0070-declare-gke-control-plane-patch-target.md) | GKE 제어 영역 최소 버전 목표와 노드 보존·실제 plan 검토·별도 적용 승인 범위 |
-| [docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md](docs/adr/0075-remove-moimroom-static-catalog-and-image-publishing.md) | 지운 moimroom의 앱 목록 파일과 AWS·GCP 이미지 게시 자원 제거, 적용 순서 |
-| [terraform/environments/gcp/dev/rin/.terraform.lock.hcl](terraform/environments/gcp/dev/rin/.terraform.lock.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/backend.hcl.example](terraform/environments/gcp/dev/rin/backend.hcl.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/main.tf](terraform/environments/gcp/dev/rin/main.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/outputs.tf](terraform/environments/gcp/dev/rin/outputs.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/startup.sh](terraform/environments/gcp/dev/rin/startup.sh) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/terraform.tfvars.example](terraform/environments/gcp/dev/rin/terraform.tfvars.example) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/tests/host.tftest.hcl](terraform/environments/gcp/dev/rin/tests/host.tftest.hcl) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/tests/test_bootstrap.py](terraform/environments/gcp/dev/rin/tests/test_bootstrap.py) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/variables.tf](terraform/environments/gcp/dev/rin/variables.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-| [terraform/environments/gcp/dev/rin/versions.tf](terraform/environments/gcp/dev/rin/versions.tf) | rin 전용 GCP 호스트·CI 접근과 검증(ADR0059) |
-
-### 자동 워크로드 관측 준비 파일
-
-- [clusters/aws-dev-management/values/alloy.yaml](clusters/aws-dev-management/values/alloy.yaml)
-- [clusters/aws-dev-management/values/observability-boundary.yaml](clusters/aws-dev-management/values/observability-boundary.yaml)
-- [clusters/aws-dev-management/values/otel-gateway-automatic.yaml](clusters/aws-dev-management/values/otel-gateway-automatic.yaml)
-- [clusters/aws-dev-workload/values/alloy.yaml](clusters/aws-dev-workload/values/alloy.yaml)
-- [clusters/aws-dev-workload/values/cnpg-prometheus.yaml](clusters/aws-dev-workload/values/cnpg-prometheus.yaml)
-- [clusters/aws-dev-workload/values/observability-boundary.yaml](clusters/aws-dev-workload/values/observability-boundary.yaml)
-- [clusters/aws-dev-workload/values/otel-gateway-automatic.yaml](clusters/aws-dev-workload/values/otel-gateway-automatic.yaml)
-- [docs/operations/automatic-workload-observability.md](docs/operations/automatic-workload-observability.md)
-- [helm/charts/clickstack/templates/otel-collector/private-service.yaml](helm/charts/clickstack/templates/otel-collector/private-service.yaml)
-- [helm/charts/hopcharlie-app/templates/observability.yaml](helm/charts/hopcharlie-app/templates/observability.yaml)
-- [helm/charts/observability-boundary/Chart.yaml](helm/charts/observability-boundary/Chart.yaml)
-- [helm/charts/observability-boundary/templates/gateway-policy.yaml](helm/charts/observability-boundary/templates/gateway-policy.yaml)
-- [helm/charts/observability-boundary/templates/metadata-rbac.yaml](helm/charts/observability-boundary/templates/metadata-rbac.yaml)
-- [helm/charts/observability-boundary/templates/metrics-query.yaml](helm/charts/observability-boundary/templates/metrics-query.yaml)
-- [helm/charts/observability-boundary/templates/metrics-rbac.yaml](helm/charts/observability-boundary/templates/metrics-rbac.yaml)
-- [helm/charts/observability-boundary/values.schema.json](helm/charts/observability-boundary/values.schema.json)
-- [helm/charts/observability-boundary/values.yaml](helm/charts/observability-boundary/values.yaml)
-- [scripts/tests/proof-alloy-discovery.py](scripts/tests/proof-alloy-discovery.py)
-- [scripts/tests/proof-metrics-query.py](scripts/tests/proof-metrics-query.py)
-- [scripts/tests/test-automatic-observability.py](scripts/tests/test-automatic-observability.py)
-
-- [docs/plans/workload-observability-activation.md](docs/plans/workload-observability-activation.md) — AWS 자동 관측 활성화 실행 계획·승인 범위
-- [EKS 자동 관측 최종 활성화 C3](docs/plans/workload-observability-c3.md)
-- [docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md](docs/adr/0063-rotate-observability-tls-with-public-ca-bundles.md) — 관측 TLS 수명·CA bundle 갱신 제안
-- [clusters/aws-dev-management/values/observability-activation.yaml](clusters/aws-dev-management/values/observability-activation.yaml)
-- [clusters/aws-dev-management/values/clickstack-workload.yaml](clusters/aws-dev-management/values/clickstack-workload.yaml)
-- [clusters/aws-dev-workload/values/baseline-observability.yaml](clusters/aws-dev-workload/values/baseline-observability.yaml)
-- [scripts/render-observability-activation.py](scripts/render-observability-activation.py)
-- [docs/operations/workload-observability-activation.md](docs/operations/workload-observability-activation.md)
-
-- [helm/charts/observability-boundary/templates/_helpers.tpl](helm/charts/observability-boundary/templates/_helpers.tpl) — query 설정과 Pod checksum 공유
-
-### HyperDX Prometheus 인증 수정 준비
-
-- [images/hyperdx-prometheus-auth/Dockerfile](images/hyperdx-prometheus-auth/Dockerfile)
-- [images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs](images/hyperdx-prometheus-auth/patch-prometheus-auth.cjs)
-- [images/hyperdx-prometheus-auth/render-buildspec.py](images/hyperdx-prometheus-auth/render-buildspec.py)
-- [images/hyperdx-prometheus-auth/README.md](images/hyperdx-prometheus-auth/README.md)
-- [images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs](images/hyperdx-prometheus-auth/tests/test-prometheus-auth.cjs)
-- [docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md](docs/adr/0071-patch-hyperdx-prometheus-basic-auth.md)
-- [docs/adr/0072-add-onprem-as-paired-database-environment.md](docs/adr/0072-add-onprem-as-paired-database-environment.md)
-
-- [images/hyperdx-prometheus-auth/publish-image.py](images/hyperdx-prometheus-auth/publish-image.py) — 승인 후 기존 CodeBuild 안에서만 패치 이미지 게시
-
-### 운영 환경 동등성 검사
-
-- [docs/adr/0076-enable-platform-parity-audit.md](docs/adr/0076-enable-platform-parity-audit.md) — 감사 모드 활성화와 검증 범위
-- [helm/charts/hopcharlie-platform/templates/parity.yaml](helm/charts/hopcharlie-platform/templates/parity.yaml) — 비밀값 없는 검사 설정
-- [scripts/tests/test-platform-parity.py](scripts/tests/test-platform-parity.py) — API 한정 활성화·설정 교체·안전 모드 검사
-
-### hopai 활동 조회 (콘솔 이주 지도)
-
-- [docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md](docs/adr/0077-platform-reads-hopai-activity-from-clickhouse.md) — API가 관측 ClickHouse에서 hopai 호출을 읽는다 (제안)
-- [docs/adr/0078-manage-three-member-db-paths-with-gitops.md](docs/adr/0078-manage-three-member-db-paths-with-gitops.md) — 세 멤버 DB 경로의 GitOps 소유권과 primary source 준비의 최소 권한 (제안)
-- [docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md](docs/adr/0079-platform-reads-written-record-tokens-from-ssm.md) — API가 쓰기 기록 토큰을 SSM에서 선택적으로 읽는다 (제안)
-- [docs/adr/0080-fetch-optional-residency-policy-from-ssm.md](docs/adr/0080-fetch-optional-residency-policy-from-ssm.md) — API가 레지던시 정책을 SSM에서 선택적으로 읽어 시작 전 검사를 켠다 (제안)
-- [docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md](docs/adr/0081-onprem-minio-storage-and-platform-image-flavor.md) — onprem 앱 저장소를 노트북 MinIO로 두고 관리 플랫폼에 MinIO 이미지를 고정 (제안)
-- [docs/adr/0082-onboard-existing-compose-apps-infra.md](docs/adr/0082-onboard-existing-compose-apps-infra.md) — compose로 돌던 앱 가져오기의 차트, Argo, 승인 정책, 플랫폼 권한 (제안)
-- [docs/adr/0083-allow-cnpg-api-backend-egress-on-onprem.md](docs/adr/0083-allow-cnpg-api-backend-egress-on-onprem.md) — 온프렘 CNPG와 bootstrap Job의 API backend egress를 앱과 분리 (제안, 운영 미적용)
-- [scripts/put-clickhouse-read-password.sh](scripts/put-clickhouse-read-password.sh) — 읽기 전용 비밀번호를 관측 Secret에서 SSM으로 옮긴다 (사용자가 직접 실행)
-
-- [scripts/tests/test-platform-written-tokens.py](scripts/tests/test-platform-written-tokens.py) — 실제 설정 스크립트와 API entrypoint의 미설정·전달·접근 거부·리터럴 값 보존 검사
-
-## GKE 중앙 관측 연결 준비
-
-[ADR0082](docs/adr/0082-connect-gke-to-central-observability.md)의 코드 준비안입니다. gate는 off이며 실제 설치·GKE 앱 rollout·Secret·tailnet ACL 변경은 별도 실행 범위입니다. 온프레미스는 제외합니다. [운영·검증·복구 순서](docs/operations/gke-observability.md)를 따릅니다.
-
-| 파일 | 용도 |
-| --- | --- |
-| [clusters/aws-dev-management/values/clickstack-gke.yaml](clusters/aws-dev-management/values/clickstack-gke.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/aws-dev-management/values/observability-transport.yaml](clusters/aws-dev-management/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/observability-contract.json](clusters/gcp-dev-workload/observability-contract.json) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/alloy.yaml](clusters/gcp-dev-workload/values/alloy.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/app-observability.yaml](clusters/gcp-dev-workload/values/app-observability.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml](clusters/gcp-dev-workload/values/kube-prometheus-stack.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/observability-activation.yaml](clusters/gcp-dev-workload/values/observability-activation.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/observability-boundary.yaml](clusters/gcp-dev-workload/values/observability-boundary.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/observability-transport.yaml](clusters/gcp-dev-workload/values/observability-transport.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml](clusters/gcp-dev-workload/values/otel-gateway-automatic.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml](helm/charts/observability-boundary/templates/gke-metrics-rbac.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [helm/charts/observability-transport/Chart.yaml](helm/charts/observability-transport/Chart.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [helm/charts/observability-transport/templates/routes.yaml](helm/charts/observability-transport/templates/routes.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [helm/charts/observability-transport/values.schema.json](helm/charts/observability-transport/values.schema.json) | GKE 관측 코드·준비 설정·검증 |
-| [helm/charts/observability-transport/values.yaml](helm/charts/observability-transport/values.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [helm/gitops/templates/observability-external.yaml](helm/gitops/templates/observability-external.yaml) | GKE 관측 코드·준비 설정·검증 |
-| [scripts/tests/test-gke-observability.py](scripts/tests/test-gke-observability.py) | GKE 관측 코드·준비 설정·검증 |
-| [clusters/gcp-dev-workload/observability-namespace.yaml](clusters/gcp-dev-workload/observability-namespace.yaml) | 노드 로그·지표 agent용 namespace의 명시적 실행 준비 |
-| [terraform/environments/aws/dev/foundation/langfuse.tf](terraform/environments/aws/dev/foundation/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [terraform/environments/aws/dev/management/langfuse.tf](terraform/environments/aws/dev/management/langfuse.tf) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/foundation/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl](terraform/environments/aws/dev/management/tests/langfuse.tftest.hcl) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [docs/adr/0086-persist-langfuse-cloud-resource-ownership.md](docs/adr/0086-persist-langfuse-cloud-resource-ownership.md) | Langfuse 전용 cloud 리소스의 지속 소유권·검사 |
-| [docs/adr/0088-align-onprem-source-rewire-admission.md](docs/adr/0088-align-onprem-source-rewire-admission.md) | 온프레미스 source 준비 권한 동등성·실제 admission 회귀 (제안) |
-| [docs/adr/0090-remove-duplicate-feature-push-ci.md](docs/adr/0090-remove-duplicate-feature-push-ci.md) | 기능 브랜치 push·PR 중복 검사 제거, 검증·배포 경계 유지 |
-
-### Onprem registration preparation (disabled)
-
-- [helm/db-network/onprem-registration-policy-fragment.json.example](helm/db-network/onprem-registration-policy-fragment.json.example)
-- [.github/workflows/onprem-admission.yml](.github/workflows/onprem-admission.yml)
-- [scripts/test-onprem-admission.py](scripts/test-onprem-admission.py)
-- [scripts/tests/test-onprem-registration.py](scripts/tests/test-onprem-registration.py)
-- [scripts/tests/test-onprem-settings.py](scripts/tests/test-onprem-settings.py)
-- [terraform/platform/aws/onprem-registration.tf](terraform/platform/aws/onprem-registration.tf)
-- [terraform/platform/aws/tests/onprem-registration.tftest.hcl](terraform/platform/aws/tests/onprem-registration.tftest.hcl)
-- [helm/charts/hopcharlie-platform/templates/onprem-registration.yaml](helm/charts/hopcharlie-platform/templates/onprem-registration.yaml)
-- [helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml](helm/charts/hopcharlie-platform/templates/onprem-argo-policy.yaml)
-- [helm/charts/hopcharlie-platform/templates/onprem-network.yaml](helm/charts/hopcharlie-platform/templates/onprem-network.yaml)
-- [helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml](helm/charts/hopcharlie-platform/templates/onprem-secret-webhook.yaml)
-- [docs/adr/0084-isolate-onprem-registration-capabilities.md](docs/adr/0084-isolate-onprem-registration-capabilities.md)
-- [docs/adr/0087-bound-gke-observability-argocd-writes.md](docs/adr/0087-bound-gke-observability-argocd-writes.md) — GKE 관측 Argo의 단계별 admission·권한 위임과 실효 권한 (채택)
-- [helm/charts/gcp-argocd-access/templates/observability.yaml](helm/charts/gcp-argocd-access/templates/observability.yaml) — 기본 off인 관측 guard·namespace Role·단계별 binding
-- [helm/charts/gcp-argocd-access/files/observability-resources.json](helm/charts/gcp-argocd-access/files/observability-resources.json) — 관측 Argo 쓰기 고정 이름 목록
-- [clusters/gcp-dev-workload/values/argocd-observability-access.yaml](clusters/gcp-dev-workload/values/argocd-observability-access.yaml) — 관측 권한의 수동 관리자 적용 입력
-| [docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md](docs/adr/0087-connect-hopai-langfuse-with-scoped-project-key.md) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
-| [clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml](clusters/aws-dev-management/manifests/langfuse-hopai-ingress.yaml) | Hopai Langfuse 프로젝트 연결과 한정 ingress |
-
-- [docs/adr/0093-authorize-gke-app-observability-resources.md](docs/adr/0093-authorize-gke-app-observability-resources.md) — GKE 새 앱의 공개 CA·CNPG PodMonitor 자동 등록 권한과 admission 제한
-- [helm/charts/gcp-argocd-access/templates/app-observability.yaml](helm/charts/gcp-argocd-access/templates/app-observability.yaml) — 기본 off인 앱 관측 자원 guard와 단계별 권한
-| [docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md](docs/adr/0089-run-ai-recommendations-without-cluster-credentials.md) | 클러스터 자격 증명을 읽지 않는 추천 Job과 지원 handshake |
-| [scripts/tests/test-hopai-recommendations.py](scripts/tests/test-hopai-recommendations.py) | 추천·기존 실행 shell의 SSM 조회·명령·비밀 로그 회귀 |
-| [clusters/aws-dev-management/manifests/hopcharlie-ai.yaml](clusters/aws-dev-management/manifests/hopcharlie-ai.yaml) | moimroom AI 안내 게이트웨이(gcp L4·노트북 Ollama), 앱 위치를 따라가는 AI 경로(-ai-follow-*), 한정 NetworkPolicy |
-
-- [scripts/apply-onprem-observability.py](scripts/apply-onprem-observability.py)
-- [scripts/tests/test-onprem-observability-apply.py](scripts/tests/test-onprem-observability-apply.py)
-- [docs/adr/0093-explicit-onprem-collector-installation.md](docs/adr/0093-explicit-onprem-collector-installation.md)
-- [docs/runbooks/hopai-langfuse.md](docs/runbooks/hopai-langfuse.md) — 실제 hopai 자동 계측 검증 결과, 활성화 관문과 미완료 사항
-
-- [hopai Langfuse 실제 수신 검증 기록](docs/runbooks/hopai-langfuse-live-check.json)
-| [scripts/render-gpu-canary-activation.py](scripts/render-gpu-canary-activation.py) | 전용 GPU 품질 카나리의 source-only 활성화 렌더러 |
-| [scripts/tests/test-gpu-canary-activation.py](scripts/tests/test-gpu-canary-activation.py) | 정책·비밀·라우팅·영속 상태 경계 회귀 검사 |
-| [docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md](docs/adr/0094-activate-ai-quality-controller-with-durable-source-only-state.md) | 별도 평가 프로젝트와 영속 카나리 상태 연결 결정 |
-| [docs/runbooks/gpu-quality-canary.md](docs/runbooks/gpu-quality-canary.md) | GPU 카나리 활성화와 실제 평가·단계 전환 운영 절차 |
-
-## Independent GCE workload storage
-
-- [helm/charts/gce-workload-deployment/Chart.yaml](helm/charts/gce-workload-deployment/Chart.yaml)
-- [helm/charts/gce-workload-deployment/values.yaml](helm/charts/gce-workload-deployment/values.yaml)
-- [helm/charts/gce-workload-deployment/templates/minio.yaml](helm/charts/gce-workload-deployment/templates/minio.yaml)
-- [clusters/onprem-dev-workload/values/apps.yaml](clusters/onprem-dev-workload/values/apps.yaml)
-- [scripts/tests/test-gce-storage-settings.py](scripts/tests/test-gce-storage-settings.py)
-- [clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json](clusters/onprem-dev-workload/observability-tailnet-policy-fragment.json)
-- [clusters/onprem-dev-workload/values/observability-transport.yaml](clusters/onprem-dev-workload/values/observability-transport.yaml)
-- [clusters/aws-dev-management/values/observability-onprem-query-transport.yaml](clusters/aws-dev-management/values/observability-onprem-query-transport.yaml)
-- [docs/adr/0097-isolate-onprem-observability-transport.md](docs/adr/0097-isolate-onprem-observability-transport.md)
-- [docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md](docs/adr/0098-keep-explicit-member-db-paths-gitops-owned.md)
-- [docs/adr/0099-hopai-onprem-rehearsal-target.md](docs/adr/0099-hopai-onprem-rehearsal-target.md)
-
-- [docs/operations/onprem-observability-live-check.json](docs/operations/onprem-observability-live-check.json)
-
-GCE HTTP routing:
-
-- [helm/charts/gce-app-web-route/Chart.yaml](helm/charts/gce-app-web-route/Chart.yaml)
-- [helm/charts/gce-app-web-route/templates/service.yaml](helm/charts/gce-app-web-route/templates/service.yaml)
-- [helm/charts/gce-app-web-route/values.yaml](helm/charts/gce-app-web-route/values.yaml)
-
-- [scripts/tests/test-gce-web-route.py](scripts/tests/test-gce-web-route.py)
-
-- [docs/adr/0098-expand-aws-workload-platform-metrics.md](docs/adr/0098-expand-aws-workload-platform-metrics.md)
-
-- [helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml](helm/charts/observability-boundary/templates/aws-metrics-rbac.yaml)
+</details>
